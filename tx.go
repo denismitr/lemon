@@ -1,8 +1,7 @@
-package lemondb
+package lemon
 
 import (
 	"context"
-	"fmt"
 	"github.com/denismitr/lemon/internal/engine"
 	"github.com/pkg/errors"
 )
@@ -16,21 +15,17 @@ type Tx struct {
 	ctx context.Context
 }
 
-func (x *Tx) Get(key string) *Result {
-	d, err := x.e.FindDocumentByKey(key)
+func (x *Tx) Get(key string) (*Document, error) {
+	d, err := x.e.FindByKey(key)
 	if err != nil {
 		if errors.Is(err, engine.ErrDocumentNotFound) {
-			return newErrorResult(key, errors.Wrapf(ErrKeyDoesNotExist, "%s", key))
+			return nil, errors.Wrapf(ErrKeyDoesNotExist, "%s", key)
 		}
 
-		return newErrorResult(key, err)
+		return nil, err
 	}
 
-	if d.Key != key {
-		panic(fmt.Sprintf("how can keys not be equal %s != %s", d.Key, key))
-	}
-
-	return newSuccessResult(key, d.Value)
+	return newDocument(key, d.String()), nil
 }
 
 func (x *Tx) Insert(key string, data interface{}) error {
@@ -38,7 +33,36 @@ func (x *Tx) Insert(key string, data interface{}) error {
 		return ErrTxIsReadOnly
 	}
 
-	if err := x.e.AddDocument(key, data); err != nil {
+	if err := x.e.Add(key, data); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (x *Tx) InsertOrReplace(key string, data interface{}) error {
+	if x.readOnly {
+		return ErrTxIsReadOnly
+	}
+
+	if err := x.e.Add(key, data); err != nil {
+		if errors.Is(err, engine.ErrKeyAlreadyExists) {
+			if err := x.e.Replace(key, data); err != nil {
+				return err
+			}
+		}
+
+		return err
+	}
+
+	return nil
+}
+
+func (x *Tx) Remove(keys ...string) error {
+	if x.readOnly {
+		return ErrTxIsReadOnly
+	}
+
+	if err := x.e.RemoveByKeys(keys...); err != nil {
 		return err
 	}
 	return nil

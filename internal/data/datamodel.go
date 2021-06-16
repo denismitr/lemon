@@ -2,12 +2,13 @@ package data
 
 type PrimaryKeys map[string]int
 
-type Document struct {
-	Key   string `json:"k"`
-	Value string `json:"v"`
+type Value string
+
+func (i Value) String() string {
+	return string(i)
 }
 
 type Model struct {
-	PKs       PrimaryKeys `json:"pks"`
-	Documents []Document  `json:"documents"`
+	PKs    PrimaryKeys `json:"pks"`
+	Values []Value     `json:"documents"`
 }

@@ -1,4 +1,4 @@
-package lemondb
+package lemon
 
 import (
 	"context"

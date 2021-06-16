@@ -1,4 +1,4 @@
-package lemondb
+package lemon
 
 import (
 	"github.com/denismitr/lemon/internal/storage"

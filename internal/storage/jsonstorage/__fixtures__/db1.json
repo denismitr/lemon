@@ -1,14 +1,7 @@
 {
-  "lastId": 5,
-  "keys": {"key1": 0,"key2": 1},
+  "pks": {"key1": 0,"key2": 1},
   "documents": [
-    {
-      "foo": "bar",
-      "bar": 123
-    },
-    {
-      "123": "foobar",
-      "baz": "foo"
-    }
+    "{\"foo\":\"bar\",\"bar\":123}",
+    "{\"123\":\"foobar\",\"baz\":\"foo\"}"
   ]
 }

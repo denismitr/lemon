@@ -1,3 +1,3 @@
-package lemondb
+package lemon
 
 type D map[string]interface{}

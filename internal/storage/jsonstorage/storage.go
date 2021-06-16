@@ -55,6 +55,14 @@ func (s *JSONStorage) Write(data interface{}) error {
 		return errors.Wrapf(err, "could not marshal data %+v ", data)
 	}
 
+	if err := s.f.Truncate(0); err != nil {
+		return errors.Wrapf(err, "could not truncate file %s", s.f.Name())
+	}
+
+	if err := s.f.Sync(); err != nil {
+		return errors.Wrapf(err, "could not sync file %s", s.f.Name())
+	}
+
 	if _, err := s.f.Seek(0, 0); err != nil {
 		return errors.Wrapf(err, "could not seek the begging of the file %s", s.f.Name())
 	}
