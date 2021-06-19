@@ -49,6 +49,13 @@ func New(path string) (*LemonDB, func() error, error) {
 	}, closer, nil
 }
 
+func (db *LemonDB) Count() int {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	return db.e.Count()
+}
+
 func (db *LemonDB) ReadTx(ctx context.Context, cb UserCallback) error {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
@@ -70,6 +77,10 @@ func (db *LemonDB) UpdateTx(ctx context.Context, cb UserCallback) error {
 	err := cb(&tx)
 	if err != nil {
 		return errors.Wrap(err, "db write failed")
+	}
+
+	if err := db.e.Persist(); err != nil {
+		return err
 	}
 
 	return nil

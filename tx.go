@@ -3,6 +3,7 @@ package lemon
 import (
 	"context"
 	"github.com/denismitr/lemon/internal/engine"
+	"github.com/denismitr/lemon/options"
 	"github.com/pkg/errors"
 )
 
@@ -16,7 +17,7 @@ type Tx struct {
 }
 
 func (x *Tx) Get(key string) (*Document, error) {
-	d, err := x.e.FindByKey(key)
+	v, err := x.e.FindByKey(key)
 	if err != nil {
 		if errors.Is(err, engine.ErrDocumentNotFound) {
 			return nil, errors.Wrapf(ErrKeyDoesNotExist, "%s", key)
@@ -25,7 +26,7 @@ func (x *Tx) Get(key string) (*Document, error) {
 		return nil, err
 	}
 
-	return newDocument(key, d.String()), nil
+	return newDocument(key, v), nil
 }
 
 func (x *Tx) Insert(key string, data interface{}) error {
@@ -33,7 +34,7 @@ func (x *Tx) Insert(key string, data interface{}) error {
 		return ErrTxIsReadOnly
 	}
 
-	if err := x.e.Add(key, data); err != nil {
+	if err := x.e.Insert(key, data); err != nil {
 		return err
 	}
 	return nil
@@ -44,9 +45,9 @@ func (x *Tx) InsertOrReplace(key string, data interface{}) error {
 		return ErrTxIsReadOnly
 	}
 
-	if err := x.e.Add(key, data); err != nil {
+	if err := x.e.Insert(key, data); err != nil {
 		if errors.Is(err, engine.ErrKeyAlreadyExists) {
-			if err := x.e.Replace(key, data); err != nil {
+			if err := x.e.Update(key, data); err != nil {
 				return err
 			}
 		}
@@ -55,6 +56,31 @@ func (x *Tx) InsertOrReplace(key string, data interface{}) error {
 	}
 
 	return nil
+}
+
+func (x *Tx) Find(ctx context.Context, opts *options.FindOptions, dest *[]Document) error {
+	if opts == nil {
+		opts = options.Find()
+	}
+
+	if opts.KR != nil {
+		var scanner engine.RangeScanner
+		if opts.O == options.Ascend {
+			scanner = x.e.ScanBetweenAscend
+		} else {
+			scanner = x.e.ScanBetweenDescend
+		}
+
+		if err := scanner(ctx, opts.KR.Lower, opts.KR.Upper, func(k string, v []byte) {
+			*dest = append(*dest, createDocument(k, v))
+		}); err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	panic("TODO: full doc scan")
 }
 
 func (x *Tx) Remove(keys ...string) error {
@@ -66,4 +92,8 @@ func (x *Tx) Remove(keys ...string) error {
 		return err
 	}
 	return nil
+}
+
+func (x *Tx) Count() int {
+	return x.e.Count()
 }

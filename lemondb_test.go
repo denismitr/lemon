@@ -2,7 +2,9 @@ package lemon_test
 
 import (
 	"context"
+	"fmt"
 	"github.com/denismitr/lemon"
+	"github.com/denismitr/lemon/options"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -10,10 +12,11 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+	"time"
 )
 
 func TestLemonDB_Read(t *testing.T) {
-	db, closer, err := lemon.New("./__fixtures__/db1.json")
+	db, closer, err := lemon.New("./__fixtures__/read_db1.ldb")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,12 +27,12 @@ func TestLemonDB_Read(t *testing.T) {
 		var result1 *lemon.Document
 		var result2 *lemon.Document
 		if err := db.ReadTx(context.Background(), func(tx *lemon.Tx) error {
-			doc1, err := tx.Get("user:123")
+			doc1, err := tx.Get("product:8976")
 			if err != nil {
 				return err
 			}
 
-			doc2, err := tx.Get("user:678")
+			doc2, err := tx.Get("product:1145")
 			if err != nil {
 				return err
 			}
@@ -41,25 +44,25 @@ func TestLemonDB_Read(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		json1 := result1.Unwrap()
-		assert.Equal(t, `{"foo":"bar"}`, json1)
+		json1 := result1.RawString()
+		assert.Equal(t, `{"100":"foobar","baz":8989764,"foo":"bar"}`, json1)
 		foo, err := result1.String("foo")
 		require.NoError(t, err)
 		assert.Equal(t, "bar", foo)
 
-		json2  := result2.Unwrap()
-		assert.Equal(t, `{"bar":56745,"baz":123.6}`, json2)
-		bar, err := result2.Int("bar")
+		json2 := result2.RawString()
+		assert.Equal(t, `{"999":null,"baz12":123.879,"foo":"bar5674"}`, json2)
+		bar5674, err := result2.String("foo")
 		require.NoError(t, err)
-		assert.Equal(t, 56745, bar)
-		baz, err := result2.Float("baz")
+		assert.Equal(t, "bar5674", bar5674)
+		baz12, err := result2.Float("baz12")
 		require.NoError(t, err)
-		assert.Equal(t, 123.6, baz)
+		assert.Equal(t, 123.879, baz12)
 	})
 }
 
 func TestLemonDB_Write(t *testing.T) {
-	db, closer, err := lemon.New("./__fixtures__/db2.json")
+	db, closer, err := lemon.New("./__fixtures__/write_db1.ldb")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +72,7 @@ func TestLemonDB_Write(t *testing.T) {
 			t.Error(err)
 		}
 
-		if err := os.Remove("./__fixtures__/db2.json"); err != nil {
+		if err := os.Remove("./__fixtures__/write_db1.ldb"); err != nil {
 			t.Error(err)
 		}
 	}()
@@ -87,9 +90,9 @@ func TestLemonDB_Write(t *testing.T) {
 			}
 
 			if err := tx.Insert("product:1145", map[string]interface{}{
-				"foo": "bar5674",
+				"foo":   "bar5674",
 				"baz12": 123.879,
-				"999": nil,
+				"999":   nil,
 			}); err != nil {
 				return err
 			}
@@ -141,25 +144,25 @@ func TestLemonDB_Write(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		readJson1 := readResult1.Unwrap()
+		readJson1 := readResult1.RawString()
 		assert.Equal(t, `{"100":"foobar","baz":8989764,"foo":"bar"}`, readJson1)
-		assert.Equal(t, result1.Unwrap(), readJson1)
+		assert.Equal(t, result1.RawString(), readJson1)
 
-		readJson2 := readResult2.Unwrap()
+		readJson2 := readResult2.RawString()
 		assert.Equal(t, `{"999":null,"baz12":123.879,"foo":"bar5674"}`, readJson2)
-		assert.Equal(t, result2.Unwrap(), readJson2)
+		assert.Equal(t, result2.RawString(), readJson2)
 	})
 }
 
 type removeTestSuite struct {
 	suite.Suite
-	db *lemon.LemonDB
+	db       *lemon.LemonDB
 	fileName string
-	closer func() error
+	closer   func() error
 }
 
 func (rts *removeTestSuite) SetupTest() {
-	db, closer, err := lemon.New("./__fixtures__/db3.json")
+	db, closer, err := lemon.New("./__fixtures__/db3.ldb")
 	rts.Require().NoError(err)
 	rts.closer = closer
 	rts.db = db
@@ -174,9 +177,9 @@ func (rts *removeTestSuite) SetupTest() {
 		}
 
 		if err := tx.Insert("item:1145", lemon.D{
-			"foo": "bar5674",
+			"foo":   "bar5674",
 			"baz12": 123.879,
-			"999": nil,
+			"999":   nil,
 		}); err != nil {
 			return err
 		}
@@ -204,7 +207,7 @@ func (rts *removeTestSuite) TearDownTest() {
 	err := rts.closer()
 	rts.Require().NoError(err)
 
-	if err := os.Remove("./__fixtures__/db3.json"); err != nil {
+	if err := os.Remove("./__fixtures__/db3.ldb"); err != nil {
 		rts.Require().NoError(err)
 	}
 }
@@ -220,9 +223,6 @@ func (rts *removeTestSuite) TestLemonDB_RemoveItemInTheMiddle() {
 		rts.Require().NoError(err)
 	}
 
-	expectedContents := `{"pks":{"item:8976":0,"users":1},"documents":["{\"100\":\"foobar\",\"baz\":8989764,\"foo\":\"bar\"}","{\"user1\":\"abc123\",\"user2\":\"John Smith\",\"user3\":\"anyone\",\"user4\":\"someone\"}"]}`
-	AssertFileContents(rts.T(), "./__fixtures__/db3.json", expectedContents)
-
 	if err := rts.db.ReadTx(context.Background(), func(tx *lemon.Tx) error {
 		doc, err := tx.Get("item:1145")
 		rts.Require().Error(err)
@@ -233,6 +233,141 @@ func (rts *removeTestSuite) TestLemonDB_RemoveItemInTheMiddle() {
 	}); err != nil {
 		rts.Require().NoError(err)
 	}
+}
+
+type findTestSuite struct {
+	suite.Suite
+	fixture string
+}
+
+func (fts *findTestSuite) SetupSuite() {
+	fts.fixture = "./__fixtures__/find_db1.ldb"
+	db, closer, err := lemon.New(fts.fixture)
+	fts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			fts.Require().NoError(err)
+		}
+	}()
+
+	seedUserData(fts.T(), db, 1_000)
+	seedProductData(fts.T(), db, 1_000)
+}
+
+func (fts *findTestSuite) TearDownSuite() {
+	if err := os.Remove(fts.fixture); err != nil {
+		fts.Require().NoError(err)
+	}
+}
+
+func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Descend() {
+	db, closer, err := lemon.New(fts.fixture)
+	fts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			fts.Require().NoError(err)
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
+	defer cancel()
+
+	var docs []lemon.Document
+	if err := db.ReadTx(context.Background(), func(tx *lemon.Tx) error {
+		opts := options.Find().SetOrder(options.Descend).KeyRange("user:100", "user:110")
+		if err := tx.Find(ctx, opts, &docs); err != nil {
+			return err
+		}
+
+		return nil
+	}); err != nil {
+		fts.Require().NoError(err)
+	}
+
+	fts.Assert().Len(docs, 10)
+}
+
+func seedUserData(t *testing.T, db *lemon.LemonDB, n int) {
+	t.Helper()
+
+	type userData struct {
+		Username string  `json:"username"`
+		Phone    string  `json:"phone"`
+		Address  string  `json:"address"`
+		Balance  float64 `json:"balance"`
+		Logins   int     `json:"logins"`
+	}
+
+	baseUser := userData{
+		Username: "foobar",
+		Phone:    "999444555",
+		Address:  "Some street ap.",
+	}
+
+	if err := db.UpdateTx(context.Background(), func(tx *lemon.Tx) error {
+		for i := 1; i < n; i++ {
+			user := userData{
+				Username: fmt.Sprintf("%s_%d", baseUser.Username, i),
+				Phone:    fmt.Sprintf("%s%d", baseUser.Phone, i),
+				Address:  fmt.Sprintf("%s %d", baseUser.Address, i),
+				Balance:  float64(i),
+				Logins:  i,
+			}
+
+			if err := tx.Insert(fmt.Sprintf("user:%d", i), user); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func seedProductData(t *testing.T, db *lemon.LemonDB, n int) {
+	t.Helper()
+
+	type productData struct {
+		Name     string  `json:"name"`
+		Buyers   []int   `json:"buyers"`
+		ID       int     `json:"id"`
+		OwnerID  int     `json:"ownerId"`
+		Price    float64 `json:"price"`
+		Quantity int     `json:"quantity"`
+	}
+
+	baseProduct := productData{
+		Name: "product_",
+		ID:  0,
+	}
+
+	if err := db.UpdateTx(context.Background(), func(tx *lemon.Tx) error {
+		for i := 0; i < n; i++ {
+			user := productData{
+				Name: fmt.Sprintf("%s_%d", baseProduct.Name, i + 1),
+				Buyers:    []int{1 + i, 2 + i, 3 + i, 4 + i},
+				ID:  i + 1,
+				OwnerID:  n - i,
+				Price:   float64(i + 1),
+				Quantity: i,
+			}
+
+			if err := tx.Insert(fmt.Sprintf("product:%d", i+1), user); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTx_Find(t *testing.T) {
+	suite.Run(t, &findTestSuite{})
 }
 
 func TestTx_Remove(t *testing.T) {

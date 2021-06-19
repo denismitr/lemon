@@ -1,6 +1,6 @@
 package data
 
-type PrimaryKeys map[string]int
+type PrimaryKeys []string
 
 type Value string
 
@@ -12,3 +12,9 @@ type Model struct {
 	PKs    PrimaryKeys `json:"pks"`
 	Values []Value     `json:"documents"`
 }
+
+type Item struct {
+	Key string
+	Value Value
+}
+

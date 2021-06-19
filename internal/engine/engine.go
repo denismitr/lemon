@@ -1,9 +1,10 @@
 package engine
 
 import (
+	"context"
 	"encoding/json"
-	"github.com/denismitr/lemon/internal/data"
 	"github.com/denismitr/lemon/internal/storage"
+	"github.com/google/btree"
 	"github.com/pkg/errors"
 )
 
@@ -12,128 +13,89 @@ var ErrKeyAlreadyExists = errors.New("key already exists")
 
 type Engine struct {
 	s storage.Storage
-	dm data.Model
+	pks *btree.BTree
 }
 
 func New(s storage.Storage) *Engine {
 	return &Engine{
 		s: s,
+		pks: btree.New(2),
 	}
 }
 
 func (e *Engine) Init() error {
-	size, err := e.s.Size()
-	if err != nil {
-		return errors.Wrap(err, "init DB failed")
+	if err := e.s.Load(); err != nil {
+		return err
 	}
 
-	if size == 0 {
-		e.dm.PKs = make(data.PrimaryKeys)
-		e.dm.Values = make([]data.Value, 0)
-		if err := e.s.Write(e.dm); err != nil {
-			return errors.Wrap(err, "init DB failed")
-		}
-	} else {
-		if loadErr := e.loadFromStorage(); loadErr != nil {
-			return errors.Wrap(loadErr, "init DB failed")
-		}
+	pks := e.s.PKs()
+	for i := range pks  {
+		e.pks.ReplaceOrInsert(&index{key: pks[i], offset: i})
 	}
 
 	return nil
 }
 
 func (e *Engine) Persist() error {
-	if e.dm.PKs == nil {
-		panic("how could primaryKeys map be empty?")
-	}
-
-	if e.dm.Values == nil {
-		panic("how could values slice be empty?")
-	}
-
-	if err := e.s.Write(e.dm); err != nil {
-		if loadErr := e.loadFromStorage(); loadErr != nil {
-			return errors.Wrap(loadErr, "persist DB failed and could not reload from disk")
-		}
-
-		return errors.Wrap(err, "persist DB failed")
-	}
-
-	if loadErr := e.loadFromStorage(); loadErr != nil {
-		return errors.Wrap(loadErr, "persist DB failed and could not reload from disk")
-	}
-
-	return nil
+	return e.s.Persist()
 }
 
-func (e *Engine) loadFromStorage() error {
-	if err := e.s.Read(&e.dm); err != nil {
-		return errors.Wrap(err, "could not load data from storage")
+func (e *Engine) FindByKey(pk string) ([]byte, error) {
+	offset, err := e.findOffsetByKey(pk)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil
+	return e.s.GetValueAt(offset)
 }
 
-func (e *Engine) FindByKey(pk string) (*data.Value, error) {
-	for k, docIdx := range e.dm.PKs {
-		if k == pk {
-			if len(e.dm.Values) < docIdx + 1 {
-				return nil, errors.Wrap(ErrDocumentNotFound, "document index not found")
-			}
-
-			return &e.dm.Values[docIdx], nil
-		}
+func (e *Engine) findOffsetByKey(key string) (int, error) {
+	item := e.pks.Get(&index{key: key})
+	if item == nil {
+		return 0, errors.Wrapf(ErrDocumentNotFound, "search by primary key %s", key)
 	}
 
-	return nil, errors.Wrapf(ErrDocumentNotFound, "search by primary key %s", pk)
+	found := item.(*index)
+
+	return found.offset, nil
 }
 
 func (e *Engine) RemoveByKeys(pks ...string) error {
 	for _, pk := range pks {
 		if err := e.removeByKeyFromDataModel(pk); err != nil {
-			if loadErr := e.loadFromStorage(); loadErr != nil {
-				return errors.Wrap(err, loadErr.Error())
-			}
 			return err
 		}
-	}
-
-	if err := e.Persist(); err != nil {
-		return err
 	}
 
 	return nil
 }
 
 func (e *Engine) removeByKeyFromDataModel(key string) error {
-	var found bool
-	var removedDocumentOffset int
-	for pk, offset := range e.dm.PKs {
-		if pk == key {
-			e.dm.Values = append(e.dm.Values[:offset], e.dm.Values[offset+1:]...)
-			found = true
-			removedDocumentOffset = offset
-			break
+	offset, err := e.findOffsetByKey(key)
+	if err != nil {
+		return err
+	}
+
+	if err := e.s.RemoveAt(offset); err != nil {
+		return err
+	}
+
+	e.pks.Delete(&index{key: key})
+
+	e.pks.Ascend(func(i btree.Item) bool {
+		pk := i.(*index)
+		if pk.offset > offset {
+			pk.offset--
 		}
-	}
-
-	if !found {
-		return errors.Wrapf(ErrKeyAlreadyExists, "%s", key)
-	}
-
-	delete(e.dm.PKs, key)
-
-	for pk, offset := range e.dm.PKs {
-		if offset > removedDocumentOffset {
-			e.dm.PKs[pk] = offset - 1
-		}
-	}
+		return true
+	})
 
 	return nil
 }
 
-func (e *Engine) Add(key string, d interface{}) error {
-	if _, found := e.dm.PKs[key]; found {
+func (e *Engine) Insert(key string, d interface{}) error {
+	_, err := e.findOffsetByKey(key)
+	if err == nil {
 		return errors.Wrapf(ErrKeyAlreadyExists, "%s", key)
 	}
 
@@ -142,21 +104,16 @@ func (e *Engine) Add(key string, d interface{}) error {
 		return err
 	}
 
-	e.dm.Values = append(e.dm.Values, v)
-	lastRecordPos := len(e.dm.Values)
-	e.dm.PKs[key] = lastRecordPos - 1
-
-	if err := e.Persist(); err != nil {
-		return err
-	}
+	e.s.Append(key, v)
+	e.pks.ReplaceOrInsert(&index{key: key, offset: e.s.LastOffset()})
 
 	return nil
 }
 
-func (e *Engine) Replace(key string, d interface{}) error {
-	 offset, found := e.dm.PKs[key]
-	 if !found {
-		return errors.Wrapf(ErrDocumentNotFound, "%s", key)
+func (e *Engine) Update(key string, d interface{}) error {
+	 offset, err := e.findOffsetByKey(key)
+	 if err != nil {
+		return err
 	}
 
 	v, err := serializeToValue(d)
@@ -164,25 +121,82 @@ func (e *Engine) Replace(key string, d interface{}) error {
 		return err
 	}
 
-	e.dm.Values[offset] = v
-	if err := e.Persist(); err != nil {
+	if err := e.s.ReplaceValueAt(offset, v); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func serializeToValue(d interface{}) (data.Value, error) {
-	var v string
+func (e *Engine) Count() int {
+	return e.s.Len()
+}
+
+type ItemReceiver func(k string, v []byte)
+type RangeScanner func(ctx context.Context, lowerBoundPK string, upperBoundPK string, ir ItemReceiver) error
+
+func (e *Engine) ScanBetweenDescend(
+	ctx context.Context,
+	lowerBoundPK string,
+	upperBoundPK string,
+	ir ItemReceiver,
+) (err error) {
+	e.pks.DescendRange(&index{key: upperBoundPK}, &index{key: lowerBoundPK}, func(i btree.Item) bool {
+		if ctx.Err() != nil {
+			err = ctx.Err()
+			return false
+		}
+
+		idx := i.(*index)
+		if v, getErr := e.s.GetValueAt(idx.offset); getErr != nil {
+			err = getErr
+			return false
+		} else {
+			ir(idx.key, v)
+		}
+
+		return true
+	})
+
+	return
+}
+
+func (e *Engine) ScanBetweenAscend(
+	ctx context.Context,
+	lowerBoundPK string,
+	upperBoundPK string,
+	ir ItemReceiver,
+) (err error) {
+	e.pks.AscendRange(&index{key: upperBoundPK}, &index{key: lowerBoundPK}, func(i btree.Item) bool {
+		if ctx.Err() != nil {
+			err = ctx.Err()
+			return false
+		}
+
+		idx := i.(*index)
+		if v, getErr := e.s.GetValueAt(idx.offset); getErr != nil {
+			err = getErr
+			return false
+		} else {
+			ir(idx.key, v)
+		}
+		return true
+	})
+
+	return
+}
+
+func serializeToValue(d interface{}) ([]byte, error) {
+	var v []byte
 	if s, isStr := d.(string); isStr {
-		v = s
+		v = []byte(s)
 	} else {
 		b, err := json.Marshal(d)
 		if err != nil {
-			return "", errors.Wrapf(err, "could not marshal data %+v", d)
+			return nil, errors.Wrapf(err, "could not marshal data %+v", d)
 		}
-		v = string(b)
+		v = b
 	}
 
-	return data.Value(v), nil
+	return v, nil
 }
