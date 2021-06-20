@@ -14,6 +14,7 @@ const (
 type FindOptions struct {
 	O Order
 	KR *KeyRange
+	Px string
 }
 
 func (fo *FindOptions) SetOrder(o Order) *FindOptions {
@@ -23,6 +24,11 @@ func (fo *FindOptions) SetOrder(o Order) *FindOptions {
 
 func (fo *FindOptions) KeyRange(lower, upper string) *FindOptions {
 	fo.KR = &KeyRange{Lower: lower, Upper: upper}
+	return fo
+}
+
+func (fo *FindOptions) Prefix(p string) *FindOptions {
+	fo.Px = p
 	return fo
 }
 

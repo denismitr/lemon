@@ -84,7 +84,7 @@ func TestLemonDB_Write(t *testing.T) {
 			if err := tx.Insert("product:8976", lemon.D{
 				"foo": "bar",
 				"baz": 8989764,
-				"100": "foobar",
+				"100": "username",
 			}); err != nil {
 				return err
 			}
@@ -116,7 +116,7 @@ func TestLemonDB_Write(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "bar", result1.StringOrDefault("foo", ""))
 		assert.Equal(t, 8989764, result1.IntOrDefault("baz", 0))
-		assert.Equal(t, "foobar", result1.StringOrDefault("100", ""))
+		assert.Equal(t, "username", result1.StringOrDefault("100", ""))
 		assert.Equal(t, "bar5674", result2.StringOrDefault("foo", ""))
 		assert.Equal(t, 123.879, result2.FloatOrDefault("baz12", 0))
 		/*assert.Equal(t, nil, docs[1]["999"])*/
@@ -145,7 +145,7 @@ func TestLemonDB_Write(t *testing.T) {
 		}
 
 		readJson1 := readResult1.RawString()
-		assert.Equal(t, `{"100":"foobar","baz":8989764,"foo":"bar"}`, readJson1)
+		assert.Equal(t, `{"100":"username","baz":8989764,"foo":"bar"}`, readJson1)
 		assert.Equal(t, result1.RawString(), readJson1)
 
 		readJson2 := readResult2.RawString()
@@ -171,7 +171,7 @@ func (rts *removeTestSuite) SetupTest() {
 		if err := tx.Insert("item:8976", lemon.D{
 			"foo": "bar",
 			"baz": 8989764,
-			"100": "foobar",
+			"100": "username",
 		}); err != nil {
 			return err
 		}
@@ -289,6 +289,111 @@ func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Descend() {
 	fts.Assert().Len(docs, 10)
 }
 
+func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Ascend() {
+	db, closer, err := lemon.New(fts.fixture)
+	fts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			fts.Require().NoError(err)
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
+	defer cancel()
+
+	var docs []lemon.Document
+	if err := db.ReadTx(context.Background(), func(tx *lemon.Tx) error {
+		opts := options.Find().SetOrder(options.Ascend).KeyRange("product:750", "product:500")
+		if err := tx.Find(ctx, opts, &docs); err != nil {
+			return err
+		}
+
+		return nil
+	}); err != nil {
+		fts.Require().NoError(err, "should be no error")
+	}
+
+	fts.Assert().Len(docs, 250)
+
+	for i := 500; i < 750; i++ {
+		idx := i - 500
+		fts.Assert().Equal(fmt.Sprintf("product_%d", i), docs[idx].StringOrDefault("name", ""))
+		fts.Assert().Equal(i, docs[idx].IntOrDefault("id", 0))
+	}
+}
+
+func (fts *findTestSuite) TestLemonDB_FindAllUsers_Ascend() {
+	db, closer, err := lemon.New(fts.fixture)
+	fts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			fts.Require().NoError(err)
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
+	defer cancel()
+
+	var docs []lemon.Document
+	if err := db.ReadTx(context.Background(), func(tx *lemon.Tx) error {
+		opts := options.Find().SetOrder(options.Ascend).Prefix("user")
+		if err := tx.Find(ctx, opts, &docs); err != nil {
+			return err
+		}
+
+		return nil
+	}); err != nil {
+		fts.Require().NoError(err, "should be no error")
+	}
+
+	fts.Require().Lenf(docs, 1_000, "users total count mismatch, got %d", len(docs))
+
+	for i := 1; i < 1_001; i++ {
+		fts.Assert().Equal(fmt.Sprintf("username_%d", i), docs[i - 1].StringOrDefault("username", ""))
+		fts.Assert().Equal(fmt.Sprintf("999444555%d", i), docs[i - 1].StringOrDefault("phone", ""))
+		fts.Assert().Equal(i, docs[i - 1].IntOrDefault("logins", 0))
+		fts.Assert().Equal(float64(i), docs[i - 1].FloatOrDefault("balance", 0))
+	}
+}
+
+func (fts *findTestSuite) TestLemonDB_FindAllUsers_Descend() {
+	db, closer, err := lemon.New(fts.fixture)
+	fts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			fts.Require().NoError(err)
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
+	defer cancel()
+
+	var docs []lemon.Document
+	if err := db.ReadTx(context.Background(), func(tx *lemon.Tx) error {
+		opts := options.Find().SetOrder(options.Descend).Prefix("user")
+		if err := tx.Find(ctx, opts, &docs); err != nil {
+			return err
+		}
+
+		return nil
+	}); err != nil {
+		fts.Require().NoError(err, "should be no error")
+	}
+
+	fts.Require().Lenf(docs, 1_000, "users total count mismatch, got %d", len(docs))
+
+	total := 1_000
+	for i := 1_000; i > 0; i-- {
+		fts.Assert().Equal(fmt.Sprintf("username_%d", i), docs[total - i].StringOrDefault("username", ""))
+		fts.Assert().Equal(fmt.Sprintf("999444555%d", i), docs[total - i].StringOrDefault("phone", ""))
+		fts.Assert().Equal(i, docs[total - i].IntOrDefault("logins", 0))
+		fts.Assert().Equal(float64(i), docs[total - i].FloatOrDefault("balance", 0))
+	}
+}
+
 func seedUserData(t *testing.T, db *lemon.LemonDB, n int) {
 	t.Helper()
 
@@ -301,13 +406,13 @@ func seedUserData(t *testing.T, db *lemon.LemonDB, n int) {
 	}
 
 	baseUser := userData{
-		Username: "foobar",
+		Username: "username",
 		Phone:    "999444555",
 		Address:  "Some street ap.",
 	}
 
 	if err := db.UpdateTx(context.Background(), func(tx *lemon.Tx) error {
-		for i := 1; i < n; i++ {
+		for i := 1; i < n + 1; i++ {
 			user := userData{
 				Username: fmt.Sprintf("%s_%d", baseUser.Username, i),
 				Phone:    fmt.Sprintf("%s%d", baseUser.Phone, i),
@@ -340,7 +445,7 @@ func seedProductData(t *testing.T, db *lemon.LemonDB, n int) {
 	}
 
 	baseProduct := productData{
-		Name: "product_",
+		Name: "product",
 		ID:  0,
 	}
 

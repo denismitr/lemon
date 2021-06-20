@@ -6,6 +6,7 @@ import (
 	"github.com/denismitr/lemon/internal/storage"
 	"github.com/google/btree"
 	"github.com/pkg/errors"
+	"strings"
 )
 
 var ErrDocumentNotFound = errors.New("document not found")
@@ -134,6 +135,8 @@ func (e *Engine) Count() int {
 
 type ItemReceiver func(k string, v []byte)
 type RangeScanner func(ctx context.Context, lowerBoundPK string, upperBoundPK string, ir ItemReceiver) error
+type PrefixScanner func(ctx context.Context, prefix string, ir ItemReceiver) error
+type Scanner func(ctx context.Context, ir ItemReceiver) error
 
 func (e *Engine) ScanBetweenDescend(
 	ctx context.Context,
@@ -168,6 +171,108 @@ func (e *Engine) ScanBetweenAscend(
 	ir ItemReceiver,
 ) (err error) {
 	e.pks.AscendRange(&index{key: upperBoundPK}, &index{key: lowerBoundPK}, func(i btree.Item) bool {
+		if ctx.Err() != nil {
+			err = ctx.Err()
+			return false
+		}
+
+		idx := i.(*index)
+		if v, getErr := e.s.GetValueAt(idx.offset); getErr != nil {
+			err = getErr
+			return false
+		} else {
+			ir(idx.key, v)
+		}
+		return true
+	})
+
+	return
+}
+
+func (e *Engine) ScanPrefixAscend(
+	ctx context.Context,
+	prefix string,
+	ir ItemReceiver,
+) (err error) {
+	e.pks.AscendGreaterOrEqual(&index{key: prefix}, func(i btree.Item) bool {
+		if ctx.Err() != nil {
+			err = ctx.Err()
+			return false
+		}
+
+		idx := i.(*index)
+		if !strings.HasPrefix(idx.key, prefix) {
+			return false
+		}
+
+		if v, getErr := e.s.GetValueAt(idx.offset); getErr != nil {
+			err = getErr
+			return false
+		} else {
+			ir(idx.key, v)
+		}
+		return true
+	})
+
+	return
+}
+
+func (e *Engine) ScanPrefixDescend(
+	ctx context.Context,
+	prefix string,
+	ir ItemReceiver,
+) (err error) {
+	e.pks.DescendGreaterThan(&index{key: prefix}, func(i btree.Item) bool {
+		if ctx.Err() != nil {
+			err = ctx.Err()
+			return false
+		}
+
+		idx := i.(*index)
+		if !strings.HasPrefix(idx.key, prefix) {
+			return false
+		}
+
+		if v, getErr := e.s.GetValueAt(idx.offset); getErr != nil {
+			err = getErr
+			return false
+		} else {
+			ir(idx.key, v)
+		}
+		return true
+	})
+
+	return
+}
+
+func (e *Engine) ScanAscend(
+	ctx context.Context,
+	ir ItemReceiver,
+) (err error) {
+	e.pks.Ascend(func(i btree.Item) bool {
+		if ctx.Err() != nil {
+			err = ctx.Err()
+			return false
+		}
+
+		idx := i.(*index)
+		if v, getErr := e.s.GetValueAt(idx.offset); getErr != nil {
+			err = getErr
+			return false
+		} else {
+			ir(idx.key, v)
+		}
+		return true
+	})
+
+	return
+}
+
+func (e *Engine) ScanDescend(
+	ctx context.Context,
+	ir ItemReceiver,
+) (err error) {
+	e.pks.Descend(func(i btree.Item) bool {
 		if ctx.Err() != nil {
 			err = ctx.Err()
 			return false

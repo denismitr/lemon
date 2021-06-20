@@ -12,11 +12,14 @@ func TestIndex_Less_2segments(t *testing.T) {
 		less bool
 	}{
 		{"user:11", "user:100", true},
+		{"user:1", "user:999", true},
 		{"user:100", "user:11", false},
 		{"usera", "userb", true},
 		{"userc", "userb", false},
 		{"user:a", "user:b", true},
 		{"user:a:2", "user:b:1", true},
+		{"user:a", "user:b:0", true},
+		{"user", "user:1", true},
 	}
 
 	for _, tc := range tt {

@@ -28,7 +28,12 @@ func (p *index) Less(than btree.Item) bool {
 		if ourSegments[i] < otherSegments[i] && prevEq {
 			return true
 		} else if ourSegments[i] == otherSegments[i] {
-			prevEq = true
+			// last iteration
+			if i == l - 1 {
+				return true
+			} else {
+				prevEq = true
+			}
 		} else {
 			prevEq = false
 		}

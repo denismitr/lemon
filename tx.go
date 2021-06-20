@@ -78,9 +78,37 @@ func (x *Tx) Find(ctx context.Context, opts *options.FindOptions, dest *[]Docume
 		}
 
 		return nil
-	}
+	} else if opts.Px != "" {
+		var scanner engine.PrefixScanner
+		if opts.O == options.Ascend {
+			scanner = x.e.ScanPrefixAscend
+		} else {
+			scanner = x.e.ScanPrefixDescend
+		}
 
-	panic("TODO: full doc scan")
+		if err := scanner(ctx, opts.Px, func(k string, v []byte) {
+			*dest = append(*dest, createDocument(k, v))
+		}); err != nil {
+			return err
+		}
+
+		return nil
+	} else {
+		var scanner engine.Scanner
+		if opts.O == options.Ascend {
+			scanner = x.e.ScanAscend
+		} else {
+			scanner = x.e.ScanDescend
+		}
+
+		if err := scanner(ctx, func(k string, v []byte) {
+			*dest = append(*dest, createDocument(k, v))
+		}); err != nil {
+			return err
+		}
+
+		return nil
+	}
 }
 
 func (x *Tx) Remove(keys ...string) error {
