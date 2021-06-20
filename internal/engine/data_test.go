@@ -20,6 +20,8 @@ func TestIndex_Less_2segments(t *testing.T) {
 		{"user:a:2", "user:b:1", true},
 		{"user:a", "user:b:0", true},
 		{"user", "user:1", true},
+		{"product", "user", true},
+		{"product:9", "user:1", true},
 	}
 
 	for _, tc := range tt {

@@ -394,6 +394,90 @@ func (fts *findTestSuite) TestLemonDB_FindAllUsers_Descend() {
 	}
 }
 
+func (fts *findTestSuite) TestLemonDB_FindAllDocs_Descend() {
+	db, closer, err := lemon.New(fts.fixture)
+	fts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			fts.Require().NoError(err)
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
+	defer cancel()
+
+	var docs []lemon.Document
+	if err := db.ReadTx(context.Background(), func(tx *lemon.Tx) error {
+		opts := options.Find().SetOrder(options.Descend)
+		if err := tx.Find(ctx, opts, &docs); err != nil {
+			return err
+		}
+
+		return nil
+	}); err != nil {
+		fts.Require().NoError(err, "should be no error")
+	}
+
+	fts.Require().Lenf(docs, 2_000, "users and products total count mismatch, got %d", len(docs))
+
+	totalUsers := 1_000
+	for i := 0; i < totalUsers; i++ {
+		fts.Assert().Equal(fmt.Sprintf("username_%d", totalUsers - i), docs[i].StringOrDefault("username", ""))
+		fts.Assert().Equal(fmt.Sprintf("999444555%d", totalUsers - i), docs[i].StringOrDefault("phone", ""))
+		fts.Assert().Equal(totalUsers - i, docs[i].IntOrDefault("logins", 0))
+		fts.Assert().Equal(float64(totalUsers - i), docs[i].FloatOrDefault("balance", 0))
+	}
+
+	totalProducts := 1_000
+	for i := 0; i < totalProducts; i++ {
+		fts.Assert().Equal(fmt.Sprintf("product_%d", totalProducts - i), docs[totalUsers + i].StringOrDefault("name", ""))
+		fts.Assert().Equal(totalProducts - i, docs[totalUsers + i].IntOrDefault("id", 0))
+	}
+}
+
+func (fts *findTestSuite) TestLemonDB_FindAllDocs_Ascend() {
+	db, closer, err := lemon.New(fts.fixture)
+	fts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			fts.Require().NoError(err)
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
+	defer cancel()
+
+	var docs []lemon.Document
+	if err := db.ReadTx(context.Background(), func(tx *lemon.Tx) error {
+		opts := options.Find().SetOrder(options.Ascend)
+		if err := tx.Find(ctx, opts, &docs); err != nil {
+			return err
+		}
+
+		return nil
+	}); err != nil {
+		fts.Require().NoError(err, "should be no error")
+	}
+
+	fts.Require().Lenf(docs, 2_000, "users and products total count mismatch, got %d", len(docs))
+
+	totalProducts := 1_000
+	for i := 0; i < totalProducts; i++ {
+		fts.Assert().Equal(fmt.Sprintf("product_%d", i + 1), docs[i].StringOrDefault("name", ""))
+		fts.Assert().Equal(i + 1, docs[i].IntOrDefault("id", 0))
+	}
+
+	totalUsers := 1_000
+	for i := 0; i < totalUsers; i++ {
+		fts.Assert().Equal(fmt.Sprintf("username_%d", i + 1), docs[totalProducts + i].StringOrDefault("username", ""))
+		fts.Assert().Equal(fmt.Sprintf("999444555%d", i + 1), docs[totalProducts + i].StringOrDefault("phone", ""))
+		fts.Assert().Equal(i + 1, docs[totalProducts + i].IntOrDefault("logins", 0))
+		fts.Assert().Equal(float64(i + 1), docs[totalProducts + i].FloatOrDefault("balance", 0))
+	}
+}
+
 func seedUserData(t *testing.T, db *lemon.LemonDB, n int) {
 	t.Helper()
 
