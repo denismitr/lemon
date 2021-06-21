@@ -17,26 +17,29 @@ func (p *index) Less(than btree.Item) bool {
 	otherSegments := strings.Split(other.key, ":")
 	l := smallestSegmentLen(ourSegments, otherSegments)
 
-	prevEq := true
+	prevEq := false
 	for i := 0; i < l; i++ {
-		if less, bothInts := tryToCompareAsINTs(ourSegments[i], otherSegments[i]); bothInts && less && prevEq {
-			return less
-		} else if bothInts {
-			continue
-		}
-
-		if ourSegments[i] < otherSegments[i] && prevEq {
-			return true
-		} else if ourSegments[i] == otherSegments[i] {
-			// last iteration
-			if i == l - 1 {
-				return true
+		// try to compare as ints
+		bothInts, a, b := convertToINTs(ourSegments[i], otherSegments[i])
+		if bothInts {
+			if a != b {
+				return a < b
 			} else {
 				prevEq = true
+				continue
 			}
-		} else {
-			prevEq = false
 		}
+
+		// try to compare as strings
+		if ourSegments[i] != otherSegments[i]  {
+			return ourSegments[i] < otherSegments[i]
+		} else {
+			prevEq = ourSegments[i] == otherSegments[i]
+		}
+	}
+
+	if prevEq && len(otherSegments) > len(ourSegments) {
+		return true
 	}
 
 	return false
@@ -59,17 +62,17 @@ func isPositiveInt(s string) bool {
 	return n > 0
 }
 
-func tryToCompareAsINTs(a, b string) (less bool, bothInts bool) {
+func convertToINTs(a, b string) (bool, int, int) {
 	an, err := strconv.Atoi(a)
 	if err != nil {
-		return false, false
+		return false, 0, 0
 	}
 
 	bn, err := strconv.Atoi(b)
 	if err != nil {
-		return false, false
+		return false, 0, 0
 	}
 
-	return an < bn, true
+	return true, an, bn
 }
 

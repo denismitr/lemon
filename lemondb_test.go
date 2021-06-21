@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/denismitr/lemon"
-	"github.com/denismitr/lemon/options"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -12,7 +11,6 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
-	"time"
 )
 
 func TestLemonDB_Read(t *testing.T) {
@@ -26,7 +24,7 @@ func TestLemonDB_Read(t *testing.T) {
 	t.Run("get existing keys", func(t *testing.T) {
 		var result1 *lemon.Document
 		var result2 *lemon.Document
-		if err := db.ReadTx(context.Background(), func(tx *lemon.Tx) error {
+		if err := db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
 			doc1, err := tx.Get("product:8976")
 			if err != nil {
 				return err
@@ -80,7 +78,7 @@ func TestLemonDB_Write(t *testing.T) {
 	var result1 *lemon.Document
 	var result2 *lemon.Document
 	t.Run("add new documents and confirm with read", func(t *testing.T) {
-		err := db.UpdateTx(context.Background(), func(tx *lemon.Tx) error {
+		err := db.MultiUpdate(context.Background(), func(tx *lemon.Tx) error {
 			if err := tx.Insert("product:8976", lemon.D{
 				"foo": "bar",
 				"baz": 8989764,
@@ -125,7 +123,7 @@ func TestLemonDB_Write(t *testing.T) {
 		var readResult2 *lemon.Document
 		// Confirm that those keys are accessible after previous transaction has committed
 		// and results should be identical
-		if err := db.ReadTx(context.Background(), func(tx *lemon.Tx) error {
+		if err := db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
 			doc1, err := tx.Get("product:8976")
 			if err != nil {
 				return err
@@ -167,7 +165,7 @@ func (rts *removeTestSuite) SetupTest() {
 	rts.closer = closer
 	rts.db = db
 
-	if err := db.UpdateTx(context.Background(), func(tx *lemon.Tx) error {
+	if err := db.MultiUpdate(context.Background(), func(tx *lemon.Tx) error {
 		if err := tx.Insert("item:8976", lemon.D{
 			"foo": "bar",
 			"baz": 8989764,
@@ -213,7 +211,7 @@ func (rts *removeTestSuite) TearDownTest() {
 }
 
 func (rts *removeTestSuite) TestLemonDB_RemoveItemInTheMiddle() {
-	if err := rts.db.UpdateTx(context.Background(), func(tx *lemon.Tx) error {
+	if err := rts.db.MultiUpdate(context.Background(), func(tx *lemon.Tx) error {
 		if err := tx.Remove("item:1145"); err != nil {
 			return err
 		}
@@ -223,7 +221,7 @@ func (rts *removeTestSuite) TestLemonDB_RemoveItemInTheMiddle() {
 		rts.Require().NoError(err)
 	}
 
-	if err := rts.db.ReadTx(context.Background(), func(tx *lemon.Tx) error {
+	if err := rts.db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
 		doc, err := tx.Get("item:1145")
 		rts.Require().Error(err)
 		rts.Assert().Nil(doc)
@@ -232,249 +230,6 @@ func (rts *removeTestSuite) TestLemonDB_RemoveItemInTheMiddle() {
 		return nil
 	}); err != nil {
 		rts.Require().NoError(err)
-	}
-}
-
-type findTestSuite struct {
-	suite.Suite
-	fixture string
-}
-
-func (fts *findTestSuite) SetupSuite() {
-	fts.fixture = "./__fixtures__/find_db1.ldb"
-	db, closer, err := lemon.New(fts.fixture)
-	fts.Require().NoError(err)
-
-	defer func() {
-		if err := closer(); err != nil {
-			fts.Require().NoError(err)
-		}
-	}()
-
-	seedUserData(fts.T(), db, 1_000)
-	seedProductData(fts.T(), db, 1_000)
-}
-
-func (fts *findTestSuite) TearDownSuite() {
-	if err := os.Remove(fts.fixture); err != nil {
-		fts.Require().NoError(err)
-	}
-}
-
-func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Descend() {
-	db, closer, err := lemon.New(fts.fixture)
-	fts.Require().NoError(err)
-
-	defer func() {
-		if err := closer(); err != nil {
-			fts.Require().NoError(err)
-		}
-	}()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
-	defer cancel()
-
-	var docs []lemon.Document
-	if err := db.ReadTx(context.Background(), func(tx *lemon.Tx) error {
-		opts := options.Find().SetOrder(options.Descend).KeyRange("user:100", "user:110")
-		if err := tx.Find(ctx, opts, &docs); err != nil {
-			return err
-		}
-
-		return nil
-	}); err != nil {
-		fts.Require().NoError(err)
-	}
-
-	fts.Assert().Len(docs, 10)
-}
-
-func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Ascend() {
-	db, closer, err := lemon.New(fts.fixture)
-	fts.Require().NoError(err)
-
-	defer func() {
-		if err := closer(); err != nil {
-			fts.Require().NoError(err)
-		}
-	}()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
-	defer cancel()
-
-	var docs []lemon.Document
-	if err := db.ReadTx(context.Background(), func(tx *lemon.Tx) error {
-		opts := options.Find().SetOrder(options.Ascend).KeyRange("product:750", "product:500")
-		if err := tx.Find(ctx, opts, &docs); err != nil {
-			return err
-		}
-
-		return nil
-	}); err != nil {
-		fts.Require().NoError(err, "should be no error")
-	}
-
-	fts.Assert().Len(docs, 250)
-
-	for i := 500; i < 750; i++ {
-		idx := i - 500
-		fts.Assert().Equal(fmt.Sprintf("product_%d", i), docs[idx].StringOrDefault("name", ""))
-		fts.Assert().Equal(i, docs[idx].IntOrDefault("id", 0))
-	}
-}
-
-func (fts *findTestSuite) TestLemonDB_FindAllUsers_Ascend() {
-	db, closer, err := lemon.New(fts.fixture)
-	fts.Require().NoError(err)
-
-	defer func() {
-		if err := closer(); err != nil {
-			fts.Require().NoError(err)
-		}
-	}()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
-	defer cancel()
-
-	var docs []lemon.Document
-	if err := db.ReadTx(context.Background(), func(tx *lemon.Tx) error {
-		opts := options.Find().SetOrder(options.Ascend).Prefix("user")
-		if err := tx.Find(ctx, opts, &docs); err != nil {
-			return err
-		}
-
-		return nil
-	}); err != nil {
-		fts.Require().NoError(err, "should be no error")
-	}
-
-	fts.Require().Lenf(docs, 1_000, "users total count mismatch, got %d", len(docs))
-
-	for i := 1; i < 1_001; i++ {
-		fts.Assert().Equal(fmt.Sprintf("username_%d", i), docs[i - 1].StringOrDefault("username", ""))
-		fts.Assert().Equal(fmt.Sprintf("999444555%d", i), docs[i - 1].StringOrDefault("phone", ""))
-		fts.Assert().Equal(i, docs[i - 1].IntOrDefault("logins", 0))
-		fts.Assert().Equal(float64(i), docs[i - 1].FloatOrDefault("balance", 0))
-	}
-}
-
-func (fts *findTestSuite) TestLemonDB_FindAllUsers_Descend() {
-	db, closer, err := lemon.New(fts.fixture)
-	fts.Require().NoError(err)
-
-	defer func() {
-		if err := closer(); err != nil {
-			fts.Require().NoError(err)
-		}
-	}()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
-	defer cancel()
-
-	var docs []lemon.Document
-	if err := db.ReadTx(context.Background(), func(tx *lemon.Tx) error {
-		opts := options.Find().SetOrder(options.Descend).Prefix("user")
-		if err := tx.Find(ctx, opts, &docs); err != nil {
-			return err
-		}
-
-		return nil
-	}); err != nil {
-		fts.Require().NoError(err, "should be no error")
-	}
-
-	fts.Require().Lenf(docs, 1_000, "users total count mismatch, got %d", len(docs))
-
-	total := 1_000
-	for i := 1_000; i > 0; i-- {
-		fts.Assert().Equal(fmt.Sprintf("username_%d", i), docs[total - i].StringOrDefault("username", ""))
-		fts.Assert().Equal(fmt.Sprintf("999444555%d", i), docs[total - i].StringOrDefault("phone", ""))
-		fts.Assert().Equal(i, docs[total - i].IntOrDefault("logins", 0))
-		fts.Assert().Equal(float64(i), docs[total - i].FloatOrDefault("balance", 0))
-	}
-}
-
-func (fts *findTestSuite) TestLemonDB_FindAllDocs_Descend() {
-	db, closer, err := lemon.New(fts.fixture)
-	fts.Require().NoError(err)
-
-	defer func() {
-		if err := closer(); err != nil {
-			fts.Require().NoError(err)
-		}
-	}()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
-	defer cancel()
-
-	var docs []lemon.Document
-	if err := db.ReadTx(context.Background(), func(tx *lemon.Tx) error {
-		opts := options.Find().SetOrder(options.Descend)
-		if err := tx.Find(ctx, opts, &docs); err != nil {
-			return err
-		}
-
-		return nil
-	}); err != nil {
-		fts.Require().NoError(err, "should be no error")
-	}
-
-	fts.Require().Lenf(docs, 2_000, "users and products total count mismatch, got %d", len(docs))
-
-	totalUsers := 1_000
-	for i := 0; i < totalUsers; i++ {
-		fts.Assert().Equal(fmt.Sprintf("username_%d", totalUsers - i), docs[i].StringOrDefault("username", ""))
-		fts.Assert().Equal(fmt.Sprintf("999444555%d", totalUsers - i), docs[i].StringOrDefault("phone", ""))
-		fts.Assert().Equal(totalUsers - i, docs[i].IntOrDefault("logins", 0))
-		fts.Assert().Equal(float64(totalUsers - i), docs[i].FloatOrDefault("balance", 0))
-	}
-
-	totalProducts := 1_000
-	for i := 0; i < totalProducts; i++ {
-		fts.Assert().Equal(fmt.Sprintf("product_%d", totalProducts - i), docs[totalUsers + i].StringOrDefault("name", ""))
-		fts.Assert().Equal(totalProducts - i, docs[totalUsers + i].IntOrDefault("id", 0))
-	}
-}
-
-func (fts *findTestSuite) TestLemonDB_FindAllDocs_Ascend() {
-	db, closer, err := lemon.New(fts.fixture)
-	fts.Require().NoError(err)
-
-	defer func() {
-		if err := closer(); err != nil {
-			fts.Require().NoError(err)
-		}
-	}()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
-	defer cancel()
-
-	var docs []lemon.Document
-	if err := db.ReadTx(context.Background(), func(tx *lemon.Tx) error {
-		opts := options.Find().SetOrder(options.Ascend)
-		if err := tx.Find(ctx, opts, &docs); err != nil {
-			return err
-		}
-
-		return nil
-	}); err != nil {
-		fts.Require().NoError(err, "should be no error")
-	}
-
-	fts.Require().Lenf(docs, 2_000, "users and products total count mismatch, got %d", len(docs))
-
-	totalProducts := 1_000
-	for i := 0; i < totalProducts; i++ {
-		fts.Assert().Equal(fmt.Sprintf("product_%d", i + 1), docs[i].StringOrDefault("name", ""))
-		fts.Assert().Equal(i + 1, docs[i].IntOrDefault("id", 0))
-	}
-
-	totalUsers := 1_000
-	for i := 0; i < totalUsers; i++ {
-		fts.Assert().Equal(fmt.Sprintf("username_%d", i + 1), docs[totalProducts + i].StringOrDefault("username", ""))
-		fts.Assert().Equal(fmt.Sprintf("999444555%d", i + 1), docs[totalProducts + i].StringOrDefault("phone", ""))
-		fts.Assert().Equal(i + 1, docs[totalProducts + i].IntOrDefault("logins", 0))
-		fts.Assert().Equal(float64(i + 1), docs[totalProducts + i].FloatOrDefault("balance", 0))
 	}
 }
 
@@ -495,18 +250,50 @@ func seedUserData(t *testing.T, db *lemon.LemonDB, n int) {
 		Address:  "Some street ap.",
 	}
 
-	if err := db.UpdateTx(context.Background(), func(tx *lemon.Tx) error {
-		for i := 1; i < n + 1; i++ {
+	if err := db.MultiUpdate(context.Background(), func(tx *lemon.Tx) error {
+		for i := 1; i < n+1; i++ {
 			user := userData{
 				Username: fmt.Sprintf("%s_%d", baseUser.Username, i),
 				Phone:    fmt.Sprintf("%s%d", baseUser.Phone, i),
 				Address:  fmt.Sprintf("%s %d", baseUser.Address, i),
 				Balance:  float64(i),
-				Logins:  i,
+				Logins:   i,
 			}
 
 			if err := tx.Insert(fmt.Sprintf("user:%d", i), user); err != nil {
 				return err
+			}
+		}
+
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func seedUserPets(t *testing.T, db *lemon.LemonDB, firstUserId, lastUserId, pets int) {
+	t.Helper()
+
+	type petData struct {
+		Name   string `json:"name"`
+		Age    int    `json:"age"`
+		Weight float64 `json:"weight"`
+		Kind   string `json:"kind"`
+	}
+
+	if err := db.MultiUpdate(context.Background(), func(tx *lemon.Tx) error {
+		for i := firstUserId; i <= lastUserId; i++ {
+			for j := 0; j < pets; j++ {
+				pet := petData{
+					Name: fmt.Sprintf("pet_%d", j + 1),
+					Age:    j + 1,
+					Weight:  float64(j) + 1.5,
+					Kind:   fmt.Sprintf("animal kind %d", j + 1),
+				}
+
+				if err := tx.Insert(fmt.Sprintf("user:%d:pet:%d", i, j + 1), pet); err != nil {
+					return err
+				}
 			}
 		}
 
@@ -530,17 +317,17 @@ func seedProductData(t *testing.T, db *lemon.LemonDB, n int) {
 
 	baseProduct := productData{
 		Name: "product",
-		ID:  0,
+		ID:   0,
 	}
 
-	if err := db.UpdateTx(context.Background(), func(tx *lemon.Tx) error {
+	if err := db.MultiUpdate(context.Background(), func(tx *lemon.Tx) error {
 		for i := 0; i < n; i++ {
 			user := productData{
-				Name: fmt.Sprintf("%s_%d", baseProduct.Name, i + 1),
-				Buyers:    []int{1 + i, 2 + i, 3 + i, 4 + i},
-				ID:  i + 1,
+				Name:     fmt.Sprintf("%s_%d", baseProduct.Name, i+1),
+				Buyers:   []int{1 + i, 2 + i, 3 + i, 4 + i},
+				ID:       i + 1,
 				OwnerID:  n - i,
-				Price:   float64(i + 1),
+				Price:    float64(i + 1),
 				Quantity: i,
 			}
 
@@ -553,10 +340,6 @@ func seedProductData(t *testing.T, db *lemon.LemonDB, n int) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-}
-
-func TestTx_Find(t *testing.T) {
-	suite.Run(t, &findTestSuite{})
 }
 
 func TestTx_Remove(t *testing.T) {

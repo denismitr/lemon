@@ -16,7 +16,7 @@ type Tx struct {
 	ctx context.Context
 }
 
-func (x *Tx) Get(key string) (*Document, error) {
+func (x *Tx) Get(key string) (*Document, error) { // fixme: decide on ref or value
 	v, err := x.e.FindByKey(key)
 	if err != nil {
 		if errors.Is(err, engine.ErrDocumentNotFound) {
@@ -58,7 +58,33 @@ func (x *Tx) InsertOrReplace(key string, data interface{}) error {
 	return nil
 }
 
+func (x *Tx) Scan(ctx context.Context, opts *options.FindOptions, cb func(d Document) bool) error {
+	ir := func(k string, v []byte) bool {
+		d := createDocument(k, v)
+		return cb(d)
+	}
+
+	if err := x.applyScanner(ctx, opts, ir); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (x *Tx) Find(ctx context.Context, opts *options.FindOptions, dest *[]Document) error {
+	ir := func(k string, v []byte) bool {
+		*dest = append(*dest, createDocument(k, v))
+		return true
+	}
+
+	if err := x.applyScanner(ctx, opts, ir); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (x *Tx) applyScanner(ctx context.Context, opts *options.FindOptions, ir engine.ItemReceiver) error {
 	if opts == nil {
 		opts = options.Find()
 	}
@@ -71,9 +97,7 @@ func (x *Tx) Find(ctx context.Context, opts *options.FindOptions, dest *[]Docume
 			scanner = x.e.ScanBetweenDescend
 		}
 
-		if err := scanner(ctx, opts.KR.Lower, opts.KR.Upper, func(k string, v []byte) {
-			*dest = append(*dest, createDocument(k, v))
-		}); err != nil {
+		if err := scanner(ctx, opts.KR.Lower, opts.KR.Upper, ir); err != nil {
 			return err
 		}
 
@@ -86,9 +110,7 @@ func (x *Tx) Find(ctx context.Context, opts *options.FindOptions, dest *[]Docume
 			scanner = x.e.ScanPrefixDescend
 		}
 
-		if err := scanner(ctx, opts.Px, func(k string, v []byte) {
-			*dest = append(*dest, createDocument(k, v))
-		}); err != nil {
+		if err := scanner(ctx, opts.Px, ir); err != nil {
 			return err
 		}
 
@@ -101,9 +123,7 @@ func (x *Tx) Find(ctx context.Context, opts *options.FindOptions, dest *[]Docume
 			scanner = x.e.ScanDescend
 		}
 
-		if err := scanner(ctx, func(k string, v []byte) {
-			*dest = append(*dest, createDocument(k, v))
-		}); err != nil {
+		if err := scanner(ctx, ir); err != nil {
 			return err
 		}
 

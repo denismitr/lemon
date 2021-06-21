@@ -133,7 +133,7 @@ func (e *Engine) Count() int {
 	return e.s.Len()
 }
 
-type ItemReceiver func(k string, v []byte)
+type ItemReceiver func(k string, v []byte) bool
 type RangeScanner func(ctx context.Context, lowerBoundPK string, upperBoundPK string, ir ItemReceiver) error
 type PrefixScanner func(ctx context.Context, prefix string, ir ItemReceiver) error
 type Scanner func(ctx context.Context, ir ItemReceiver) error
@@ -151,14 +151,13 @@ func (e *Engine) ScanBetweenDescend(
 		}
 
 		idx := i.(*index)
-		if v, getErr := e.s.GetValueAt(idx.offset); getErr != nil {
+		v, getErr := e.s.GetValueAt(idx.offset);
+		if getErr != nil {
 			err = getErr
 			return false
-		} else {
-			ir(idx.key, v)
 		}
 
-		return true
+		return ir(idx.key, v)
 	})
 
 	return
@@ -181,9 +180,8 @@ func (e *Engine) ScanBetweenAscend(
 			err = getErr
 			return false
 		} else {
-			ir(idx.key, v)
+			return ir(idx.key, v)
 		}
-		return true
 	})
 
 	return
@@ -237,9 +235,8 @@ func (e *Engine) ScanPrefixDescend(
 			err = getErr
 			return false
 		} else {
-			ir(idx.key, v)
+			return ir(idx.key, v)
 		}
-		return true
 	})
 
 	return
@@ -260,9 +257,8 @@ func (e *Engine) ScanAscend(
 			err = getErr
 			return false
 		} else {
-			ir(idx.key, v)
+			return ir(idx.key, v)
 		}
-		return true
 	})
 
 	return
@@ -283,9 +279,8 @@ func (e *Engine) ScanDescend(
 			err = getErr
 			return false
 		} else {
-			ir(idx.key, v)
+			return ir(idx.key, v)
 		}
-		return true
 	})
 
 	return

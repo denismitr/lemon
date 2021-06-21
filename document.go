@@ -14,6 +14,10 @@ type Document struct {
 	value []byte
 }
 
+func (d Document) Key() string {
+	return d.key
+}
+
 func newDocument(k string, v []byte) *Document {
 	return &Document{key: k, value: v}
 }

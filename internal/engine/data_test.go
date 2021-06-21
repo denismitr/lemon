@@ -6,7 +6,7 @@ import (
 )
 
 func TestIndex_Less_2segments(t *testing.T) {
-	tt := []struct{
+	tt := []struct {
 		key1 string
 		key2 string
 		less bool
@@ -22,10 +22,14 @@ func TestIndex_Less_2segments(t *testing.T) {
 		{"user", "user:1", true},
 		{"product", "user", true},
 		{"product:9", "user:1", true},
+		{"user:1", "user:1:pets", true},
+		{"item:8976", "item:8976", false},
+		{"product:1145", "product:1144", false},
+		{"product:1145", "product:1146", true},
 	}
 
 	for _, tc := range tt {
-		t.Run(tc.key1 + "_" + tc.key2, func(t *testing.T) {
+		t.Run(tc.key1+"_"+tc.key2, func(t *testing.T) {
 			idxA := index{key: tc.key1}
 			idxB := index{key: tc.key2}
 

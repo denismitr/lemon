@@ -56,7 +56,7 @@ func (db *LemonDB) Count() int {
 	return db.e.Count()
 }
 
-func (db *LemonDB) ReadTx(ctx context.Context, cb UserCallback) error {
+func (db *LemonDB) MultiRead(ctx context.Context, cb UserCallback) error {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
@@ -69,7 +69,7 @@ func (db *LemonDB) ReadTx(ctx context.Context, cb UserCallback) error {
 	return nil
 }
 
-func (db *LemonDB) UpdateTx(ctx context.Context, cb UserCallback) error {
+func (db *LemonDB) MultiUpdate(ctx context.Context, cb UserCallback) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
