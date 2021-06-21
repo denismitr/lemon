@@ -53,7 +53,7 @@ func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Descend() {
 
 	var docs []lemon.Document
 	if err := db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
-		opts := options.Find().SetOrder(options.Descend).KeyRange("user:100", "user:110")
+		opts := options.Find().Order(options.Descend).KeyRange("user:100", "user:109")
 		if err := tx.Find(ctx, opts, &docs); err != nil {
 			return err
 		}
@@ -63,7 +63,13 @@ func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Descend() {
 		fts.Require().NoError(err)
 	}
 
-	fts.Assert().Len(docs, 10)
+	expectedDocs := 9
+	fts.Assert().Len(docs, expectedDocs)
+
+	for i := 0; i < 9; i++ {
+		fts.Require().Equal(fmt.Sprintf("user:10%d", expectedDocs - i), docs[i].Key())
+		fts.Require().Equal(fmt.Sprintf("username_10%d", expectedDocs - i), docs[i].StringOrDefault("username", ""))
+	}
 }
 
 func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Ascend() {
@@ -81,7 +87,7 @@ func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Ascend() {
 
 	var docs []lemon.Document
 	if err := db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
-		opts := options.Find().SetOrder(options.Ascend).KeyRange("product:750", "product:500")
+		opts := options.Find().Order(options.Ascend).KeyRange("product:500", "product:750")
 		if err := tx.Find(ctx, opts, &docs); err != nil {
 			return err
 		}
@@ -115,7 +121,7 @@ func (fts *findTestSuite) TestLemonDB_FindAllUsers_Ascend() {
 
 	var docs []lemon.Document
 	if err := db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
-		opts := options.Find().SetOrder(options.Ascend).Prefix("user")
+		opts := options.Find().Order(options.Ascend).Prefix("user")
 		if err := tx.Find(ctx, opts, &docs); err != nil {
 			return err
 		}
@@ -150,7 +156,7 @@ func (fts *findTestSuite) TestLemonDB_FindAllUsers_Descend() {
 
 	var docs []lemon.Document
 	if err := db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
-		opts := options.Find().SetOrder(options.Descend).Prefix("user")
+		opts := options.Find().Order(options.Descend).Prefix("user")
 		if err := tx.Find(ctx, opts, &docs); err != nil {
 			return err
 		}
@@ -186,7 +192,7 @@ func (fts *findTestSuite) TestLemonDB_FindAllDocs_Descend() {
 
 	var docs []lemon.Document
 	if err := db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
-		opts := options.Find().SetOrder(options.Descend)
+		opts := options.Find().Order(options.Descend)
 		if err := tx.Find(ctx, opts, &docs); err != nil {
 			return err
 		}
@@ -228,7 +234,7 @@ func (fts *findTestSuite) TestLemonDB_FindAllDocs_Ascend() {
 
 	var docs []lemon.Document
 	if err := db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
-		opts := options.Find().SetOrder(options.Ascend)
+		opts := options.Find().Order(options.Ascend)
 		if err := tx.Find(ctx, opts, &docs); err != nil {
 			return err
 		}
@@ -298,7 +304,7 @@ func (sts *scanTestSuite) Test_ScanUserPets() {
 
 	var docs []lemon.Document
 	if err := db.MultiRead(ctx, func(tx *lemon.Tx) error {
-		opts := options.Find().SetOrder(options.Ascend).Prefix("user")
+		opts := options.Find().Order(options.Ascend).Prefix("user")
 		if scanErr := tx.Scan(ctx, opts, func (d lemon.Document) bool {
 			if strings.Contains(d.Key(), ":pet:") {
 				docs = append(docs, d)

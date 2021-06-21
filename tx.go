@@ -97,7 +97,7 @@ func (x *Tx) applyScanner(ctx context.Context, opts *options.FindOptions, ir eng
 			scanner = x.e.ScanBetweenDescend
 		}
 
-		if err := scanner(ctx, opts.KR.Lower, opts.KR.Upper, ir); err != nil {
+		if err := scanner(ctx, opts.KR.From, opts.KR.To, ir); err != nil {
 			return err
 		}
 

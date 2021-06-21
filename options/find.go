@@ -1,7 +1,7 @@
 package options
 
 type KeyRange struct {
-	Lower, Upper string
+	From, To string
 }
 
 type Order string
@@ -17,13 +17,13 @@ type FindOptions struct {
 	Px string
 }
 
-func (fo *FindOptions) SetOrder(o Order) *FindOptions {
+func (fo *FindOptions) Order(o Order) *FindOptions {
 	fo.O = o
 	return fo
 }
 
-func (fo *FindOptions) KeyRange(lower, upper string) *FindOptions {
-	fo.KR = &KeyRange{Lower: lower, Upper: upper}
+func (fo *FindOptions) KeyRange(from, to string) *FindOptions {
+	fo.KR = &KeyRange{From: from, To: to}
 	return fo
 }
 

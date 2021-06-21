@@ -140,11 +140,12 @@ type Scanner func(ctx context.Context, ir ItemReceiver) error
 
 func (e *Engine) ScanBetweenDescend(
 	ctx context.Context,
-	lowerBoundPK string,
-	upperBoundPK string,
+	from string,
+	to string,
 	ir ItemReceiver,
 ) (err error) {
-	e.pks.DescendRange(&index{key: upperBoundPK}, &index{key: lowerBoundPK}, func(i btree.Item) bool {
+	// Descend required a reverse order of `from` and `to`
+	e.pks.DescendRange(&index{key: to}, &index{key: from}, func(i btree.Item) bool {
 		if ctx.Err() != nil {
 			err = ctx.Err()
 			return false
@@ -165,11 +166,11 @@ func (e *Engine) ScanBetweenDescend(
 
 func (e *Engine) ScanBetweenAscend(
 	ctx context.Context,
-	lowerBoundPK string,
-	upperBoundPK string,
+	from string,
+	to string,
 	ir ItemReceiver,
 ) (err error) {
-	e.pks.AscendRange(&index{key: upperBoundPK}, &index{key: lowerBoundPK}, func(i btree.Item) bool {
+	e.pks.AscendRange(&index{key: from}, &index{key: to}, func(i btree.Item) bool {
 		if ctx.Err() != nil {
 			err = ctx.Err()
 			return false

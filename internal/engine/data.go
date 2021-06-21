@@ -38,11 +38,7 @@ func (p *index) Less(than btree.Item) bool {
 		}
 	}
 
-	if prevEq && len(otherSegments) > len(ourSegments) {
-		return true
-	}
-
-	return false
+	return prevEq && len(otherSegments) > len(ourSegments)
 }
 
 func smallestSegmentLen(a, b []string) int {
