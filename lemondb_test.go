@@ -19,7 +19,11 @@ func TestLemonDB_Read(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	defer closer()
+	defer func() {
+		if err := closer(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	t.Run("get existing keys", func(t *testing.T) {
 		var result1 *lemon.Document
@@ -59,97 +63,211 @@ func TestLemonDB_Read(t *testing.T) {
 	})
 }
 
-func TestLemonDB_Write(t *testing.T) {
-	db, closer, err := lemon.New("./__fixtures__/write_db1.ldb")
+type writeTestSuite struct {
+	suite.Suite
+	fixture string
+}
+
+func (wts *writeTestSuite) SetupSuite() {
+	wts.fixture = "./__fixtures__/write_db1.ldb"
+
+	// only init new database
+	_, closer, err := lemon.New(wts.fixture)
 	if err != nil {
-		t.Fatal(err)
+		wts.Require().NoError(err)
+	}
+
+	if err := closer(); err != nil {
+		wts.Require().NoError(err)
+	}
+}
+
+func (wts *writeTestSuite) TearDownSuite() {
+	if err := os.Remove(wts.fixture); err != nil {
+		wts.Require().NoError(err)
+	}
+}
+
+func (wts *writeTestSuite) Test_WriteAndRead_InTwoTransactions() {
+	db, closer, err := lemon.New(wts.fixture)
+	if err != nil {
+		wts.Require().NoError(err)
 	}
 
 	defer func() {
 		if err := closer(); err != nil {
-			t.Error(err)
-		}
-
-		if err := os.Remove("./__fixtures__/write_db1.ldb"); err != nil {
-			t.Error(err)
+			wts.Assert().NoError(err)
 		}
 	}()
 
 	var result1 *lemon.Document
 	var result2 *lemon.Document
-	t.Run("add new documents and confirm with read", func(t *testing.T) {
-		err := db.MultiUpdate(context.Background(), func(tx *lemon.Tx) error {
-			if err := tx.Insert("product:8976", lemon.D{
-				"foo": "bar",
-				"baz": 8989764,
-				"100": "username",
-			}); err != nil {
-				return err
-			}
-
-			if err := tx.Insert("product:1145", map[string]interface{}{
-				"foo":   "bar5674",
-				"baz12": 123.879,
-				"999":   nil,
-			}); err != nil {
-				return err
-			}
-
-			doc1, err := tx.Get("product:8976")
-			if err != nil {
-				return err
-			}
-
-			doc2, err := tx.Get("product:1145")
-			if err != nil {
-				return err
-			}
-
-			result1 = doc1
-			result2 = doc2
-
-			return nil
-		})
-
-		require.NoError(t, err)
-		assert.Equal(t, "bar", result1.StringOrDefault("foo", ""))
-		assert.Equal(t, 8989764, result1.IntOrDefault("baz", 0))
-		assert.Equal(t, "username", result1.StringOrDefault("100", ""))
-		assert.Equal(t, "bar5674", result2.StringOrDefault("foo", ""))
-		assert.Equal(t, 123.879, result2.FloatOrDefault("baz12", 0))
-		/*assert.Equal(t, nil, docs[1]["999"])*/
-
-		var readResult1 *lemon.Document
-		var readResult2 *lemon.Document
-		// Confirm that those keys are accessible after previous transaction has committed
-		// and results should be identical
-		if err := db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
-			doc1, err := tx.Get("product:8976")
-			if err != nil {
-				return err
-			}
-
-			doc2, err := tx.Get("product:1145")
-			if err != nil {
-				return err
-			}
-
-			readResult1 = doc1
-			readResult2 = doc2
-
-			return nil
+	if txErr := db.MultiUpdate(context.Background(), func(tx *lemon.Tx) error {
+		if err := tx.Insert("product:8976", lemon.D{
+			"foo": "bar",
+			"baz": 8989764,
+			"100": "username",
 		}); err != nil {
-			t.Fatal(err)
+			return err
 		}
 
-		readJson1 := readResult1.RawString()
-		assert.Equal(t, `{"100":"username","baz":8989764,"foo":"bar"}`, readJson1)
-		assert.Equal(t, result1.RawString(), readJson1)
+		if err := tx.Insert("product:1145", map[string]interface{}{
+			"foo":   "bar5674",
+			"baz12": 123.879,
+			"999":   nil,
+		}); err != nil {
+			return err
+		}
 
-		readJson2 := readResult2.RawString()
-		assert.Equal(t, `{"999":null,"baz12":123.879,"foo":"bar5674"}`, readJson2)
-		assert.Equal(t, result2.RawString(), readJson2)
-	})
+		doc1, err := tx.Get("product:8976")
+		if err != nil {
+			return err
+		}
+
+		doc2, err := tx.Get("product:1145")
+		if err != nil {
+			return err
+		}
+
+		result1 = doc1
+		result2 = doc2
+
+		return nil
+	}); txErr != nil {
+		wts.Require().NoError(txErr)
+	}
+
+	wts.Assert().Equal("bar", result1.StringOrDefault("foo", ""))
+	wts.Assert().Equal(8989764, result1.IntOrDefault("baz", 0))
+	wts.Assert().Equal("username", result1.StringOrDefault("100", ""))
+	wts.Assert().Equal("bar5674", result2.StringOrDefault("foo", ""))
+	wts.Assert().Equal(123.879, result2.FloatOrDefault("baz12", 0))
+	/*assert.Equal(t, nil, docs[1]["999"])*/
+
+	var readResult1 *lemon.Document
+	var readResult2 *lemon.Document
+	// Confirm that those keys are accessible after previous transaction has committed
+	// and results should be identical
+	if txErr := db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
+		doc1, err := tx.Get("product:8976")
+		if err != nil {
+			return err
+		}
+
+		doc2, err := tx.Get("product:1145")
+		if err != nil {
+			return err
+		}
+
+		readResult1 = doc1
+		readResult2 = doc2
+
+		return nil
+	}); txErr != nil {
+		wts.Require().NoError(txErr)
+	}
+
+	readJson1 := readResult1.RawString()
+	wts.Assert().Equal(`{"100":"username","baz":8989764,"foo":"bar"}`, readJson1)
+	wts.Assert().Equal(result1.RawString(), readJson1)
+
+	readJson2 := readResult2.RawString()
+	wts.Assert().Equal(`{"999":null,"baz12":123.879,"foo":"bar5674"}`, readJson2)
+	wts.Assert().Equal(result2.RawString(), readJson2)
+}
+
+func (wts *writeTestSuite) Test_ReplaceInsertedDocs() {
+	db, closer, err := lemon.New(wts.fixture)
+	if err != nil {
+		wts.Require().NoError(err)
+	}
+
+	defer func() {
+		if err := closer(); err != nil {
+			wts.Assert().NoError(err)
+		}
+	}()
+
+	if txErr := db.MultiUpdate(context.Background(), func(tx *lemon.Tx) error {
+		if err := tx.Insert("item:77", lemon.D{
+			"foo": "bar",
+			"baz": 8989764,
+			"100": "username",
+		}); err != nil {
+			return err
+		}
+
+		if err := tx.Insert("item:1145", lemon.D{
+			"foo":   "bar5674",
+			"baz12": 123.879,
+			"999":   nil,
+		}); err != nil {
+			return err
+		}
+
+		return nil
+	}); txErr != nil {
+		wts.Require().NoError(txErr)
+	}
+
+	wts.Assert().Equal(2, db.Count())
+
+	if txErr := db.MultiUpdate(context.Background(), func(tx *lemon.Tx) error {
+		if err := tx.InsertOrReplace("item:77", lemon.D{
+			"foo": "bar22",
+			"baz": 1,
+			"bar": nil,
+		}); err != nil {
+			return err
+		}
+
+		if err := tx.InsertOrReplace("item:1145", lemon.D{
+			"foo1":   "0",
+			"baz": 123.879,
+			"999":   "bar",
+		}); err != nil {
+			return err
+		}
+
+		return nil
+	}); txErr != nil {
+		wts.Require().NoError(txErr)
+	}
+
+	wts.Assert().Equal(2, db.Count())
+
+	var readResult1 *lemon.Document
+	var readResult2 *lemon.Document
+	// Confirm that those keys are accessible after previous transaction has committed
+	// and results should be identical
+	if txErr := db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
+		doc1, err := tx.Get("item:77")
+		if err != nil {
+			return err
+		}
+
+		doc2, err := tx.Get("item:1145")
+		if err != nil {
+			return err
+		}
+
+		readResult1 = doc1
+		readResult2 = doc2
+
+		return nil
+	}); txErr != nil {
+		wts.Require().NoError(txErr)
+	}
+
+	readJson1 := readResult1.RawString()
+	wts.Assert().Equal(`{"bar":null,"baz":1,"foo":"bar22"}`, readJson1)
+
+	readJson2 := readResult2.RawString()
+	wts.Assert().Equal(`{"999":"bar","baz":123.879,"foo1":"0"}`, readJson2)
+}
+
+func Test_Write(t *testing.T) {
+	suite.Run(t, &writeTestSuite{})
 }
 
 type removeTestSuite struct {

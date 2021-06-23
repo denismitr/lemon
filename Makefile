@@ -15,10 +15,10 @@ vars:
 
 test:
 	@echo Starting to run tests locally with no coverage
-	$(GOTEST) ./...
+	$(GOTEST) -count=1 ./...
 	@echo Done
 
-test_cover:
+test/cover:
 	@echo Starting to run tests locally with coverage
 	$(GOTEST) -cover -coverpkg=./... -coverprofile=$(COVEROUT) . && $(GOCOVER) -html=$(COVEROUT)
 	@echo Done

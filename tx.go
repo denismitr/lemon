@@ -47,8 +47,10 @@ func (x *Tx) InsertOrReplace(key string, data interface{}) error {
 
 	if err := x.e.Insert(key, data); err != nil {
 		if errors.Is(err, engine.ErrKeyAlreadyExists) {
-			if err := x.e.Update(key, data); err != nil {
-				return err
+			if updateErr := x.e.Update(key, data); updateErr != nil {
+				return updateErr
+			} else {
+				return nil
 			}
 		}
 
