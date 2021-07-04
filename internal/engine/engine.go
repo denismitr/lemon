@@ -12,6 +12,11 @@ import (
 var ErrDocumentNotFound = errors.New("document not found")
 var ErrKeyAlreadyExists = errors.New("key already exists")
 
+type ItemReceiver func(k string, v []byte) bool
+type RangeScanner func(ctx context.Context, lowerBoundPK string, upperBoundPK string, ir ItemReceiver) error
+type PrefixScanner func(ctx context.Context, prefix string, ir ItemReceiver) error
+type Scanner func(ctx context.Context, ir ItemReceiver) error
+
 type Engine struct {
 	s storage.Storage
 	pks *btree.BTree
@@ -48,6 +53,25 @@ func (e *Engine) FindByKey(pk string) ([]byte, error) {
 	}
 
 	return e.s.GetValueAt(offset)
+}
+
+func (e *Engine) FindByKeys(pks []string, ir ItemReceiver) error {
+	for _, k := range pks {
+		offset, err := e.findOffsetByKey(k)
+		if err != nil {
+			continue
+		}
+
+		if b, vErr := e.s.GetValueAt(offset); vErr != nil {
+			return vErr
+		} else {
+			if next := ir(k, b); !next {
+				break
+			}
+		}
+	}
+
+	return nil
 }
 
 func (e *Engine) findOffsetByKey(key string) (int, error) {
@@ -132,11 +156,6 @@ func (e *Engine) Update(key string, d interface{}) error {
 func (e *Engine) Count() int {
 	return e.s.Len()
 }
-
-type ItemReceiver func(k string, v []byte) bool
-type RangeScanner func(ctx context.Context, lowerBoundPK string, upperBoundPK string, ir ItemReceiver) error
-type PrefixScanner func(ctx context.Context, prefix string, ir ItemReceiver) error
-type Scanner func(ctx context.Context, ir ItemReceiver) error
 
 func (e *Engine) ScanBetweenDescend(
 	ctx context.Context,

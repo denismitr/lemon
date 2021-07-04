@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/denismitr/lemon"
-	"github.com/denismitr/lemon/options"
 	"github.com/stretchr/testify/suite"
 	"os"
 	"strings"
@@ -19,14 +18,8 @@ type findTestSuite struct {
 
 func (fts *findTestSuite) SetupSuite() {
 	fts.fixture = "./__fixtures__/find_db1.ldb"
-	db, closer, err := lemon.New(fts.fixture)
+	db, err := lemon.New(fts.fixture)
 	fts.Require().NoError(err)
-
-	defer func() {
-		if err := closer(); err != nil {
-			fts.Require().NoError(err)
-		}
-	}()
 
 	seedUserData(fts.T(), db, 1_000)
 	seedProductData(fts.T(), db, 1_000)
@@ -39,21 +32,15 @@ func (fts *findTestSuite) TearDownSuite() {
 }
 
 func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Descend() {
-	db, closer, err := lemon.New(fts.fixture)
+	db, err := lemon.New(fts.fixture)
 	fts.Require().NoError(err)
-
-	defer func() {
-		if err := closer(); err != nil {
-			fts.Require().NoError(err)
-		}
-	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
 	defer cancel()
 
 	var docs []lemon.Document
 	if err := db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
-		opts := options.Find().Order(options.Descend).KeyRange("user:100", "user:109")
+		opts := lemon.Q().Order(lemon.Descend).KeyRange("user:100", "user:109")
 		if err := tx.Find(ctx, opts, &docs); err != nil {
 			return err
 		}
@@ -73,21 +60,15 @@ func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Descend() {
 }
 
 func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Ascend() {
-	db, closer, err := lemon.New(fts.fixture)
+	db, err := lemon.New(fts.fixture)
 	fts.Require().NoError(err)
-
-	defer func() {
-		if err := closer(); err != nil {
-			fts.Require().NoError(err)
-		}
-	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
 	defer cancel()
 
 	var docs []lemon.Document
 	if err := db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
-		opts := options.Find().Order(options.Ascend).KeyRange("product:500", "product:750")
+		opts := lemon.Q().Order(lemon.Ascend).KeyRange("product:500", "product:750")
 		if err := tx.Find(ctx, opts, &docs); err != nil {
 			return err
 		}
@@ -107,21 +88,15 @@ func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Ascend() {
 }
 
 func (fts *findTestSuite) TestLemonDB_FindAllUsers_Ascend() {
-	db, closer, err := lemon.New(fts.fixture)
+	db, err := lemon.New(fts.fixture)
 	fts.Require().NoError(err)
-
-	defer func() {
-		if err := closer(); err != nil {
-			fts.Require().NoError(err)
-		}
-	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
 	defer cancel()
 
 	var docs []lemon.Document
 	if err := db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
-		opts := options.Find().Order(options.Ascend).Prefix("user")
+		opts := lemon.Q().Order(lemon.Ascend).Prefix("user")
 		if err := tx.Find(ctx, opts, &docs); err != nil {
 			return err
 		}
@@ -142,21 +117,15 @@ func (fts *findTestSuite) TestLemonDB_FindAllUsers_Ascend() {
 }
 
 func (fts *findTestSuite) TestLemonDB_FindAllUsers_Descend() {
-	db, closer, err := lemon.New(fts.fixture)
+	db, err := lemon.New(fts.fixture)
 	fts.Require().NoError(err)
-
-	defer func() {
-		if err := closer(); err != nil {
-			fts.Require().NoError(err)
-		}
-	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
 	defer cancel()
 
 	var docs []lemon.Document
 	if err := db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
-		opts := options.Find().Order(options.Descend).Prefix("user")
+		opts := lemon.Q().Order(lemon.Descend).Prefix("user")
 		if err := tx.Find(ctx, opts, &docs); err != nil {
 			return err
 		}
@@ -178,21 +147,15 @@ func (fts *findTestSuite) TestLemonDB_FindAllUsers_Descend() {
 }
 
 func (fts *findTestSuite) TestLemonDB_FindAllDocs_Descend() {
-	db, closer, err := lemon.New(fts.fixture)
+	db, err := lemon.New(fts.fixture)
 	fts.Require().NoError(err)
-
-	defer func() {
-		if err := closer(); err != nil {
-			fts.Require().NoError(err)
-		}
-	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
 	defer cancel()
 
 	var docs []lemon.Document
 	if err := db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
-		opts := options.Find().Order(options.Descend)
+		opts := lemon.Q().Order(lemon.Descend)
 		if err := tx.Find(ctx, opts, &docs); err != nil {
 			return err
 		}
@@ -220,21 +183,15 @@ func (fts *findTestSuite) TestLemonDB_FindAllDocs_Descend() {
 }
 
 func (fts *findTestSuite) TestLemonDB_FindAllDocs_Ascend() {
-	db, closer, err := lemon.New(fts.fixture)
+	db, err := lemon.New(fts.fixture)
 	fts.Require().NoError(err)
-
-	defer func() {
-		if err := closer(); err != nil {
-			fts.Require().NoError(err)
-		}
-	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
 	defer cancel()
 
 	var docs []lemon.Document
 	if err := db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
-		opts := options.Find().Order(options.Ascend)
+		opts := lemon.Q().Order(lemon.Ascend)
 		if err := tx.Find(ctx, opts, &docs); err != nil {
 			return err
 		}
@@ -268,14 +225,8 @@ type scanTestSuite struct {
 
 func (sts *scanTestSuite) SetupSuite() {
 	sts.fixture = "./__fixtures__/scan_db1.ldb"
-	db, closer, err := lemon.New(sts.fixture)
+	db, err := lemon.New(sts.fixture)
 	sts.Require().NoError(err)
-
-	defer func() {
-		if err := closer(); err != nil {
-			sts.Require().NoError(err)
-		}
-	}()
 
 	seedUserData(sts.T(), db, 1_000)
 	seedProductData(sts.T(), db, 1_000)
@@ -290,21 +241,15 @@ func (sts *scanTestSuite) TearDownSuite() {
 }
 
 func (sts *scanTestSuite) Test_ScanUserPets() {
-	db, closer, err := lemon.New(sts.fixture)
+	db, err := lemon.New(sts.fixture)
 	sts.Require().NoError(err)
-
-	defer func() {
-		if err := closer(); err != nil {
-			sts.Require().NoError(err)
-		}
-	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
 	defer cancel()
 
 	var docs []lemon.Document
 	if err := db.MultiRead(ctx, func(tx *lemon.Tx) error {
-		opts := options.Find().Order(options.Ascend).Prefix("user")
+		opts := lemon.Q().Order(lemon.Ascend).Prefix("user")
 		if scanErr := tx.Scan(ctx, opts, func (d lemon.Document) bool {
 			if strings.Contains(d.Key(), ":pet:") {
 				docs = append(docs, d)

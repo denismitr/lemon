@@ -49,15 +49,6 @@ func smallestSegmentLen(a, b []string) int {
 	return len(a)
 }
 
-func isPositiveInt(s string) bool {
-	n, err := strconv.Atoi(s)
-	if err != nil {
-		return false
-	}
-
-	return n > 0
-}
-
 func convertToINTs(a, b string) (bool, int, int) {
 	an, err := strconv.Atoi(a)
 	if err != nil {

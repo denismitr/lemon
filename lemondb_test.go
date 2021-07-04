@@ -14,16 +14,11 @@ import (
 )
 
 func TestLemonDB_Read(t *testing.T) {
-	db, closer, err := lemon.New("./__fixtures__/read_db1.ldb")
+	db, err := lemon.New("./__fixtures__/read_db1.ldb")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	defer func() {
-		if err := closer(); err != nil {
-			t.Fatal(err)
-		}
-	}()
 
 	t.Run("get existing keys", func(t *testing.T) {
 		var result1 *lemon.Document
@@ -72,14 +67,12 @@ func (wts *writeTestSuite) SetupSuite() {
 	wts.fixture = "./__fixtures__/write_db1.ldb"
 
 	// only init new database
-	_, closer, err := lemon.New(wts.fixture)
+	_, err := lemon.New(wts.fixture)
 	if err != nil {
 		wts.Require().NoError(err)
 	}
 
-	if err := closer(); err != nil {
-		wts.Require().NoError(err)
-	}
+	assert.FileExists(wts.T(), wts.fixture)
 }
 
 func (wts *writeTestSuite) TearDownSuite() {
@@ -89,16 +82,10 @@ func (wts *writeTestSuite) TearDownSuite() {
 }
 
 func (wts *writeTestSuite) Test_WriteAndRead_InTwoTransactions() {
-	db, closer, err := lemon.New(wts.fixture)
+	db, err := lemon.New(wts.fixture)
 	if err != nil {
 		wts.Require().NoError(err)
 	}
-
-	defer func() {
-		if err := closer(); err != nil {
-			wts.Assert().NoError(err)
-		}
-	}()
 
 	var result1 *lemon.Document
 	var result2 *lemon.Document
@@ -177,16 +164,10 @@ func (wts *writeTestSuite) Test_WriteAndRead_InTwoTransactions() {
 }
 
 func (wts *writeTestSuite) Test_ReplaceInsertedDocs() {
-	db, closer, err := lemon.New(wts.fixture)
+	db, err := lemon.New(wts.fixture)
 	if err != nil {
 		wts.Require().NoError(err)
 	}
-
-	defer func() {
-		if err := closer(); err != nil {
-			wts.Assert().NoError(err)
-		}
-	}()
 
 	if txErr := db.MultiUpdate(context.Background(), func(tx *lemon.Tx) error {
 		if err := tx.Insert("item:77", lemon.D{
@@ -274,13 +255,11 @@ type removeTestSuite struct {
 	suite.Suite
 	db       *lemon.LemonDB
 	fileName string
-	closer   func() error
 }
 
 func (rts *removeTestSuite) SetupTest() {
-	db, closer, err := lemon.New("./__fixtures__/db3.ldb")
+	db, err := lemon.New("./__fixtures__/db3.ldb")
 	rts.Require().NoError(err)
-	rts.closer = closer
 	rts.db = db
 
 	if err := db.MultiUpdate(context.Background(), func(tx *lemon.Tx) error {
@@ -316,13 +295,6 @@ func (rts *removeTestSuite) SetupTest() {
 }
 
 func (rts *removeTestSuite) TearDownTest() {
-	if rts.closer == nil {
-		return
-	}
-
-	err := rts.closer()
-	rts.Require().NoError(err)
-
 	if err := os.Remove("./__fixtures__/db3.ldb"); err != nil {
 		rts.Require().NoError(err)
 	}
