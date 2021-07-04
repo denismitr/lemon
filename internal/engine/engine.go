@@ -118,7 +118,7 @@ func (e *Engine) removeByKeyFromDataModel(key string) error {
 	return nil
 }
 
-func (e *Engine) Insert(key string, d interface{}) error {
+func (e *Engine) Insert(key string, d interface{}, tags Tags) error {
 	_, err := e.findOffsetByKey(key)
 	if err == nil {
 		return errors.Wrapf(ErrKeyAlreadyExists, "%s", key)
@@ -128,6 +128,8 @@ func (e *Engine) Insert(key string, d interface{}) error {
 	if err != nil {
 		return err
 	}
+
+
 
 	e.s.Append(key, v)
 	e.pks.ReplaceOrInsert(&index{key: key, offset: e.s.LastOffset()})
@@ -304,6 +306,10 @@ func (e *Engine) ScanDescend(
 	})
 
 	return
+}
+
+func (e *Engine) LastOffset() int {
+	return e.s.LastOffset()
 }
 
 func serializeToValue(d interface{}) ([]byte, error) {

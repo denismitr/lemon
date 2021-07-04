@@ -40,9 +40,16 @@ func (x *Tx) MGet(key ...string) ([]*Document, error) { // fixme: decide on ref 
 	return docs, nil
 }
 
-func (x *Tx) Insert(key string, data interface{}) error {
+func (x *Tx) Insert(key string, data interface{}, tags ...Tag) error {
 	if x.readOnly {
 		return ErrTxIsReadOnly
+	}
+
+	ts := engine.Tags{}
+	for _, t := range tags {
+		if t.Type() == BoolTagType {
+			ts.Booleans = append(ts.Booleans, t.TagIndex())
+		}
 	}
 
 	if err := x.e.Insert(key, data); err != nil {
