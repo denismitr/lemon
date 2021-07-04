@@ -15,38 +15,15 @@ type LemonDB struct {
 
 type UserCallback func(tx *Tx) error
 
-func New(path string) (*LemonDB, func() error, error) {
-	f, err := jsonstorage.OpenOrCreate(path)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	closer := func() error {
-		if err := f.Sync(); err != nil {
-			return errors.Wrap(err, "could not sync file before closing")
-		}
-
-		if err := f.Close(); err != nil {
-			return errors.Wrap(err, "could not close file")
-		}
-
-		return nil
-	}
-
-	s := jsonstorage.NewJSONStorage(f)
+func New(path string) (*LemonDB, error) {
+	s := jsonstorage.New(path)
 	e := engine.New(s)
 
 	if initErr := e.Init(); initErr != nil {
-		if cErr := closer(); cErr != nil {
-			return nil, nil, errors.Wrap(initErr, cErr.Error())
-		}
-
-		return nil, nil, initErr
+		return nil, initErr
 	}
 
-	return &LemonDB{
-		e: e,
-	}, closer, nil
+	return &LemonDB{e: e}, nil
 }
 
 func (db *LemonDB) Count() int {

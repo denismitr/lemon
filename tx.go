@@ -3,7 +3,6 @@ package lemon
 import (
 	"context"
 	"github.com/denismitr/lemon/internal/engine"
-	"github.com/denismitr/lemon/options"
 	"github.com/pkg/errors"
 )
 
@@ -27,6 +26,18 @@ func (x *Tx) Get(key string) (*Document, error) { // fixme: decide on ref or val
 	}
 
 	return newDocument(key, v), nil
+}
+
+func (x *Tx) MGet(key ...string) ([]*Document, error) { // fixme: decide on ref or value
+	docs := make([]*Document, 0)
+	if err := x.e.FindByKeys(key, func(k string, b []byte) bool {
+		docs = append(docs, newDocument(k, b))
+		return true
+	}); err != nil {
+		return nil, err
+	}
+
+	return docs, nil
 }
 
 func (x *Tx) Insert(key string, data interface{}) error {
@@ -60,7 +71,7 @@ func (x *Tx) InsertOrReplace(key string, data interface{}) error {
 	return nil
 }
 
-func (x *Tx) Scan(ctx context.Context, opts *options.FindOptions, cb func(d Document) bool) error {
+func (x *Tx) Scan(ctx context.Context, opts *QueryOptions, cb func(d Document) bool) error {
 	ir := func(k string, v []byte) bool {
 		d := createDocument(k, v)
 		return cb(d)
@@ -73,7 +84,7 @@ func (x *Tx) Scan(ctx context.Context, opts *options.FindOptions, cb func(d Docu
 	return nil
 }
 
-func (x *Tx) Find(ctx context.Context, opts *options.FindOptions, dest *[]Document) error {
+func (x *Tx) Find(ctx context.Context, opts *QueryOptions, dest *[]Document) error {
 	ir := func(k string, v []byte) bool {
 		*dest = append(*dest, createDocument(k, v))
 		return true
@@ -86,14 +97,14 @@ func (x *Tx) Find(ctx context.Context, opts *options.FindOptions, dest *[]Docume
 	return nil
 }
 
-func (x *Tx) applyScanner(ctx context.Context, opts *options.FindOptions, ir engine.ItemReceiver) error {
+func (x *Tx) applyScanner(ctx context.Context, opts *QueryOptions, ir engine.ItemReceiver) error {
 	if opts == nil {
-		opts = options.Find()
+		opts = Q()
 	}
 
 	if opts.KR != nil {
 		var scanner engine.RangeScanner
-		if opts.O == options.Ascend {
+		if opts.O == Ascend {
 			scanner = x.e.ScanBetweenAscend
 		} else {
 			scanner = x.e.ScanBetweenDescend
@@ -106,7 +117,7 @@ func (x *Tx) applyScanner(ctx context.Context, opts *options.FindOptions, ir eng
 		return nil
 	} else if opts.Px != "" {
 		var scanner engine.PrefixScanner
-		if opts.O == options.Ascend {
+		if opts.O == Ascend {
 			scanner = x.e.ScanPrefixAscend
 		} else {
 			scanner = x.e.ScanPrefixDescend
@@ -119,7 +130,7 @@ func (x *Tx) applyScanner(ctx context.Context, opts *options.FindOptions, ir eng
 		return nil
 	} else {
 		var scanner engine.Scanner
-		if opts.O == options.Ascend {
+		if opts.O == Ascend {
 			scanner = x.e.ScanAscend
 		} else {
 			scanner = x.e.ScanDescend

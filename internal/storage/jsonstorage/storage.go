@@ -3,29 +3,13 @@ package jsonstorage
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/denismitr/lemon/internal/storage"
 	"github.com/pkg/errors"
 	"io"
 	"os"
+	"strings"
+	"sync"
 )
-
-func OpenOrCreate(path string) (*os.File, error) {
-	var file *os.File
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		f, err := os.Create(path)
-		if err != nil {
-			return nil, err
-		}
-		file = f
-	} else {
-		f, err := os.OpenFile(path, os.O_RDWR, 0666)
-		if err != nil {
-			return nil, err
-		}
-		file = f
-	}
-
-	return file, nil
-}
 
 type model struct {
 	PKs    []string `json:"pks"`
@@ -33,12 +17,22 @@ type model struct {
 }
 
 type JSONStorage struct {
-	f  *os.File
+	fullPath string
+	tmpPath string
+
+	mu sync.RWMutex
+
 	dm model
 }
 
-func NewJSONStorage(f *os.File) *JSONStorage {
-	return &JSONStorage{f: f}
+func New(fullPath string) *JSONStorage {
+	if !strings.HasSuffix(fullPath, ".ldb") {
+		fullPath += ".ldb"
+	}
+
+	tmpPath := strings.TrimSuffix(fullPath, ".ldb") + ".tmp"
+
+	return &JSONStorage{fullPath: fullPath, tmpPath: tmpPath}
 }
 
 func (s *JSONStorage) PKs() []string {
@@ -46,6 +40,10 @@ func (s *JSONStorage) PKs() []string {
 }
 
 func (s *JSONStorage) Len() int {
+	if len(s.dm.PKs) != len(s.dm.Values) {
+		panic("how can number of pks and number of values not be equal?")
+	}
+
 	return len(s.dm.PKs)
 }
 
@@ -98,21 +96,6 @@ func (s *JSONStorage) RemoveAt(offset int) error {
 	return nil
 }
 
-func (s *JSONStorage) Size() (int, error) {
-	var size int
-	info, err := s.f.Stat()
-	if err != nil {
-		return 0, errors.Wrap(err, "could not measure file size")
-	}
-
-	size64 := info.Size()
-	if int64(int(size64)) == size64 {
-		size = int(size64)
-	}
-
-	return size, nil
-}
-
 func (s *JSONStorage) Initialize() error {
 	if s.dm.PKs == nil || s.dm.Values == nil {
 		s.dm.PKs = []string{}
@@ -132,9 +115,7 @@ func (s *JSONStorage) Persist() error {
 }
 
 func (s *JSONStorage) Load() error {
-	if n, err := s.Size(); err != nil {
-		return err
-	} else if n == 0 {
+	if !storage.FileExists(s.fullPath) {
 		return s.Initialize()
 	}
 
@@ -142,37 +123,51 @@ func (s *JSONStorage) Load() error {
 }
 
 func (s *JSONStorage) write() error {
-	// fixme: maybe write to tmp file and then replace existing file
-	if err := s.f.Truncate(0); err != nil {
-		return errors.Wrapf(err, "could not truncate file %s", s.f.Name())
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	tmpF, tmpClose, err := storage.CreateFileUnderLock(s.tmpPath, storage.DefaultFilePerm)
+	if err != nil {
+		return err
 	}
 
-	if err := s.f.Sync(); err != nil {
-		return errors.Wrapf(err, "could not sync file %s", s.f.Name())
-	}
-
-	if _, err := s.f.Seek(0, 0); err != nil {
-		return errors.Wrapf(err, "could not seek the begging of the file %s", s.f.Name())
-	}
-
-	e := json.NewEncoder(s.f)
+	e := json.NewEncoder(tmpF)
 	if err := e.Encode(&s.dm); err != nil {
-		return errors.Wrapf(err, "could not write to file %s", s.f.Name())
+		tmpClose() // log
+		os.Remove(tmpF.Name())
+		return errors.Wrapf(err, "could not write to tmp file %s", tmpF.Name())
 	}
 
-	if err := s.f.Sync(); err != nil {
-		return errors.Wrapf(err, "could not sync file %s", s.f.Name())
+	if err := tmpF.Sync(); err != nil {
+		tmpClose() // log
+		os.Remove(tmpF.Name())
+		return errors.Wrapf(err, "could not sync tmp file %s", tmpF.Name())
+	}
+
+	if err := tmpClose(); err != nil {
+		return errors.Wrapf(err, "could not close tmp file %s", tmpF.Name())
+	}
+
+	if err := os.Rename(tmpF.Name(), s.fullPath); err != nil {
+		os.Remove(tmpF.Name())
+		return errors.Wrapf(err, "could not replace %s with %s", s.fullPath, tmpF.Name())
 	}
 
 	return nil
 }
 
 func (s *JSONStorage) read() error {
-	if _, err := s.f.Seek(0, 0); err != nil {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	f, fClose, err := storage.OpenFile(s.fullPath)
+	if err != nil {
 		return err
 	}
 
-	size, err := s.Size()
+	defer fClose()
+
+	size, err := storage.FileSize(f)
 	if err != nil {
 		return err
 	}
@@ -193,7 +188,7 @@ func (s *JSONStorage) read() error {
 			d := append(data[:cap(data)], 0)
 			data = d[:len(data)]
 		}
-		n, err := s.f.Read(data[len(data):cap(data)])
+		n, err := f.Read(data[len(data):cap(data)])
 		data = data[:len(data)+n]
 		if err != nil {
 			if err == io.EOF {
