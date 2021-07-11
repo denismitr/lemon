@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/suite"
 	"io/ioutil"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -206,7 +207,7 @@ func (wts *writeTestSuite) Test_ReplaceInsertedDocs() {
 			"foo1":   "0",
 			"baz": 123.879,
 			"999":   "bar",
-		}); err != nil {
+		}, lemon.BoolTag("valid", true)); err != nil {
 			return err
 		}
 
@@ -245,6 +246,9 @@ func (wts *writeTestSuite) Test_ReplaceInsertedDocs() {
 
 	readJson2 := readResult2.RawString()
 	wts.Assert().Equal(`{"999":"bar","baz":123.879,"foo1":"0"}`, readJson2)
+
+	expectedContent := `{"pks":["item:77","item:1145"],"tags":[{"b":null,"f":null,"i":null,"s":null},{"b":[{"k":"valid","v":true}],"f":null,"i":null,"s":null}],"documents":["eyJiYXIiOm51bGwsImJheiI6MSwiZm9vIjoiYmFyMjIifQ==","eyI5OTkiOiJiYXIiLCJiYXoiOjEyMy44NzksImZvbzEiOiIwIn0="]}`
+	AssertFileContents(wts.T(), wts.fixture, expectedContent)
 }
 
 func Test_Write(t *testing.T) {
@@ -444,7 +448,10 @@ func AssertFileContents(t *testing.T, path string, expectedContents string) {
 		t.Errorf("file %s could not be opened\nbecause:  %v", path, err)
 	}
 
-	if string(b) != expectedContents {
+	expectedContents = strings.Trim(expectedContents, " \n")
+	str := strings.Trim(string(b), " \n")
+	if str != expectedContents {
+
 		t.Errorf("file %s contents\n%s\ndoes not match expected\n%s", path, string(b), expectedContents)
 	}
 

@@ -3,7 +3,7 @@ package engine
 import "github.com/google/btree"
 
 type Tags struct {
-	Booleans []TagIndex
+	Booleans []BoolTagIndex
 }
 
 type TagIndex interface {
@@ -12,15 +12,15 @@ type TagIndex interface {
 }
 
 type BoolTagIndex struct {
-	k      string
-	v      bool
+	K      string
+	V      bool
 	offset int
 }
 
 func NewBoolTagIndex(k string, v bool) *BoolTagIndex {
 	return &BoolTagIndex{
-		k: k,
-		v: v,
+		K: k,
+		V: v,
 	}
 }
 
@@ -31,15 +31,15 @@ func (ti *BoolTagIndex) setOffset(offset int) {
 func (ti *BoolTagIndex) Less(than btree.Item) bool {
 	other := than.(*BoolTagIndex)
 
-	if ti.k < other.k {
+	if ti.K < other.K {
 		return true
-	} else if ti.k != other.k {
+	} else if ti.K != other.K {
 		return false
 	}
 
-	if ti.v == true && other.v == false {
+	if ti.V == false && other.V == true {
 		return true
-	} else if ti.v != other.v {
+	} else if ti.V != other.V {
 		return false
 	}
 

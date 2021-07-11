@@ -40,32 +40,36 @@ func (x *Tx) MGet(key ...string) ([]*Document, error) { // fixme: decide on ref 
 	return docs, nil
 }
 
-func (x *Tx) Insert(key string, data interface{}, tags ...Tag) error {
+func (x *Tx) Insert(key string, data interface{}, taggers ...Tagger) error {
 	if x.readOnly {
 		return ErrTxIsReadOnly
 	}
 
 	ts := engine.Tags{}
-	for _, t := range tags {
-		if t.Type() == BoolTagType {
-			ts.Booleans = append(ts.Booleans, t.TagIndex())
-		}
+	for _, t := range taggers {
+		t(&ts)
 	}
 
-	if err := x.e.Insert(key, data); err != nil {
+	if err := x.e.Insert(key, data, ts); err != nil {
 		return err
 	}
+
 	return nil
 }
 
-func (x *Tx) InsertOrReplace(key string, data interface{}) error {
+func (x *Tx) InsertOrReplace(key string, data interface{}, taggers ...Tagger) error {
 	if x.readOnly {
 		return ErrTxIsReadOnly
 	}
 
-	if err := x.e.Insert(key, data); err != nil {
+	ts := engine.Tags{}
+	for _, t := range taggers {
+		t(&ts)
+	}
+
+	if err := x.e.Insert(key, data, ts); err != nil {
 		if errors.Is(err, engine.ErrKeyAlreadyExists) {
-			if updateErr := x.e.Update(key, data); updateErr != nil {
+			if updateErr := x.e.Update(key, data, ts); updateErr != nil {
 				return updateErr
 			} else {
 				return nil

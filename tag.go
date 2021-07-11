@@ -10,30 +10,18 @@ const (
 	BoolTagType TagType = iota
 )
 
+type Tagger func(t *engine.Tags)
+
 type Tag interface {
 	Name() string
 	Type() TagType
 	TagIndex() engine.TagIndex
 }
 
-func BoolTag(name string, value bool) Tag {
-	return boolTag{name: name, value: value}
+func BoolTag(name string, value bool) Tagger {
+	return func(t *engine.Tags) {
+		t.Booleans = append(t.Booleans, engine.BoolTagIndex{K: name, V: value})
+	}
 }
 
-type boolTag struct {
-	name string
-	value bool
-}
-
-func (b boolTag) Name() string {
-	return b.name
-}
-
-func (b boolTag) Type() TagType {
-	return BoolTagType
-}
-
-func (b boolTag) TagIndex() engine.TagIndex {
-	return engine.NewBoolTagIndex(b.name, b.value)
-}
 

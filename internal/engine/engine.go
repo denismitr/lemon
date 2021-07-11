@@ -20,12 +20,14 @@ type Scanner func(ctx context.Context, ir ItemReceiver) error
 type Engine struct {
 	s storage.Storage
 	pks *btree.BTree
+	bTags *btree.BTree
 }
 
 func New(s storage.Storage) *Engine {
 	return &Engine{
 		s: s,
 		pks: btree.New(2),
+		bTags: btree.New(2),
 	}
 }
 
@@ -129,15 +131,22 @@ func (e *Engine) Insert(key string, d interface{}, tags Tags) error {
 		return err
 	}
 
+	nextOffset := e.s.NextOffset()
+	var tagSetters []storage.TagSetter
+	for _, t := range tags.Booleans {
+		t.setOffset(nextOffset)
+		e.bTags.ReplaceOrInsert(&t)
+		tagSetters = append(tagSetters, storage.BoolTagSetter(t.K, t.V))
+	}
 
+	e.s.Append(key, v, tagSetters...)
 
-	e.s.Append(key, v)
-	e.pks.ReplaceOrInsert(&index{key: key, offset: e.s.LastOffset()})
+	e.pks.ReplaceOrInsert(&index{key: key, offset: nextOffset})
 
 	return nil
 }
 
-func (e *Engine) Update(key string, d interface{}) error {
+func (e *Engine) Update(key string, d interface{}, tags Tags) error {
 	 offset, err := e.findOffsetByKey(key)
 	 if err != nil {
 		return err
@@ -148,7 +157,14 @@ func (e *Engine) Update(key string, d interface{}) error {
 		return err
 	}
 
-	if err := e.s.ReplaceValueAt(offset, v); err != nil {
+	var tagSetters []storage.TagSetter
+	for _, t := range tags.Booleans {
+		t.setOffset(offset)
+		e.bTags.ReplaceOrInsert(&t)
+		tagSetters = append(tagSetters, storage.BoolTagSetter(t.K, t.V))
+	}
+
+	if err := e.s.ReplaceValueAt(offset, v, tagSetters...); err != nil {
 		return err
 	}
 
@@ -319,7 +335,7 @@ func serializeToValue(d interface{}) ([]byte, error) {
 	} else {
 		b, err := json.Marshal(d)
 		if err != nil {
-			return nil, errors.Wrapf(err, "could not marshal data %+v", d)
+			return nil, errors.Wrapf(err, "could not marshal data %+V", d)
 		}
 		v = b
 	}

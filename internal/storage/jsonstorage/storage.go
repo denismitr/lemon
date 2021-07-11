@@ -12,13 +12,14 @@ import (
 )
 
 type model struct {
-	PKs    []string `json:"pks"`
-	Values [][]byte `json:"documents"`
+	PKs    []string       `json:"pks"`
+	Tags   []storage.Tags `json:"tags"`
+	Values [][]byte       `json:"documents"`
 }
 
 type JSONStorage struct {
 	fullPath string
-	tmpPath string
+	tmpPath  string
 
 	mu sync.RWMutex
 
@@ -55,16 +56,34 @@ func (s *JSONStorage) LastOffset() int {
 	return offset
 }
 
-func (s *JSONStorage) Append(k string, v []byte) {
-	s.dm.PKs = append(s.dm.PKs, k)
-	s.dm.Values = append(s.dm.Values, v)
+func (s *JSONStorage) NextOffset() int {
+	return len(s.dm.PKs)
 }
 
-func (s *JSONStorage) ReplaceValueAt(offset int, v []byte) error {
-	if len(s.dm.Values) < offset + 1 {
+func (s *JSONStorage) Append(k string, v []byte, ts ...storage.TagSetter) int {
+	s.dm.PKs = append(s.dm.PKs, k)
+	s.dm.Values = append(s.dm.Values, v)
+
+	tags := storage.Tags{}
+	for _, s := range ts {
+		s(&tags)
+	}
+
+	s.dm.Tags = append(s.dm.Tags, tags)
+	return len(s.dm.PKs) - 1
+}
+
+func (s *JSONStorage) ReplaceValueAt(offset int, v []byte, ts ...storage.TagSetter) error {
+	if len(s.dm.Values) < offset+1 {
 		return errors.Errorf("offset %d is out of range for values", offset)
 	}
 
+	tags := storage.Tags{}
+	for _, s := range ts {
+		s(&tags)
+	}
+
+	s.dm.Tags[offset] = tags
 	s.dm.Values[offset] = v
 	return nil
 }
@@ -74,7 +93,7 @@ func (s *JSONStorage) GetValueAt(offset int) ([]byte, error) {
 		panic("offset cannot be less than 0")
 	}
 
-	if len(s.dm.Values) < offset + 1 {
+	if len(s.dm.Values) < offset+1 {
 		return nil, errors.Errorf("offset %d is out of range for values", offset)
 	}
 
@@ -82,11 +101,11 @@ func (s *JSONStorage) GetValueAt(offset int) ([]byte, error) {
 }
 
 func (s *JSONStorage) RemoveAt(offset int) error {
-	if len(s.dm.PKs) < offset + 1 {
+	if len(s.dm.PKs) < offset+1 {
 		return errors.Errorf("offset %d is out of range for primary keys", offset)
 	}
 
-	if len(s.dm.Values) < offset + 1 {
+	if len(s.dm.Values) < offset+1 {
 		return errors.Errorf("offset %d is out of range for values", offset)
 	}
 
