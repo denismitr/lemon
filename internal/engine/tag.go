@@ -3,7 +3,10 @@ package engine
 import "github.com/google/btree"
 
 type Tags struct {
-	Booleans []BoolTagIndex
+	Booleans []BoolTag  `json:"b"`
+	FloatTag []FloatTag `json:"f"`
+	IntTag   []IntTag   `json:"i"`
+	StrTag   []StrTag   `json:"s"`
 }
 
 type TagIndex interface {
@@ -11,25 +14,26 @@ type TagIndex interface {
 	setOffset(int)
 }
 
-type BoolTagIndex struct {
-	K      string
-	V      bool
+type BoolTag struct {
+	K      string `json:"k"`
+	V      bool   `json:"v"`
 	offset int
 }
 
-func NewBoolTagIndex(k string, v bool) *BoolTagIndex {
-	return &BoolTagIndex{
-		K: k,
-		V: v,
+func NewBoolTagIndex(k string, v bool, offset int) *BoolTag {
+	return &BoolTag{
+		K:      k,
+		V:      v,
+		offset: offset,
 	}
 }
 
-func (ti *BoolTagIndex) setOffset(offset int) {
+func (ti *BoolTag) setOffset(offset int) {
 	ti.offset = offset
 }
 
-func (ti *BoolTagIndex) Less(than btree.Item) bool {
-	other := than.(*BoolTagIndex)
+func (ti *BoolTag) Less(than btree.Item) bool {
+	other := than.(*BoolTag)
 
 	if ti.K < other.K {
 		return true
@@ -48,4 +52,27 @@ func (ti *BoolTagIndex) Less(than btree.Item) bool {
 	}
 
 	return true
+}
+
+type FloatTag struct {
+	Key   string  `json:"k"`
+	Value float64 `json:"v"`
+}
+
+type IntTag struct {
+	Key   string `json:"k"`
+	Value int    `json:"v"`
+}
+
+type StrTag struct {
+	Key   string `json:"k"`
+	Value string `json:"v"`
+}
+
+type TagSetter func(tags *Tags)
+
+func BoolTagSetter(k string, v bool) TagSetter {
+	return func(tags *Tags) {
+		tags.Booleans = append(tags.Booleans, BoolTag{K: k, V: v})
+	}
 }

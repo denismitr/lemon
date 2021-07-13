@@ -3,7 +3,6 @@ package engine
 import (
 	"context"
 	"encoding/json"
-	"github.com/denismitr/lemon/internal/storage"
 	"github.com/google/btree"
 	"github.com/pkg/errors"
 	"strings"
@@ -18,34 +17,43 @@ type PrefixScanner func(ctx context.Context, prefix string, ir ItemReceiver) err
 type Scanner func(ctx context.Context, ir ItemReceiver) error
 
 type Engine struct {
-	s storage.Storage
-	pks *btree.BTree
+	s     *jsonStorage
+	pks   *btree.BTree
 	bTags *btree.BTree
 }
 
-func New(s storage.Storage) *Engine {
+func New(fullPath string) *Engine {
+	s := newJsonStorage(fullPath)
+
 	return &Engine{
-		s: s,
-		pks: btree.New(2),
+		s:     s,
+		pks:   btree.New(2),
 		bTags: btree.New(2),
 	}
 }
 
 func (e *Engine) Init() error {
-	if err := e.s.Load(); err != nil {
+	if err := e.s.load(); err != nil {
 		return err
 	}
 
-	pks := e.s.PKs()
-	for i := range pks  {
+	pks := e.s.pks()
+	for i := range pks {
 		e.pks.ReplaceOrInsert(&index{key: pks[i], offset: i})
+	}
+
+	tags := e.s.tags()
+	for offset := range tags {
+		for _, bTag := range tags[offset].Booleans {
+			e.bTags.ReplaceOrInsert(NewBoolTagIndex(bTag.K, bTag.V, offset))
+		}
 	}
 
 	return nil
 }
 
 func (e *Engine) Persist() error {
-	return e.s.Persist()
+	return e.s.persist()
 }
 
 func (e *Engine) FindByKey(pk string) ([]byte, error) {
@@ -54,7 +62,7 @@ func (e *Engine) FindByKey(pk string) ([]byte, error) {
 		return nil, err
 	}
 
-	return e.s.GetValueAt(offset)
+	return e.s.getValueAt(offset)
 }
 
 func (e *Engine) FindByKeys(pks []string, ir ItemReceiver) error {
@@ -64,7 +72,7 @@ func (e *Engine) FindByKeys(pks []string, ir ItemReceiver) error {
 			continue
 		}
 
-		if b, vErr := e.s.GetValueAt(offset); vErr != nil {
+		if b, vErr := e.s.getValueAt(offset); vErr != nil {
 			return vErr
 		} else {
 			if next := ir(k, b); !next {
@@ -103,7 +111,7 @@ func (e *Engine) removeByKeyFromDataModel(key string) error {
 		return err
 	}
 
-	if err := e.s.RemoveAt(offset); err != nil {
+	if err := e.s.removeAt(offset); err != nil {
 		return err
 	}
 
@@ -131,15 +139,15 @@ func (e *Engine) Insert(key string, d interface{}, tags Tags) error {
 		return err
 	}
 
-	nextOffset := e.s.NextOffset()
-	var tagSetters []storage.TagSetter
+	nextOffset := e.s.nextOffset()
+	var tagSetters []TagSetter
 	for _, t := range tags.Booleans {
 		t.setOffset(nextOffset)
 		e.bTags.ReplaceOrInsert(&t)
-		tagSetters = append(tagSetters, storage.BoolTagSetter(t.K, t.V))
+		tagSetters = append(tagSetters, BoolTagSetter(t.K, t.V))
 	}
 
-	e.s.Append(key, v, tagSetters...)
+	e.s.append(key, v, tagSetters...)
 
 	e.pks.ReplaceOrInsert(&index{key: key, offset: nextOffset})
 
@@ -147,8 +155,8 @@ func (e *Engine) Insert(key string, d interface{}, tags Tags) error {
 }
 
 func (e *Engine) Update(key string, d interface{}, tags Tags) error {
-	 offset, err := e.findOffsetByKey(key)
-	 if err != nil {
+	offset, err := e.findOffsetByKey(key)
+	if err != nil {
 		return err
 	}
 
@@ -157,14 +165,14 @@ func (e *Engine) Update(key string, d interface{}, tags Tags) error {
 		return err
 	}
 
-	var tagSetters []storage.TagSetter
+	var tagSetters []TagSetter
 	for _, t := range tags.Booleans {
 		t.setOffset(offset)
 		e.bTags.ReplaceOrInsert(&t)
-		tagSetters = append(tagSetters, storage.BoolTagSetter(t.K, t.V))
+		tagSetters = append(tagSetters, BoolTagSetter(t.K, t.V))
 	}
 
-	if err := e.s.ReplaceValueAt(offset, v, tagSetters...); err != nil {
+	if err := e.s.replaceValueAt(offset, v, tagSetters...); err != nil {
 		return err
 	}
 
@@ -172,7 +180,7 @@ func (e *Engine) Update(key string, d interface{}, tags Tags) error {
 }
 
 func (e *Engine) Count() int {
-	return e.s.Len()
+	return e.s.len()
 }
 
 func (e *Engine) ScanBetweenDescend(
@@ -189,7 +197,7 @@ func (e *Engine) ScanBetweenDescend(
 		}
 
 		idx := i.(*index)
-		v, getErr := e.s.GetValueAt(idx.offset);
+		v, getErr := e.s.getValueAt(idx.offset)
 		if getErr != nil {
 			err = getErr
 			return false
@@ -214,7 +222,7 @@ func (e *Engine) ScanBetweenAscend(
 		}
 
 		idx := i.(*index)
-		if v, getErr := e.s.GetValueAt(idx.offset); getErr != nil {
+		if v, getErr := e.s.getValueAt(idx.offset); getErr != nil {
 			err = getErr
 			return false
 		} else {
@@ -241,7 +249,7 @@ func (e *Engine) ScanPrefixAscend(
 			return false
 		}
 
-		if v, getErr := e.s.GetValueAt(idx.offset); getErr != nil {
+		if v, getErr := e.s.getValueAt(idx.offset); getErr != nil {
 			err = getErr
 			return false
 		} else {
@@ -269,7 +277,7 @@ func (e *Engine) ScanPrefixDescend(
 			return false
 		}
 
-		if v, getErr := e.s.GetValueAt(idx.offset); getErr != nil {
+		if v, getErr := e.s.getValueAt(idx.offset); getErr != nil {
 			err = getErr
 			return false
 		} else {
@@ -291,7 +299,7 @@ func (e *Engine) ScanAscend(
 		}
 
 		idx := i.(*index)
-		if v, getErr := e.s.GetValueAt(idx.offset); getErr != nil {
+		if v, getErr := e.s.getValueAt(idx.offset); getErr != nil {
 			err = getErr
 			return false
 		} else {
@@ -313,7 +321,7 @@ func (e *Engine) ScanDescend(
 		}
 
 		idx := i.(*index)
-		if v, getErr := e.s.GetValueAt(idx.offset); getErr != nil {
+		if v, getErr := e.s.getValueAt(idx.offset); getErr != nil {
 			err = getErr
 			return false
 		} else {
@@ -325,7 +333,7 @@ func (e *Engine) ScanDescend(
 }
 
 func (e *Engine) LastOffset() int {
-	return e.s.LastOffset()
+	return e.s.lastOffset()
 }
 
 func serializeToValue(d interface{}) ([]byte, error) {

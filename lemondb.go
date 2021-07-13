@@ -3,7 +3,6 @@ package lemon
 import (
 	"context"
 	"github.com/denismitr/lemon/internal/engine"
-	"github.com/denismitr/lemon/internal/storage/jsonstorage"
 	"github.com/pkg/errors"
 	"sync"
 )
@@ -16,8 +15,7 @@ type LemonDB struct {
 type UserCallback func(tx *Tx) error
 
 func New(path string) (*LemonDB, error) {
-	s := jsonstorage.New(path)
-	e := engine.New(s)
+	e := engine.New(path)
 
 	if initErr := e.Init(); initErr != nil {
 		return nil, initErr

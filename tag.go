@@ -20,7 +20,7 @@ type Tag interface {
 
 func BoolTag(name string, value bool) Tagger {
 	return func(t *engine.Tags) {
-		t.Booleans = append(t.Booleans, engine.BoolTagIndex{K: name, V: value})
+		t.Booleans = append(t.Booleans, engine.BoolTag{K: name, V: value})
 	}
 }
 

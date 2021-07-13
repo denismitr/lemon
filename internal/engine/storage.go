@@ -1,4 +1,4 @@
-package jsonstorage
+package engine
 
 import (
 	"bytes"
@@ -11,36 +11,34 @@ import (
 	"sync"
 )
 
-type model struct {
-	PKs    []string       `json:"pks"`
-	Tags   []storage.Tags `json:"tags"`
-	Values [][]byte       `json:"documents"`
-}
-
-type JSONStorage struct {
+type jsonStorage struct {
 	fullPath string
 	tmpPath  string
 
 	mu sync.RWMutex
 
-	dm model
+	dm dm
 }
 
-func New(fullPath string) *JSONStorage {
+func newJsonStorage(fullPath string) *jsonStorage {
 	if !strings.HasSuffix(fullPath, ".ldb") {
 		fullPath += ".ldb"
 	}
 
 	tmpPath := strings.TrimSuffix(fullPath, ".ldb") + ".tmp"
 
-	return &JSONStorage{fullPath: fullPath, tmpPath: tmpPath}
+	return &jsonStorage{fullPath: fullPath, tmpPath: tmpPath}
 }
 
-func (s *JSONStorage) PKs() []string {
+func (s *jsonStorage) pks() []string {
 	return s.dm.PKs
 }
 
-func (s *JSONStorage) Len() int {
+func (s *jsonStorage) tags() []Tags {
+	return s.dm.Tags
+}
+
+func (s *jsonStorage) len() int {
 	if len(s.dm.PKs) != len(s.dm.Values) {
 		panic("how can number of pks and number of values not be equal?")
 	}
@@ -48,7 +46,7 @@ func (s *JSONStorage) Len() int {
 	return len(s.dm.PKs)
 }
 
-func (s *JSONStorage) LastOffset() int {
+func (s *jsonStorage) lastOffset() int {
 	offset := len(s.dm.PKs) - 1
 	if offset < 0 {
 		return 0
@@ -56,15 +54,15 @@ func (s *JSONStorage) LastOffset() int {
 	return offset
 }
 
-func (s *JSONStorage) NextOffset() int {
+func (s *jsonStorage) nextOffset() int {
 	return len(s.dm.PKs)
 }
 
-func (s *JSONStorage) Append(k string, v []byte, ts ...storage.TagSetter) int {
+func (s *jsonStorage) append(k string, v []byte, ts ...TagSetter) int {
 	s.dm.PKs = append(s.dm.PKs, k)
 	s.dm.Values = append(s.dm.Values, v)
 
-	tags := storage.Tags{}
+	tags := Tags{}
 	for _, s := range ts {
 		s(&tags)
 	}
@@ -73,12 +71,12 @@ func (s *JSONStorage) Append(k string, v []byte, ts ...storage.TagSetter) int {
 	return len(s.dm.PKs) - 1
 }
 
-func (s *JSONStorage) ReplaceValueAt(offset int, v []byte, ts ...storage.TagSetter) error {
+func (s *jsonStorage) replaceValueAt(offset int, v []byte, ts ...TagSetter) error {
 	if len(s.dm.Values) < offset+1 {
 		return errors.Errorf("offset %d is out of range for values", offset)
 	}
 
-	tags := storage.Tags{}
+	tags := Tags{}
 	for _, s := range ts {
 		s(&tags)
 	}
@@ -88,7 +86,7 @@ func (s *JSONStorage) ReplaceValueAt(offset int, v []byte, ts ...storage.TagSett
 	return nil
 }
 
-func (s *JSONStorage) GetValueAt(offset int) ([]byte, error) {
+func (s *jsonStorage) getValueAt(offset int) ([]byte, error) {
 	if offset < 0 {
 		panic("offset cannot be less than 0")
 	}
@@ -100,7 +98,7 @@ func (s *JSONStorage) GetValueAt(offset int) ([]byte, error) {
 	return s.dm.Values[offset], nil
 }
 
-func (s *JSONStorage) RemoveAt(offset int) error {
+func (s *jsonStorage) removeAt(offset int) error {
 	if len(s.dm.PKs) < offset+1 {
 		return errors.Errorf("offset %d is out of range for primary keys", offset)
 	}
@@ -115,7 +113,7 @@ func (s *JSONStorage) RemoveAt(offset int) error {
 	return nil
 }
 
-func (s *JSONStorage) Initialize() error {
+func (s *jsonStorage) initialize() error {
 	if s.dm.PKs == nil || s.dm.Values == nil {
 		s.dm.PKs = []string{}
 		s.dm.Values = make([][]byte, 0)
@@ -125,23 +123,23 @@ func (s *JSONStorage) Initialize() error {
 	return nil
 }
 
-func (s *JSONStorage) Persist() error {
+func (s *jsonStorage) persist() error {
 	if s.dm.PKs == nil || s.dm.Values == nil {
-		return s.Initialize()
+		return s.initialize()
 	}
 
 	return s.write()
 }
 
-func (s *JSONStorage) Load() error {
+func (s *jsonStorage) load() error {
 	if !storage.FileExists(s.fullPath) {
-		return s.Initialize()
+		return s.initialize()
 	}
 
 	return s.read()
 }
 
-func (s *JSONStorage) write() error {
+func (s *jsonStorage) write() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -175,7 +173,7 @@ func (s *JSONStorage) write() error {
 	return nil
 }
 
-func (s *JSONStorage) read() error {
+func (s *jsonStorage) read() error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 

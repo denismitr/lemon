@@ -9,20 +9,6 @@ const (
 	DefaultFilePerm os.FileMode = 0666
 )
 
-type Storage interface {
-	PKs() []string
-	GetValueAt(offset int) ([]byte, error)
-	//GetTagsAt(offset int)
-	RemoveAt(offset int) error
-	ReplaceValueAt(offset int, v []byte, ts ...TagSetter) error
-	Append(k string, v []byte, ts ...TagSetter) int
-	Initialize() error
-	Persist() error
-	Load() error
-	Len() int
-	LastOffset() int
-	NextOffset() int
-}
 
 type PrimaryKeys []string
 

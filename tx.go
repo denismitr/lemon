@@ -163,6 +163,7 @@ func (x *Tx) Remove(keys ...string) error {
 	if err := x.e.RemoveByKeys(keys...); err != nil {
 		return err
 	}
+
 	return nil
 }
 
