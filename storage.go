@@ -1,4 +1,4 @@
-package engine
+package lemon
 
 import (
 	"bytes"
@@ -30,24 +30,22 @@ func newJsonStorage(fullPath string) *jsonStorage {
 	return &jsonStorage{fullPath: fullPath, tmpPath: tmpPath}
 }
 
-func (s *jsonStorage) pks() []string {
-	return s.dm.PKs
+func (s *jsonStorage) records() []record {
+	return s.dm.Records
 }
 
-func (s *jsonStorage) tags() []Tags {
-	return s.dm.Tags
+func (s *jsonStorage) iterate(f func(o int, k string, v []byte, t *Tags)) {
+	for i := range s.dm.Records {
+		f(i, s.dm.Records[i].PK, s.dm.Records[i].Value, s.dm.Records[i].Tags)
+	}
 }
 
 func (s *jsonStorage) len() int {
-	if len(s.dm.PKs) != len(s.dm.Values) {
-		panic("how can number of pks and number of values not be equal?")
-	}
-
-	return len(s.dm.PKs)
+	return len(s.dm.Records)
 }
 
 func (s *jsonStorage) lastOffset() int {
-	offset := len(s.dm.PKs) - 1
+	offset := len(s.dm.Records) - 1
 	if offset < 0 {
 		return 0
 	}
@@ -55,24 +53,28 @@ func (s *jsonStorage) lastOffset() int {
 }
 
 func (s *jsonStorage) nextOffset() int {
-	return len(s.dm.PKs)
+	return len(s.dm.Records)
 }
 
 func (s *jsonStorage) append(k string, v []byte, ts ...TagSetter) int {
-	s.dm.PKs = append(s.dm.PKs, k)
-	s.dm.Values = append(s.dm.Values, v)
+	r := record{
+		PK: k,
+		Value: v,
+	}
 
 	tags := Tags{}
 	for _, s := range ts {
 		s(&tags)
 	}
 
-	s.dm.Tags = append(s.dm.Tags, tags)
-	return len(s.dm.PKs) - 1
+	r.Tags = &tags
+	s.dm.Records = append(s.dm.Records, r)
+
+	return len(s.dm.Records) - 1
 }
 
 func (s *jsonStorage) replaceValueAt(offset int, v []byte, ts ...TagSetter) error {
-	if len(s.dm.Values) < offset+1 {
+	if len(s.dm.Records) < offset+1 {
 		return errors.Errorf("offset %d is out of range for values", offset)
 	}
 
@@ -81,8 +83,8 @@ func (s *jsonStorage) replaceValueAt(offset int, v []byte, ts ...TagSetter) erro
 		s(&tags)
 	}
 
-	s.dm.Tags[offset] = tags
-	s.dm.Values[offset] = v
+	s.dm.Records[offset].Tags = &tags
+	s.dm.Records[offset].Value = v
 	return nil
 }
 
@@ -91,32 +93,29 @@ func (s *jsonStorage) getValueAt(offset int) ([]byte, error) {
 		panic("offset cannot be less than 0")
 	}
 
-	if len(s.dm.Values) < offset+1 {
+	if len(s.dm.Records) < offset+1 {
 		return nil, errors.Errorf("offset %d is out of range for values", offset)
 	}
 
-	return s.dm.Values[offset], nil
+	return s.dm.Records[offset].Value, nil
 }
 
 func (s *jsonStorage) removeAt(offset int) error {
-	if len(s.dm.PKs) < offset+1 {
-		return errors.Errorf("offset %d is out of range for primary keys", offset)
+	if offset < 0 {
+		panic("how can offset be less than 0?")
 	}
 
-	if len(s.dm.Values) < offset+1 {
-		return errors.Errorf("offset %d is out of range for values", offset)
+	if len(s.dm.Records) < offset+1 {
+		return errors.Errorf("offset %d is out of range for records", offset)
 	}
 
-	s.dm.Values = append(s.dm.Values[:offset], s.dm.Values[offset+1:]...)
-	s.dm.PKs = append(s.dm.PKs[:offset], s.dm.PKs[offset+1:]...)
-
+	s.dm.Records = append(s.dm.Records[:offset], s.dm.Records[offset+1:]...)
 	return nil
 }
 
 func (s *jsonStorage) initialize() error {
-	if s.dm.PKs == nil || s.dm.Values == nil {
-		s.dm.PKs = []string{}
-		s.dm.Values = make([][]byte, 0)
+	if s.dm.Records == nil {
+		s.dm.Records = make([]record, 0)
 		return s.write()
 	}
 
@@ -124,7 +123,7 @@ func (s *jsonStorage) initialize() error {
 }
 
 func (s *jsonStorage) persist() error {
-	if s.dm.PKs == nil || s.dm.Values == nil {
+	if s.dm.Records == nil {
 		return s.initialize()
 	}
 

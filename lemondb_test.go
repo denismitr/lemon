@@ -20,6 +20,29 @@ func TestLemonDB_Read(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	//t.Run("seed", func(t *testing.T) {
+	//	if err := db.MultiUpdate(context.Background(), func(tx *lemon.Tx) error {
+	//		if err := tx.Insert("product:8976", lemon.D{
+	//			"100": "foobar",
+	//			"baz":8989764,
+	//			"foo":"bar",
+	//		}); err != nil {
+	//			return err
+	//		}
+	//
+	//		if err := tx.Insert("product:1145", lemon.D{
+	//			"999":nil,
+	//			"baz12":123.879,
+	//			"foo":"bar5674",
+	//		}); err != nil {
+	//			return err
+	//		}
+	//
+	//		return nil
+	//	}); err != nil {
+	//		t.Fatal(err)
+	//	}
+	//})
 
 	t.Run("get existing keys", func(t *testing.T) {
 		var result1 *lemon.Document
@@ -247,7 +270,7 @@ func (wts *writeTestSuite) Test_ReplaceInsertedDocs() {
 	readJson2 := readResult2.RawString()
 	wts.Assert().Equal(`{"999":"bar","baz":123.879,"foo1":"0"}`, readJson2)
 
-	expectedContent := `{"pks":["item:77","item:1145"],"tags":[{"b":null,"f":null,"i":null,"s":null},{"b":[{"k":"valid","v":true}],"f":null,"i":null,"s":null}],"documents":["eyJiYXIiOm51bGwsImJheiI6MSwiZm9vIjoiYmFyMjIifQ==","eyI5OTkiOiJiYXIiLCJiYXoiOjEyMy44NzksImZvbzEiOiIwIn0="]}`
+	expectedContent := `{"records":[{"k":"item:77","v":"eyJiYXIiOm51bGwsImJheiI6MSwiZm9vIjoiYmFyMjIifQ==","t":{"b":null,"f":null,"i":null,"s":null}},{"k":"item:1145","v":"eyI5OTkiOiJiYXIiLCJiYXoiOjEyMy44NzksImZvbzEiOiIwIn0=","t":{"b":[{"k":"valid","v":true}],"f":null,"i":null,"s":null}}]}`
 	AssertFileContents(wts.T(), wts.fixture, expectedContent)
 }
 
@@ -319,7 +342,7 @@ func (rts *removeTestSuite) TestLemonDB_RemoveItemInTheMiddle() {
 		doc, err := tx.Get("item:1145")
 		rts.Require().Error(err)
 		rts.Assert().Nil(doc)
-		rts.Assert().True(errors.Is(err, lemon.ErrKeyDoesNotExist))
+		rts.Assert().True(errors.Is(err, lemon.ErrDocumentNotFound))
 
 		return nil
 	}); err != nil {

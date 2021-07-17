@@ -2,7 +2,6 @@ package lemon
 
 import (
 	"context"
-	"github.com/denismitr/lemon/internal/engine"
 	"github.com/pkg/errors"
 )
 
@@ -11,17 +10,13 @@ var ErrTxIsReadOnly = errors.New("transaction is read only")
 
 type Tx struct {
 	readOnly bool
-	e *engine.Engine
+	e *Engine
 	ctx context.Context
 }
 
 func (x *Tx) Get(key string) (*Document, error) { // fixme: decide on ref or value
 	v, err := x.e.FindByKey(key)
 	if err != nil {
-		if errors.Is(err, engine.ErrDocumentNotFound) {
-			return nil, errors.Wrapf(ErrKeyDoesNotExist, "%s", key)
-		}
-
 		return nil, err
 	}
 
@@ -45,7 +40,7 @@ func (x *Tx) Insert(key string, data interface{}, taggers ...Tagger) error {
 		return ErrTxIsReadOnly
 	}
 
-	ts := engine.Tags{}
+	ts := Tags{}
 	for _, t := range taggers {
 		t(&ts)
 	}
@@ -62,13 +57,13 @@ func (x *Tx) InsertOrReplace(key string, data interface{}, taggers ...Tagger) er
 		return ErrTxIsReadOnly
 	}
 
-	ts := engine.Tags{}
+	ts := Tags{}
 	for _, t := range taggers {
 		t(&ts)
 	}
 
 	if err := x.e.Insert(key, data, ts); err != nil {
-		if errors.Is(err, engine.ErrKeyAlreadyExists) {
+		if errors.Is(err, ErrKeyAlreadyExists) {
 			if updateErr := x.e.Update(key, data, ts); updateErr != nil {
 				return updateErr
 			} else {
@@ -108,13 +103,13 @@ func (x *Tx) Find(ctx context.Context, opts *QueryOptions, dest *[]Document) err
 	return nil
 }
 
-func (x *Tx) applyScanner(ctx context.Context, opts *QueryOptions, ir engine.ItemReceiver) error {
+func (x *Tx) applyScanner(ctx context.Context, opts *QueryOptions, ir ItemReceiver) error {
 	if opts == nil {
 		opts = Q()
 	}
 
 	if opts.KR != nil {
-		var scanner engine.RangeScanner
+		var scanner RangeScanner
 		if opts.O == Ascend {
 			scanner = x.e.ScanBetweenAscend
 		} else {
@@ -127,7 +122,7 @@ func (x *Tx) applyScanner(ctx context.Context, opts *QueryOptions, ir engine.Ite
 
 		return nil
 	} else if opts.Px != "" {
-		var scanner engine.PrefixScanner
+		var scanner PrefixScanner
 		if opts.O == Ascend {
 			scanner = x.e.ScanPrefixAscend
 		} else {
@@ -140,7 +135,7 @@ func (x *Tx) applyScanner(ctx context.Context, opts *QueryOptions, ir engine.Ite
 
 		return nil
 	} else {
-		var scanner engine.Scanner
+		var scanner Scanner
 		if opts.O == Ascend {
 			scanner = x.e.ScanAscend
 		} else {

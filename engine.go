@@ -1,4 +1,4 @@
-package engine
+package lemon
 
 import (
 	"context"
@@ -22,7 +22,7 @@ type Engine struct {
 	bTags *btree.BTree
 }
 
-func New(fullPath string) *Engine {
+func newEngine(fullPath string) *Engine {
 	s := newJsonStorage(fullPath)
 
 	return &Engine{
@@ -37,17 +37,15 @@ func (e *Engine) Init() error {
 		return err
 	}
 
-	pks := e.s.pks()
-	for i := range pks {
-		e.pks.ReplaceOrInsert(&index{key: pks[i], offset: i})
-	}
+	e.s.iterate(func(o int, k string, v []byte, t *Tags) {
+		e.pks.ReplaceOrInsert(&index{key: k, offset: o})
 
-	tags := e.s.tags()
-	for offset := range tags {
-		for _, bTag := range tags[offset].Booleans {
-			e.bTags.ReplaceOrInsert(NewBoolTagIndex(bTag.K, bTag.V, offset))
+		if t != nil {
+			for i := range t.Booleans {
+				e.bTags.ReplaceOrInsert(NewBoolTagIndex(t.Booleans[i].K, t.Booleans[i].V, o))
+			}
 		}
-	}
+	})
 
 	return nil
 }
@@ -350,3 +348,4 @@ func serializeToValue(d interface{}) ([]byte, error) {
 
 	return v, nil
 }
+

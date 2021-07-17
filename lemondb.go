@@ -2,20 +2,19 @@ package lemon
 
 import (
 	"context"
-	"github.com/denismitr/lemon/internal/engine"
 	"github.com/pkg/errors"
 	"sync"
 )
 
 type LemonDB struct {
-	e *engine.Engine
+	e *Engine
 	mu sync.RWMutex
 }
 
 type UserCallback func(tx *Tx) error
 
 func New(path string) (*LemonDB, error) {
-	e := engine.New(path)
+	e := newEngine(path)
 
 	if initErr := e.Init(); initErr != nil {
 		return nil, initErr
