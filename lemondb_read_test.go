@@ -82,7 +82,7 @@ func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Ascend() {
 
 	for i := 500; i < 750; i++ {
 		idx := i - 500
-		fts.Assert().Equal(fmt.Sprintf("product_%d", i), docs[idx].StringOrDefault("name", ""))
+		fts.Assert().Equal(fmt.Sprintf("product_%d", i), docs[idx].StringOrDefault("Name", ""))
 		fts.Assert().Equal(i, docs[idx].IntOrDefault("id", 0))
 	}
 }
@@ -177,7 +177,7 @@ func (fts *findTestSuite) TestLemonDB_FindAllDocs_Descend() {
 
 	totalProducts := 1_000
 	for i := 0; i < totalProducts; i++ {
-		fts.Assert().Equal(fmt.Sprintf("product_%d", totalProducts - i), docs[totalUsers + i].StringOrDefault("name", ""))
+		fts.Assert().Equal(fmt.Sprintf("product_%d", totalProducts - i), docs[totalUsers + i].StringOrDefault("Name", ""))
 		fts.Assert().Equal(totalProducts - i, docs[totalUsers + i].IntOrDefault("id", 0))
 	}
 }
@@ -205,7 +205,7 @@ func (fts *findTestSuite) TestLemonDB_FindAllDocs_Ascend() {
 
 	totalProducts := 1_000
 	for i := 0; i < totalProducts; i++ {
-		fts.Assert().Equal(fmt.Sprintf("product_%d", i + 1), docs[i].StringOrDefault("name", ""))
+		fts.Assert().Equal(fmt.Sprintf("product_%d", i + 1), docs[i].StringOrDefault("Name", ""))
 		fts.Assert().Equal(i + 1, docs[i].IntOrDefault("id", 0))
 	}
 

@@ -392,7 +392,7 @@ func seedUserPets(t *testing.T, db *lemon.LemonDB, firstUserId, lastUserId, pets
 	t.Helper()
 
 	type petData struct {
-		Name   string `json:"name"`
+		Name   string `json:"Name"`
 		Age    int    `json:"age"`
 		Weight float64 `json:"weight"`
 		Kind   string `json:"kind"`
@@ -424,7 +424,7 @@ func seedProductData(t *testing.T, db *lemon.LemonDB, n int) {
 	t.Helper()
 
 	type productData struct {
-		Name     string  `json:"name"`
+		Name     string  `json:"Name"`
 		Buyers   []int   `json:"buyers"`
 		ID       int     `json:"id"`
 		OwnerID  int     `json:"ownerId"`

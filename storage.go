@@ -56,34 +56,32 @@ func (s *jsonStorage) nextOffset() int {
 	return len(s.dm.Records)
 }
 
-func (s *jsonStorage) append(k string, v []byte, ts ...TagSetter) int {
+func (s *jsonStorage) append(k string, v []byte, tags *Tags) int {
 	r := record{
 		PK: k,
 		Value: v,
 	}
 
-	tags := Tags{}
-	for _, s := range ts {
-		s(&tags)
-	}
-
-	r.Tags = &tags
+	r.Tags = tags
 	s.dm.Records = append(s.dm.Records, r)
 
 	return len(s.dm.Records) - 1
 }
 
-func (s *jsonStorage) replaceValueAt(offset int, v []byte, ts ...TagSetter) error {
+func (s *jsonStorage) getTagsAt(offset int) (*Tags, error) {
 	if len(s.dm.Records) < offset+1 {
-		return errors.Errorf("offset %d is out of range for values", offset)
+		return nil, errors.Errorf("offset %d is out of range for values count %d", offset, len(s.dm.Records))
 	}
 
-	tags := Tags{}
-	for _, s := range ts {
-		s(&tags)
+	return s.dm.Records[offset].Tags, nil
+}
+
+func (s *jsonStorage) replaceValueAt(offset int, v []byte, tags *Tags) error {
+	if len(s.dm.Records) < offset+1 {
+		return errors.Errorf("offset %d is out of range for records count %d", offset, len(s.dm.Records))
 	}
 
-	s.dm.Records[offset].Tags = &tags
+	s.dm.Records[offset].Tags = tags
 	s.dm.Records[offset].Value = v
 	return nil
 }
@@ -94,7 +92,7 @@ func (s *jsonStorage) getValueAt(offset int) ([]byte, error) {
 	}
 
 	if len(s.dm.Records) < offset+1 {
-		return nil, errors.Errorf("offset %d is out of range for values", offset)
+		return nil, errors.Errorf("offset %d is out of range for records count %d", offset, len(s.dm.Records))
 	}
 
 	return s.dm.Records[offset].Value, nil
@@ -106,7 +104,7 @@ func (s *jsonStorage) removeAt(offset int) error {
 	}
 
 	if len(s.dm.Records) < offset+1 {
-		return errors.Errorf("offset %d is out of range for records", offset)
+		return errors.Errorf("offset %d is out of range for records count %d", offset, len(s.dm.Records))
 	}
 
 	s.dm.Records = append(s.dm.Records[:offset], s.dm.Records[offset+1:]...)

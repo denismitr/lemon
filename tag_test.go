@@ -20,8 +20,8 @@ func Test_BoolTag_Less(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.k1+"_"+tc.k2, func(t *testing.T) {
-			idxA := boolTag{K: tc.k1, V: tc.v1}
-			idxB := boolTag{K: tc.k2, V: tc.v2}
+			idxA := boolTag{Name: tc.k1, Value: tc.v1}
+			idxB := boolTag{Name: tc.k2, Value: tc.v2}
 
 			assert.Equal(t, tc.less, idxA.Less(&idxB))
 		})
@@ -30,19 +30,19 @@ func Test_BoolTag_Less(t *testing.T) {
 
 func Test_BoolTag_BTree(t *testing.T) {
 	btr := btree.New(2)
-	btr.ReplaceOrInsert(&boolTag{K: "http:success", V: true, offset: 1})
-	btr.ReplaceOrInsert(&boolTag{K: "http:success", V: true, offset: 8})
-	btr.ReplaceOrInsert(&boolTag{K: "http:success", V: false, offset: 2})
-	btr.ReplaceOrInsert(&boolTag{K: "http:error", V: false, offset: 3})
-	btr.ReplaceOrInsert(&boolTag{K: "http:error", V: true, offset: 4})
-	btr.ReplaceOrInsert(&boolTag{K: "http:error", V: true, offset: 7})
-	btr.ReplaceOrInsert(&boolTag{K: "http:z", V: false, offset: 5})
-	btr.ReplaceOrInsert(&boolTag{K: "http:z", V: true, offset: 6})
+	btr.ReplaceOrInsert(&boolTag{Name: "http:success", Value: true, offset: 1})
+	btr.ReplaceOrInsert(&boolTag{Name: "http:success", Value: true, offset: 8})
+	btr.ReplaceOrInsert(&boolTag{Name: "http:success", Value: false, offset: 2})
+	btr.ReplaceOrInsert(&boolTag{Name: "http:error", Value: false, offset: 3})
+	btr.ReplaceOrInsert(&boolTag{Name: "http:error", Value: true, offset: 4})
+	btr.ReplaceOrInsert(&boolTag{Name: "http:error", Value: true, offset: 7})
+	btr.ReplaceOrInsert(&boolTag{Name: "http:z", Value: false, offset: 5})
+	btr.ReplaceOrInsert(&boolTag{Name: "http:z", Value: true, offset: 6})
 
 	var offsetsHttpError []int
 	btr.AscendRange(
-		&boolTag{K: "http:error", V: true, offset: 0},
-		&boolTag{K: "http:error", V: true, offset: 8},
+		&boolTag{Name: "http:error", Value: true, offset: 0},
+		&boolTag{Name: "http:error", Value: true, offset: 8},
 		func (i btree.Item) bool {
 			offset := i.(*boolTag).offset
 			offsetsHttpError = append(offsetsHttpError, offset)
@@ -54,8 +54,8 @@ func Test_BoolTag_BTree(t *testing.T) {
 
 	var offsetsNoSuccess []int
 	btr.AscendRange(
-		&boolTag{K: "http:success", V: false, offset: 0},
-		&boolTag{K: "http:success", V: false, offset: 8},
+		&boolTag{Name: "http:success", Value: false, offset: 0},
+		&boolTag{Name: "http:success", Value: false, offset: 8},
 		func (i btree.Item) bool {
 			offset := i.(*boolTag).offset
 			offsetsNoSuccess = append(offsetsNoSuccess, offset)
@@ -67,8 +67,8 @@ func Test_BoolTag_BTree(t *testing.T) {
 
 	var offsetsSuccess []int
 	btr.AscendRange(
-		&boolTag{K: "http:success", V: true, offset: 0},
-		&boolTag{K: "http:success", V: true, offset: 8},
+		&boolTag{Name: "http:success", Value: true, offset: 0},
+		&boolTag{Name: "http:success", Value: true, offset: 8},
 		func (i btree.Item) bool {
 			offset := i.(*boolTag).offset
 			offsetsSuccess = append(offsetsSuccess, offset)

@@ -20,7 +20,13 @@ type Tag interface {
 
 func BoolTag(name string, value bool) Tagger {
 	return func(t *Tags) {
-		t.Booleans = append(t.Booleans, boolTag{K: name, V: value})
+		t.Booleans = append(t.Booleans, boolTag{Name: name, Value: value})
+	}
+}
+
+func StrTag(name string, value string) Tagger {
+	return func(t *Tags) {
+		t.Strings = append(t.Strings, strTag{Name: name, Value: value})
 	}
 }
 
@@ -28,7 +34,7 @@ type Tags struct {
 	Booleans []boolTag  `json:"b"`
 	FloatTag []floatTag `json:"f"`
 	IntTag   []intTag   `json:"i"`
-	StrTag   []strTag   `json:"s"`
+	Strings  []strTag   `json:"s"`
 }
 
 type TagIndex interface {
@@ -37,15 +43,15 @@ type TagIndex interface {
 }
 
 type boolTag struct {
-	K      string `json:"k"`
-	V      bool   `json:"v"`
+	Name   string `json:"k"`
+	Value  bool   `json:"v"`
 	offset int
 }
 
 func NewBoolTagIndex(k string, v bool, offset int) *boolTag {
 	return &boolTag{
-		K:      k,
-		V:      v,
+		Name:   k,
+		Value:  v,
 		offset: offset,
 	}
 }
@@ -57,15 +63,15 @@ func (ti *boolTag) setOffset(offset int) {
 func (ti *boolTag) Less(than btree.Item) bool {
 	other := than.(*boolTag)
 
-	if ti.K < other.K {
+	if ti.Name < other.Name {
 		return true
-	} else if ti.K != other.K {
+	} else if ti.Name != other.Name {
 		return false
 	}
 
-	if ti.V == false && other.V == true {
+	if ti.Value == false && other.Value == true {
 		return true
-	} else if ti.V != other.V {
+	} else if ti.Value != other.Value {
 		return false
 	}
 
@@ -87,7 +93,7 @@ type intTag struct {
 }
 
 type strTag struct {
-	Key   string `json:"k"`
+	Name  string `json:"k"`
 	Value string `json:"v"`
 }
 
@@ -95,7 +101,7 @@ type TagSetter func(tags *Tags)
 
 func BoolTagSetter(k string, v bool) TagSetter {
 	return func(tags *Tags) {
-		tags.Booleans = append(tags.Booleans, boolTag{K: k, V: v})
+		tags.Booleans = append(tags.Booleans, boolTag{Name: k, Value: v})
 	}
 }
 

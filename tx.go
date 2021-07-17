@@ -45,7 +45,7 @@ func (x *Tx) Insert(key string, data interface{}, taggers ...Tagger) error {
 		t(&ts)
 	}
 
-	if err := x.e.Insert(key, data, ts); err != nil {
+	if err := x.e.Insert(key, data, &ts); err != nil {
 		return err
 	}
 
@@ -62,9 +62,9 @@ func (x *Tx) InsertOrReplace(key string, data interface{}, taggers ...Tagger) er
 		t(&ts)
 	}
 
-	if err := x.e.Insert(key, data, ts); err != nil {
+	if err := x.e.Insert(key, data, &ts); err != nil {
 		if errors.Is(err, ErrKeyAlreadyExists) {
-			if updateErr := x.e.Update(key, data, ts); updateErr != nil {
+			if updateErr := x.e.Update(key, data, &ts); updateErr != nil {
 				return updateErr
 			} else {
 				return nil

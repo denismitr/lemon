@@ -19,7 +19,8 @@ type Scanner func(ctx context.Context, ir ItemReceiver) error
 type Engine struct {
 	s     *jsonStorage
 	pks   *btree.BTree
-	bTags *btree.BTree
+	bTags boolIndex
+	sTags stringIndex
 }
 
 func newEngine(fullPath string) *Engine {
@@ -28,7 +29,8 @@ func newEngine(fullPath string) *Engine {
 	return &Engine{
 		s:     s,
 		pks:   btree.New(2),
-		bTags: btree.New(2),
+		bTags: make(boolIndex),
+		sTags: make(stringIndex),
 	}
 }
 
@@ -41,8 +43,12 @@ func (e *Engine) Init() error {
 		e.pks.ReplaceOrInsert(&index{key: k, offset: o})
 
 		if t != nil {
-			for i := range t.Booleans {
-				e.bTags.ReplaceOrInsert(NewBoolTagIndex(t.Booleans[i].K, t.Booleans[i].V, o))
+			for _, bt := range t.Booleans {
+				e.bTags.add(bt.Name, bt.Value, o)
+			}
+
+			for _, st := range t.Strings {
+				e.sTags.add(st.Name, st.Value, o)
 			}
 		}
 	})
@@ -126,7 +132,7 @@ func (e *Engine) removeByKeyFromDataModel(key string) error {
 	return nil
 }
 
-func (e *Engine) Insert(key string, d interface{}, tags Tags) error {
+func (e *Engine) Insert(key string, d interface{}, tags *Tags) error {
 	_, err := e.findOffsetByKey(key)
 	if err == nil {
 		return errors.Wrapf(ErrKeyAlreadyExists, "%s", key)
@@ -137,22 +143,23 @@ func (e *Engine) Insert(key string, d interface{}, tags Tags) error {
 		return err
 	}
 
-	nextOffset := e.s.nextOffset()
-	var tagSetters []TagSetter
-	for _, t := range tags.Booleans {
-		t.setOffset(nextOffset)
-		e.bTags.ReplaceOrInsert(&t)
-		tagSetters = append(tagSetters, BoolTagSetter(t.K, t.V))
+	offset := e.s.append(key, v, tags)
+	e.pks.ReplaceOrInsert(&index{key: key, offset: offset})
+
+	if tags != nil {
+		for _, t := range tags.Strings {
+			e.sTags.add(t.Name, t.Value, offset)
+		}
+
+		for _, t := range tags.Booleans {
+			e.bTags.add(t.Name, t.Value, offset)
+		}
 	}
-
-	e.s.append(key, v, tagSetters...)
-
-	e.pks.ReplaceOrInsert(&index{key: key, offset: nextOffset})
 
 	return nil
 }
 
-func (e *Engine) Update(key string, d interface{}, tags Tags) error {
+func (e *Engine) Update(key string, d interface{}, tags *Tags) error {
 	offset, err := e.findOffsetByKey(key)
 	if err != nil {
 		return err
@@ -163,15 +170,34 @@ func (e *Engine) Update(key string, d interface{}, tags Tags) error {
 		return err
 	}
 
-	var tagSetters []TagSetter
-	for _, t := range tags.Booleans {
-		t.setOffset(offset)
-		e.bTags.ReplaceOrInsert(&t)
-		tagSetters = append(tagSetters, BoolTagSetter(t.K, t.V))
+	existingTags, err := e.s.getTagsAt(offset)
+	if err != nil {
+		return err
 	}
 
-	if err := e.s.replaceValueAt(offset, v, tagSetters...); err != nil {
+	if err := e.s.replaceValueAt(offset, v, tags); err != nil {
 		return err
+	}
+
+	// removing existing tags
+	if existingTags != nil {
+		for _, bt := range existingTags.Booleans {
+			e.bTags.removeOffset(bt.Name, bt.Value, offset)
+		}
+
+		for _, st := range existingTags.Strings {
+			e.sTags.removeOffset(st.Name, st.Value, offset)
+		}
+	}
+
+	if tags != nil {
+		for _, t := range tags.Strings {
+			e.sTags.add(t.Name, t.Value, offset)
+		}
+
+		for _, t := range tags.Booleans {
+			e.bTags.add(t.Name, t.Value, offset)
+		}
 	}
 
 	return nil
@@ -341,7 +367,7 @@ func serializeToValue(d interface{}) ([]byte, error) {
 	} else {
 		b, err := json.Marshal(d)
 		if err != nil {
-			return nil, errors.Wrapf(err, "could not marshal data %+V", d)
+			return nil, errors.Wrapf(err, "could not marshal data %+Value", d)
 		}
 		v = b
 	}
