@@ -12,6 +12,7 @@ var ErrJsonPathInvalid = errors.New("json path is invalid")
 type Document struct {
 	key   string
 	value []byte
+	tags Tags
 }
 
 func (d Document) Key() string {
@@ -35,7 +36,7 @@ func (d *Document) RawString() string {
 }
 
 func (d *Document) Unmarshal(dest interface{}) error {
-	err := json.Unmarshal([]byte(d.value), &dest)
+	err := json.Unmarshal(d.value, &dest)
 	if err != nil {
 		return errors.Wrap(ErrResultCouldNotBeUnmarshalled, err.Error())
 	}

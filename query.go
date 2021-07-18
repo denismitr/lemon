@@ -9,31 +9,46 @@ type KeyRange struct {
 type Order string
 
 const (
-	Ascend Order = "ASC"
+	Ascend  Order = "ASC"
 	Descend Order = "DESC"
 )
 
-type QueryOptions struct {
-	O Order
-	KR *KeyRange
-	Px string
+type queryTags struct {
+	boolTags []boolTag
+	strTags  []strTag
 }
 
-func (fo *QueryOptions) Order(o Order) *QueryOptions {
-	fo.O = o
+type queryOptions struct {
+	order    Order
+	keyRange *KeyRange
+	prefix   string
+	tags     *queryTags
+}
+
+func (fo *queryOptions) Order(o Order) *queryOptions {
+	fo.order = o
 	return fo
 }
 
-func (fo *QueryOptions) KeyRange(from, to string) *QueryOptions {
-	fo.KR = &KeyRange{From: from, To: to}
+func (fo *queryOptions) KeyRange(from, to string) *queryOptions {
+	fo.keyRange = &KeyRange{From: from, To: to}
 	return fo
 }
 
-func (fo *QueryOptions) Prefix(p string) *QueryOptions {
-	fo.Px = p
+func (fo *queryOptions) Prefix(p string) *queryOptions {
+	fo.prefix = p
 	return fo
 }
 
-func Q() *QueryOptions {
-	return &QueryOptions{O: Ascend}
+func (fo *queryOptions) BoolTag(name string, v bool) *queryOptions {
+	if fo.tags == nil {
+		fo.tags = &queryTags{}
+	}
+
+	fo.tags.boolTags = append(fo.tags.boolTags, boolTag{Name: name, Value: v})
+	return fo
+}
+
+func Q() *queryOptions {
+	return &queryOptions{order: Ascend}
 }

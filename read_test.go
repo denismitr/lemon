@@ -4,12 +4,131 @@ import (
 	"context"
 	"fmt"
 	"github.com/denismitr/lemon"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"os"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestLemonDB_Read(t *testing.T) {
+	db, err := lemon.New("./__fixtures__/read_db1.ldb")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	//t.Run("seed", func(t *testing.T) {
+	//	if err := db.MultiUpdate(context.Background(), func(tx *lemon.Tx) error {
+	//		if err := tx.Insert("product:8976", lemon.D{
+	//			"100": "foobar",
+	//			"baz":8989764,
+	//			"foo":"bar",
+	//		}); err != nil {
+	//			return err
+	//		}
+	//
+	//		if err := tx.Insert("product:1145", lemon.D{
+	//			"999":nil,
+	//			"baz12":123.879,
+	//			"foo":"bar5674",
+	//		}); err != nil {
+	//			return err
+	//		}
+	//
+	//		return nil
+	//	}); err != nil {
+	//		t.Fatal(err)
+	//	}
+	//})
+
+	t.Run("get existing keys", func(t *testing.T) {
+		var result1 *lemon.Document
+		var result2 *lemon.Document
+		if err := db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
+			doc1, err := tx.Get("product:8976")
+			if err != nil {
+				return err
+			}
+
+			doc2, err := tx.Get("product:1145")
+			if err != nil {
+				return err
+			}
+
+			result1 = doc1
+			result2 = doc2
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+
+		json1 := result1.RawString()
+		assert.Equal(t, `{"100":"foobar","baz":8989764,"foo":"bar"}`, json1)
+		foo, err := result1.String("foo")
+		require.NoError(t, err)
+		assert.Equal(t, "bar", foo)
+
+		json2 := result2.RawString()
+		assert.Equal(t, `{"999":null,"baz12":123.879,"foo":"bar5674"}`, json2)
+		bar5674, err := result2.String("foo")
+		require.NoError(t, err)
+		assert.Equal(t, "bar5674", bar5674)
+		baz12, err := result2.Float("baz12")
+		require.NoError(t, err)
+		assert.Equal(t, 123.879, baz12)
+	})
+}
+
+type findByTagsTestSuite struct {
+	suite.Suite
+	fixture string
+}
+
+func (fts *findByTagsTestSuite) SetupSuite() {
+	fts.fixture = "./__fixtures__/find_by_tags_db1.ldb"
+	db, err := lemon.New(fts.fixture)
+	fts.Require().NoError(err)
+
+	seedUserData(fts.T(), db, 1_000, seedTags{hashes: true})
+	seedProductData(fts.T(), db, 1_000)
+}
+
+func (fts *findByTagsTestSuite) TearDownSuite() {
+	if err := os.Remove(fts.fixture); err != nil {
+		fts.Require().NoError(err)
+	}
+}
+
+func (fts *findByTagsTestSuite) TestLemonDB_FindByBoolTag() {
+	db, err := lemon.New(fts.fixture)
+	fts.Require().NoError(err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
+	defer cancel()
+
+	var docs []lemon.Document
+	if err := db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
+		opts := lemon.Q().Order(lemon.Descend).BoolTag("foo", true)
+		if err := tx.Find(ctx, opts, &docs); err != nil {
+			return err
+		}
+
+		return nil
+	}); err != nil {
+		fts.Require().NoError(err)
+	}
+
+	//expectedDocs := 181
+	fts.Assert().True(len(docs) > 0)
+	fts.Assert().True(len(docs) < db.Count())
+
+	//for i := 0; i < 9; i++ {
+	//	fts.Require().Equal(fmt.Sprintf("user:10%d", expectedDocs - i), docs[i].Key())
+	//	fts.Require().Equal(fmt.Sprintf("username_10%d", expectedDocs - i), docs[i].StringOrDefault("username", ""))
+	//}
+}
 
 type findTestSuite struct {
 	suite.Suite
@@ -21,7 +140,7 @@ func (fts *findTestSuite) SetupSuite() {
 	db, err := lemon.New(fts.fixture)
 	fts.Require().NoError(err)
 
-	seedUserData(fts.T(), db, 1_000)
+	seedUserData(fts.T(), db, 1_000, seedTags{})
 	seedProductData(fts.T(), db, 1_000)
 }
 
@@ -228,7 +347,7 @@ func (sts *scanTestSuite) SetupSuite() {
 	db, err := lemon.New(sts.fixture)
 	sts.Require().NoError(err)
 
-	seedUserData(sts.T(), db, 1_000)
+	seedUserData(sts.T(), db, 1_000, seedTags{})
 	seedProductData(sts.T(), db, 1_000)
 	seedUserPets(sts.T(), db,10, 50, 3)
 	seedUserPets(sts.T(), db,134, 140, 5)
@@ -276,6 +395,12 @@ func TestTx_Find(t *testing.T) {
 	suite.Run(t, &findTestSuite{})
 }
 
+func TestTx_FindByTags(t *testing.T) {
+	suite.Run(t, &findByTagsTestSuite{})
+}
+
 func TestTx_Scan(t *testing.T) {
 	suite.Run(t, &scanTestSuite{})
 }
+
+

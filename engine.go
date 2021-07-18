@@ -6,15 +6,27 @@ import (
 	"github.com/google/btree"
 	"github.com/pkg/errors"
 	"strings"
+	"sync"
 )
 
 var ErrDocumentNotFound = errors.New("document not found")
 var ErrKeyAlreadyExists = errors.New("key already exists")
 
-type ItemReceiver func(k string, v []byte) bool
-type RangeScanner func(ctx context.Context, lowerBoundPK string, upperBoundPK string, ir ItemReceiver) error
-type PrefixScanner func(ctx context.Context, prefix string, ir ItemReceiver) error
-type Scanner func(ctx context.Context, ir ItemReceiver) error
+type (
+	ItemReceiver func(k string, v []byte) bool
+
+	rangeScanner func(
+		ctx context.Context,
+		lowerBoundPK string,
+		upperBoundPK string,
+		ir ItemReceiver,
+		fo *filterOffsets,
+	) error
+
+	prefixScanner func(ctx context.Context, prefix string, ir ItemReceiver, fo *filterOffsets) error
+
+	scanner func(ctx context.Context, ir ItemReceiver, fo *filterOffsets) error
+)
 
 type Engine struct {
 	s     *jsonStorage
@@ -207,11 +219,12 @@ func (e *Engine) Count() int {
 	return e.s.len()
 }
 
-func (e *Engine) ScanBetweenDescend(
+func (e *Engine) scanBetweenDescend(
 	ctx context.Context,
 	from string,
 	to string,
 	ir ItemReceiver,
+	fo *filterOffsets,
 ) (err error) {
 	// Descend required a reverse order of `from` and `to`
 	e.pks.DescendRange(&index{key: to}, &index{key: from}, func(i btree.Item) bool {
@@ -221,6 +234,10 @@ func (e *Engine) ScanBetweenDescend(
 		}
 
 		idx := i.(*index)
+		if fo != nil && !fo.exists(idx.offset) {
+			return true
+		}
+
 		v, getErr := e.s.getValueAt(idx.offset)
 		if getErr != nil {
 			err = getErr
@@ -233,11 +250,12 @@ func (e *Engine) ScanBetweenDescend(
 	return
 }
 
-func (e *Engine) ScanBetweenAscend(
+func (e *Engine) scanBetweenAscend(
 	ctx context.Context,
 	from string,
 	to string,
 	ir ItemReceiver,
+	fo *filterOffsets,
 ) (err error) {
 	e.pks.AscendRange(&index{key: from}, &index{key: to}, func(i btree.Item) bool {
 		if ctx.Err() != nil {
@@ -246,6 +264,10 @@ func (e *Engine) ScanBetweenAscend(
 		}
 
 		idx := i.(*index)
+		if fo != nil && !fo.exists(idx.offset) {
+			return true
+		}
+
 		if v, getErr := e.s.getValueAt(idx.offset); getErr != nil {
 			err = getErr
 			return false
@@ -257,10 +279,11 @@ func (e *Engine) ScanBetweenAscend(
 	return
 }
 
-func (e *Engine) ScanPrefixAscend(
+func (e *Engine) scanPrefixAscend(
 	ctx context.Context,
 	prefix string,
 	ir ItemReceiver,
+	fo *filterOffsets,
 ) (err error) {
 	e.pks.AscendGreaterOrEqual(&index{key: prefix}, func(i btree.Item) bool {
 		if ctx.Err() != nil {
@@ -271,6 +294,10 @@ func (e *Engine) ScanPrefixAscend(
 		idx := i.(*index)
 		if !strings.HasPrefix(idx.key, prefix) {
 			return false
+		}
+
+		if fo != nil && !fo.exists(idx.offset) {
+			return true
 		}
 
 		if v, getErr := e.s.getValueAt(idx.offset); getErr != nil {
@@ -285,10 +312,11 @@ func (e *Engine) ScanPrefixAscend(
 	return
 }
 
-func (e *Engine) ScanPrefixDescend(
+func (e *Engine) scanPrefixDescend(
 	ctx context.Context,
 	prefix string,
 	ir ItemReceiver,
+	fo *filterOffsets,
 ) (err error) {
 	e.pks.DescendGreaterThan(&index{key: prefix}, func(i btree.Item) bool {
 		if ctx.Err() != nil {
@@ -301,6 +329,10 @@ func (e *Engine) ScanPrefixDescend(
 			return false
 		}
 
+		if fo != nil && !fo.exists(idx.offset) {
+			return true
+		}
+
 		if v, getErr := e.s.getValueAt(idx.offset); getErr != nil {
 			err = getErr
 			return false
@@ -312,9 +344,35 @@ func (e *Engine) ScanPrefixDescend(
 	return
 }
 
-func (e *Engine) ScanAscend(
+type filterOffsets struct {
+	sync.RWMutex
+	offsets map[int]bool
+}
+
+func newFilterOffsets() *filterOffsets {
+	return &filterOffsets{
+		offsets: make(map[int]bool),
+	}
+}
+
+func (fo *filterOffsets) add(offsets []int) {
+	fo.Lock()
+	defer fo.Unlock()
+	for _, o := range offsets {
+		fo.offsets[o] = true
+	}
+}
+
+func (fo *filterOffsets) exists(offset int) bool {
+	fo.RLock()
+	defer fo.RUnlock()
+	return fo.offsets[offset]
+}
+
+func (e *Engine) scanAscend(
 	ctx context.Context,
 	ir ItemReceiver,
+	fo *filterOffsets,
 ) (err error) {
 	e.pks.Ascend(func(i btree.Item) bool {
 		if ctx.Err() != nil {
@@ -323,6 +381,10 @@ func (e *Engine) ScanAscend(
 		}
 
 		idx := i.(*index)
+		if fo != nil && !fo.exists(idx.offset) {
+			return true
+		}
+
 		if v, getErr := e.s.getValueAt(idx.offset); getErr != nil {
 			err = getErr
 			return false
@@ -334,9 +396,10 @@ func (e *Engine) ScanAscend(
 	return
 }
 
-func (e *Engine) ScanDescend(
+func (e *Engine) scanDescend(
 	ctx context.Context,
 	ir ItemReceiver,
+	fo *filterOffsets,
 ) (err error) {
 	e.pks.Descend(func(i btree.Item) bool {
 		if ctx.Err() != nil {
@@ -345,6 +408,10 @@ func (e *Engine) ScanDescend(
 		}
 
 		idx := i.(*index)
+		if fo != nil && !fo.exists(idx.offset) {
+			return true
+		}
+
 		if v, getErr := e.s.getValueAt(idx.offset); getErr != nil {
 			err = getErr
 			return false
@@ -358,6 +425,27 @@ func (e *Engine) ScanDescend(
 
 func (e *Engine) LastOffset() int {
 	return e.s.lastOffset()
+}
+
+func (e *Engine) getFilteredOffsets(tags *queryTags) *filterOffsets {
+	if tags == nil {
+		return nil
+	}
+
+	ft := newFilterOffsets()
+	if tags.boolTags != nil && e.bTags != nil {
+		for _, bt := range tags.boolTags {
+			go ft.add(e.bTags.findOffsets(bt.Name, bt.Value))
+		}
+	}
+
+	if tags.strTags != nil && e.sTags != nil {
+		for _, st := range tags.strTags {
+			go ft.add(e.sTags.findOffsets(st.Name, st.Value))
+		}
+	}
+
+	return ft
 }
 
 func serializeToValue(d interface{}) ([]byte, error) {

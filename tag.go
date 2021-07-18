@@ -48,14 +48,6 @@ type boolTag struct {
 	offset int
 }
 
-func NewBoolTagIndex(k string, v bool, offset int) *boolTag {
-	return &boolTag{
-		Name:   k,
-		Value:  v,
-		offset: offset,
-	}
-}
-
 func (ti *boolTag) setOffset(offset int) {
 	ti.offset = offset
 }
@@ -96,14 +88,5 @@ type strTag struct {
 	Name  string `json:"k"`
 	Value string `json:"v"`
 }
-
-type TagSetter func(tags *Tags)
-
-func BoolTagSetter(k string, v bool) TagSetter {
-	return func(tags *Tags) {
-		tags.Booleans = append(tags.Booleans, boolTag{Name: k, Value: v})
-	}
-}
-
 
 

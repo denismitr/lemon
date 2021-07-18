@@ -77,7 +77,7 @@ func (x *Tx) InsertOrReplace(key string, data interface{}, taggers ...Tagger) er
 	return nil
 }
 
-func (x *Tx) Scan(ctx context.Context, opts *QueryOptions, cb func(d Document) bool) error {
+func (x *Tx) Scan(ctx context.Context, opts *queryOptions, cb func(d Document) bool) error {
 	ir := func(k string, v []byte) bool {
 		d := createDocument(k, v)
 		return cb(d)
@@ -90,7 +90,7 @@ func (x *Tx) Scan(ctx context.Context, opts *QueryOptions, cb func(d Document) b
 	return nil
 }
 
-func (x *Tx) Find(ctx context.Context, opts *QueryOptions, dest *[]Document) error {
+func (x *Tx) Find(ctx context.Context, opts *queryOptions, dest *[]Document) error {
 	ir := func(k string, v []byte) bool {
 		*dest = append(*dest, createDocument(k, v))
 		return true
@@ -103,46 +103,49 @@ func (x *Tx) Find(ctx context.Context, opts *QueryOptions, dest *[]Document) err
 	return nil
 }
 
-func (x *Tx) applyScanner(ctx context.Context, opts *QueryOptions, ir ItemReceiver) error {
+func (x *Tx) applyScanner(ctx context.Context, opts *queryOptions, ir ItemReceiver) error {
 	if opts == nil {
 		opts = Q()
 	}
 
-	if opts.KR != nil {
-		var scanner RangeScanner
-		if opts.O == Ascend {
-			scanner = x.e.ScanBetweenAscend
+
+	fo := x.e.getFilteredOffsets(opts.tags)
+
+	if opts.keyRange != nil {
+		var sc rangeScanner
+		if opts.order == Ascend {
+			sc = x.e.scanBetweenAscend
 		} else {
-			scanner = x.e.ScanBetweenDescend
+			sc = x.e.scanBetweenDescend
 		}
 
-		if err := scanner(ctx, opts.KR.From, opts.KR.To, ir); err != nil {
+		if err := sc(ctx, opts.keyRange.From, opts.keyRange.To, ir, fo); err != nil {
 			return err
 		}
 
 		return nil
-	} else if opts.Px != "" {
-		var scanner PrefixScanner
-		if opts.O == Ascend {
-			scanner = x.e.ScanPrefixAscend
+	} else if opts.prefix != "" {
+		var sc prefixScanner
+		if opts.order == Ascend {
+			sc = x.e.scanPrefixAscend
 		} else {
-			scanner = x.e.ScanPrefixDescend
+			sc = x.e.scanPrefixDescend
 		}
 
-		if err := scanner(ctx, opts.Px, ir); err != nil {
+		if err := sc(ctx, opts.prefix, ir, fo); err != nil {
 			return err
 		}
 
 		return nil
 	} else {
-		var scanner Scanner
-		if opts.O == Ascend {
-			scanner = x.e.ScanAscend
+		var sc scanner
+		if opts.order == Ascend {
+			sc = x.e.scanAscend
 		} else {
-			scanner = x.e.ScanDescend
+			sc = x.e.scanDescend
 		}
 
-		if err := scanner(ctx, ir); err != nil {
+		if err := sc(ctx, ir, fo); err != nil {
 			return err
 		}
 
