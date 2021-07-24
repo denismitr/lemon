@@ -366,6 +366,38 @@ func (sts *scanTestSuite) Test_ScanUserPets() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
 	defer cancel()
 
+	sts.Require().Equal(2158, db.Count())
+
+	var docs []lemon.Document
+	if err := db.MultiRead(ctx, func(tx *lemon.Tx) error {
+		opts := lemon.Q().Order(lemon.Ascend).Prefix("user")
+		if scanErr := tx.Scan(ctx, opts, func (d lemon.Document) bool {
+			if strings.Contains(d.Key(), ":pet:") {
+				docs = append(docs, d)
+			}
+
+			return true
+		}); scanErr != nil {
+			return scanErr
+		}
+
+		return nil
+	}); err != nil {
+		sts.Require().NoError(err)
+	}
+
+	sts.Require().Lenf(docs, 158, "docs count mismatch: got %d", len(docs))
+}
+
+func (sts *scanTestSuite) Test_ScanUserPetsWithManualLimit() {
+	db, err := lemon.New(sts.fixture)
+	sts.Require().NoError(err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
+	defer cancel()
+
+	sts.Require().Equal(2158, db.Count())
+
 	var docs []lemon.Document
 	if err := db.MultiRead(ctx, func(tx *lemon.Tx) error {
 		opts := lemon.Q().Order(lemon.Ascend).Prefix("user")
@@ -388,7 +420,7 @@ func (sts *scanTestSuite) Test_ScanUserPets() {
 		sts.Require().NoError(err)
 	}
 
-	sts.Require().Lenf(docs, 158, "docs count mismatch: got %d", len(docs))
+	sts.Require().Lenf(docs, 21, "docs count mismatch: got %d", len(docs))
 }
 
 func TestTx_Find(t *testing.T) {

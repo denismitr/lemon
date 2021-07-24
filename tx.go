@@ -15,18 +15,18 @@ type Tx struct {
 }
 
 func (x *Tx) Get(key string) (*Document, error) { // fixme: decide on ref or value
-	v, err := x.e.FindByKey(key)
+	v, tags, err := x.e.findByKey(key)
 	if err != nil {
 		return nil, err
 	}
 
-	return newDocument(key, v), nil
+	return newDocument(key, v, tags), nil
 }
 
 func (x *Tx) MGet(key ...string) ([]*Document, error) { // fixme: decide on ref or value
 	docs := make([]*Document, 0)
-	if err := x.e.FindByKeys(key, func(k string, b []byte) bool {
-		docs = append(docs, newDocument(k, b))
+	if err := x.e.FindByKeys(key, func(k string, b []byte, tags *Tags) bool {
+		docs = append(docs, newDocument(k, b, tags))
 		return true
 	}); err != nil {
 		return nil, err
@@ -78,8 +78,8 @@ func (x *Tx) InsertOrReplace(key string, data interface{}, taggers ...Tagger) er
 }
 
 func (x *Tx) Scan(ctx context.Context, opts *queryOptions, cb func(d Document) bool) error {
-	ir := func(k string, v []byte) bool {
-		d := createDocument(k, v)
+	ir := func(k string, v []byte, tags *Tags) bool {
+		d := createDocument(k, v, tags)
 		return cb(d)
 	}
 
@@ -91,8 +91,8 @@ func (x *Tx) Scan(ctx context.Context, opts *queryOptions, cb func(d Document) b
 }
 
 func (x *Tx) Find(ctx context.Context, opts *queryOptions, dest *[]Document) error {
-	ir := func(k string, v []byte) bool {
-		*dest = append(*dest, createDocument(k, v))
+	ir := func(k string, v []byte, tags *Tags) bool {
+		*dest = append(*dest, createDocument(k, v, tags))
 		return true
 	}
 

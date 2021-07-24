@@ -13,7 +13,7 @@ var ErrDocumentNotFound = errors.New("document not found")
 var ErrKeyAlreadyExists = errors.New("key already exists")
 
 type (
-	ItemReceiver func(k string, v []byte) bool
+	ItemReceiver func(k string, v []byte, tags *Tags) bool
 
 	rangeScanner func(
 		ctx context.Context,
@@ -29,29 +29,29 @@ type (
 )
 
 type Engine struct {
-	s     *jsonStorage
-	pks   *btree.BTree
-	bTags boolIndex
-	sTags stringIndex
+	storage *jsonStorage
+	pks     *btree.BTree
+	bTags   boolIndex
+	sTags   stringIndex
 }
 
 func newEngine(fullPath string) *Engine {
 	s := newJsonStorage(fullPath)
 
 	return &Engine{
-		s:     s,
-		pks:   btree.New(2),
-		bTags: make(boolIndex),
-		sTags: make(stringIndex),
+		storage: s,
+		pks:     btree.New(2),
+		bTags:   make(boolIndex),
+		sTags:   make(stringIndex),
 	}
 }
 
 func (e *Engine) Init() error {
-	if err := e.s.load(); err != nil {
+	if err := e.storage.load(); err != nil {
 		return err
 	}
 
-	e.s.iterate(func(o int, k string, v []byte, t *Tags) {
+	e.storage.iterate(func(o int, k string, v []byte, t *Tags) {
 		e.pks.ReplaceOrInsert(&index{key: k, offset: o})
 
 		if t != nil {
@@ -68,17 +68,27 @@ func (e *Engine) Init() error {
 	return nil
 }
 
-func (e *Engine) Persist() error {
-	return e.s.persist()
+func (e *Engine) persist() error {
+	return e.storage.persist()
 }
 
-func (e *Engine) FindByKey(pk string) ([]byte, error) {
+func (e *Engine) findByKey(pk string) ([]byte, *Tags, error) {
 	offset, err := e.findOffsetByKey(pk)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return e.s.getValueAt(offset)
+	v, err := e.storage.getValueAt(offset)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	tags, err := e.storage.getTagsAt(offset)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return v, tags, nil
 }
 
 func (e *Engine) FindByKeys(pks []string, ir ItemReceiver) error {
@@ -88,12 +98,18 @@ func (e *Engine) FindByKeys(pks []string, ir ItemReceiver) error {
 			continue
 		}
 
-		if b, vErr := e.s.getValueAt(offset); vErr != nil {
-			return vErr
-		} else {
-			if next := ir(k, b); !next {
-				break
-			}
+		b, err := e.storage.getValueAt(offset)
+		if err != nil {
+			return err
+		}
+
+		tags, err := e.storage.getTagsAt(offset)
+		if err != nil {
+			return err
+		}
+
+		if next := ir(k, b, tags); !next {
+			break
 		}
 	}
 
@@ -127,7 +143,7 @@ func (e *Engine) removeByKeyFromDataModel(key string) error {
 		return err
 	}
 
-	if err := e.s.removeAt(offset); err != nil {
+	if err := e.storage.removeAt(offset); err != nil {
 		return err
 	}
 
@@ -155,7 +171,7 @@ func (e *Engine) Insert(key string, d interface{}, tags *Tags) error {
 		return err
 	}
 
-	offset := e.s.append(key, v, tags)
+	offset := e.storage.append(key, v, tags)
 	e.pks.ReplaceOrInsert(&index{key: key, offset: offset})
 
 	if tags != nil {
@@ -182,12 +198,12 @@ func (e *Engine) Update(key string, d interface{}, tags *Tags) error {
 		return err
 	}
 
-	existingTags, err := e.s.getTagsAt(offset)
+	existingTags, err := e.storage.getTagsAt(offset)
 	if err != nil {
 		return err
 	}
 
-	if err := e.s.replaceValueAt(offset, v, tags); err != nil {
+	if err := e.storage.replaceValueAt(offset, v, tags); err != nil {
 		return err
 	}
 
@@ -216,7 +232,7 @@ func (e *Engine) Update(key string, d interface{}, tags *Tags) error {
 }
 
 func (e *Engine) Count() int {
-	return e.s.len()
+	return e.storage.len()
 }
 
 func (e *Engine) scanBetweenDescend(
@@ -238,13 +254,19 @@ func (e *Engine) scanBetweenDescend(
 			return true
 		}
 
-		v, getErr := e.s.getValueAt(idx.offset)
-		if getErr != nil {
-			err = getErr
+		v, vErr := e.storage.getValueAt(idx.offset)
+		if vErr != nil {
+			err = vErr
 			return false
 		}
 
-		return ir(idx.key, v)
+		tags, tErr := e.storage.getTagsAt(idx.offset)
+		if tErr != nil {
+			err = tErr
+			return false
+		}
+
+		return ir(idx.key, v, tags)
 	})
 
 	return
@@ -268,12 +290,19 @@ func (e *Engine) scanBetweenAscend(
 			return true
 		}
 
-		if v, getErr := e.s.getValueAt(idx.offset); getErr != nil {
-			err = getErr
+		v, vErr := e.storage.getValueAt(idx.offset)
+		if vErr != nil {
+			err = vErr
 			return false
-		} else {
-			return ir(idx.key, v)
 		}
+
+		tags, tErr := e.storage.getTagsAt(idx.offset)
+		if tErr != nil {
+			err = tErr
+			return false
+		}
+
+		return ir(idx.key, v, tags)
 	})
 
 	return
@@ -300,13 +329,19 @@ func (e *Engine) scanPrefixAscend(
 			return true
 		}
 
-		if v, getErr := e.s.getValueAt(idx.offset); getErr != nil {
-			err = getErr
+		v, vErr := e.storage.getValueAt(idx.offset);
+		if vErr != nil {
+			err = vErr
 			return false
-		} else {
-			ir(idx.key, v)
 		}
-		return true
+
+		tags, tErr := e.storage.getTagsAt(idx.offset)
+		if tErr != nil {
+			err = tErr
+			return false
+		}
+
+		return ir(idx.key, v, tags)
 	})
 
 	return
@@ -333,12 +368,19 @@ func (e *Engine) scanPrefixDescend(
 			return true
 		}
 
-		if v, getErr := e.s.getValueAt(idx.offset); getErr != nil {
-			err = getErr
+		v, vErr := e.storage.getValueAt(idx.offset)
+		if vErr != nil {
+			err = vErr
 			return false
-		} else {
-			return ir(idx.key, v)
 		}
+
+		tags, tErr := e.storage.getTagsAt(idx.offset)
+		if tErr != nil {
+			err = tErr
+			return false
+		}
+
+		return ir(idx.key, v, tags)
 	})
 
 	return
@@ -385,12 +427,19 @@ func (e *Engine) scanAscend(
 			return true
 		}
 
-		if v, getErr := e.s.getValueAt(idx.offset); getErr != nil {
-			err = getErr
+		v, vErr := e.storage.getValueAt(idx.offset)
+		if vErr != nil {
+			err = vErr
 			return false
-		} else {
-			return ir(idx.key, v)
 		}
+
+		tags, tErr := e.storage.getTagsAt(idx.offset)
+		if tErr != nil {
+			err = tErr
+			return false
+		}
+
+		return ir(idx.key, v, tags)
 	})
 
 	return
@@ -412,19 +461,26 @@ func (e *Engine) scanDescend(
 			return true
 		}
 
-		if v, getErr := e.s.getValueAt(idx.offset); getErr != nil {
-			err = getErr
+		v, vErr := e.storage.getValueAt(idx.offset)
+		if vErr != nil {
+			err = vErr
 			return false
-		} else {
-			return ir(idx.key, v)
 		}
+
+		tags, tagsErr := e.storage.getTagsAt(idx.offset)
+		if tagsErr != nil {
+			err = tagsErr
+			return false
+		}
+
+		return ir(idx.key, v, tags)
 	})
 
 	return
 }
 
 func (e *Engine) LastOffset() int {
-	return e.s.lastOffset()
+	return e.storage.lastOffset()
 }
 
 func (e *Engine) getFilteredOffsets(tags *queryTags) *filterOffsets {

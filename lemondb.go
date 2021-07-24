@@ -53,7 +53,7 @@ func (db *LemonDB) MultiUpdate(ctx context.Context, cb UserCallback) error {
 		return errors.Wrap(err, "db write failed")
 	}
 
-	if err := db.e.Persist(); err != nil {
+	if err := db.e.persist(); err != nil {
 		return err
 	}
 
