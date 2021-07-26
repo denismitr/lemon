@@ -4,10 +4,13 @@ import (
 	"github.com/google/btree"
 )
 
-type TagType uint8
+type TagType string
 
 const (
-	BoolTagType TagType = iota
+	BoolTagType TagType = "bool"
+	FloatTagType TagType = "float"
+	StrTagType TagType = "str"
+	IntTagType TagType = "int"
 )
 
 type Tagger func(t *Tags)
@@ -15,7 +18,7 @@ type Tagger func(t *Tags)
 type Tag interface {
 	Name() string
 	Type() TagType
-	TagIndex() TagIndex
+	String() string
 }
 
 func BoolTag(name string, value bool) Tagger {
@@ -39,39 +42,17 @@ type Tags struct {
 
 type TagIndex interface {
 	btree.Item
-	setOffset(int)
+	setPk(int)
 }
 
 type boolTag struct {
-	Name   string `json:"k"`
-	Value  bool   `json:"v"`
-	offset int
+	Name   string
+	Value  bool
+	pk PK
 }
 
-func (ti *boolTag) setOffset(offset int) {
-	ti.offset = offset
-}
-
-func (ti *boolTag) Less(than btree.Item) bool {
-	other := than.(*boolTag)
-
-	if ti.Name < other.Name {
-		return true
-	} else if ti.Name != other.Name {
-		return false
-	}
-
-	if ti.Value == false && other.Value == true {
-		return true
-	} else if ti.Value != other.Value {
-		return false
-	}
-
-	if ti.offset < other.offset {
-		return true
-	}
-
-	return true
+func (bt *boolTag) setPk(pk PK) {
+	bt.pk = pk
 }
 
 type floatTag struct {
@@ -85,8 +66,39 @@ type intTag struct {
 }
 
 type strTag struct {
-	Name  string `json:"k"`
-	Value string `json:"v"`
+	Name  string
+	Value string
+	pk PK
+}
+
+func (st *strTag) setPk(pk PK) {
+	st.pk = pk
+}
+
+func byBooleans(a, b interface{}) bool {
+	i1, i2 := a.(*boolTag), b.(*boolTag)
+	if i1.Value == false && i2.Value == true {
+		return true
+	}
+
+	if i1.Value == true && i2.Value == false {
+		return false
+	}
+
+	return i1.pk.Less(i2.pk) // todo: call PK comparison function
+}
+
+func byStrings(a, b interface{}) bool {
+	i1, i2 := a.(*strTag), b.(*strTag)
+	if i1.Value < i2.Value {
+		return true
+	}
+
+	if i1.Value > i2.Value {
+		return false
+	}
+
+	return i1.pk.Less(i2.pk) // todo: call PK comparison function
 }
 
 

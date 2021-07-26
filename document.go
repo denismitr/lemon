@@ -27,6 +27,10 @@ func newDocument(k string, v []byte, tags *Tags) *Document {
 	return &Document{key: k, value: v, tags: *tags}
 }
 
+func newDocumentFromEntry(ent *entry) *Document {
+	return &Document{key: ent.key.String(), value: ent.value, tags: *ent.tags}
+}
+
 func createDocument(k string, v []byte, tags *Tags) Document {
 	return Document{key: k, value: v, tags: *tags}
 }

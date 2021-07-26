@@ -5,44 +5,49 @@ import (
 	"encoding/json"
 	"github.com/google/btree"
 	"github.com/pkg/errors"
+	btr "github.com/tidwall/btree"
 	"strings"
 	"sync"
 )
 
 var ErrDocumentNotFound = errors.New("document not found")
 var ErrKeyAlreadyExists = errors.New("key already exists")
+var ErrConflictingTagType = errors.New("conflicting tag type")
+
+const castPanic = "how could primary keys item not be of type *entry"
 
 type (
-	ItemReceiver func(k string, v []byte, tags *Tags) bool
+	entryReceiver func(ent *entry) bool
 
 	rangeScanner func(
 		ctx context.Context,
 		lowerBoundPK string,
 		upperBoundPK string,
-		ir ItemReceiver,
-		fo *filterOffsets,
+		ir entryReceiver,
+		fo *filterEntries,
 	) error
 
-	prefixScanner func(ctx context.Context, prefix string, ir ItemReceiver, fo *filterOffsets) error
+	prefixScanner func(ctx context.Context, prefix string, ir entryReceiver, fo *filterEntries) error
 
-	scanner func(ctx context.Context, ir ItemReceiver, fo *filterOffsets) error
+	scanner func(ctx context.Context, ir entryReceiver, fo *filterEntries) error
 )
 
 type Engine struct {
-	storage *jsonStorage
-	pks     *btree.BTree
-	bTags   boolIndex
-	sTags   stringIndex
+	storage    *jsonStorage
+	persistent bool
+	pks        *btr.BTree
+	boolTags   boolIndex
+	strTags    stringIndex
 }
 
 func newEngine(fullPath string) *Engine {
 	s := newJsonStorage(fullPath)
 
 	return &Engine{
-		storage: s,
-		pks:     btree.New(2),
-		bTags:   make(boolIndex),
-		sTags:   make(stringIndex),
+		storage:  s,
+		pks:      btr.New(byPrimaryKeys),
+		boolTags: newBoolIndex(),
+		strTags: newStringIndex(),
 	}
 }
 
@@ -68,47 +73,47 @@ func (e *Engine) Init() error {
 	return nil
 }
 
+func (e *Engine) insert(ent *entry) error {
+	existing := e.pks.Set(ent)
+	if existing != nil {
+		return ErrKeyAlreadyExists
+	}
+
+	if ent.tags != nil {
+		e.setEntityTags(ent)
+	}
+
+	return nil
+}
+
 func (e *Engine) persist() error {
 	return e.storage.persist()
 }
 
-func (e *Engine) findByKey(pk string) ([]byte, *Tags, error) {
-	offset, err := e.findOffsetByKey(pk)
-	if err != nil {
-		return nil, nil, err
+func (e *Engine) findByKey(key string) (*entry, error) {
+	found := e.pks.Get(newPK(key))
+	if found == nil {
+		return nil, errors.Wrapf(ErrDocumentNotFound, "key %s does not exist in database", key)
 	}
 
-	v, err := e.storage.getValueAt(offset)
-	if err != nil {
-		return nil, nil, err
+	ent, ok := found.(*entry)
+	if !ok {
+		panic(castPanic)
 	}
 
-	tags, err := e.storage.getTagsAt(offset)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return v, tags, nil
+	return ent, nil
 }
 
-func (e *Engine) FindByKeys(pks []string, ir ItemReceiver) error {
+func (e *Engine) findByKeys(pks []string, ir entryReceiver) error {
 	for _, k := range pks {
-		offset, err := e.findOffsetByKey(k)
-		if err != nil {
-			continue
+		found := e.pks.Get(newPK(k))
+		if found == nil {
+			return errors.Wrapf(ErrDocumentNotFound, "key %s does not exist in database", k)
 		}
 
-		b, err := e.storage.getValueAt(offset)
-		if err != nil {
-			return err
-		}
+		ent := found.(*entry)
 
-		tags, err := e.storage.getTagsAt(offset)
-		if err != nil {
-			return err
-		}
-
-		if next := ir(k, b, tags); !next {
+		if next := ir(ent); !next {
 			break
 		}
 	}
@@ -116,157 +121,78 @@ func (e *Engine) FindByKeys(pks []string, ir ItemReceiver) error {
 	return nil
 }
 
-func (e *Engine) findOffsetByKey(key string) (int, error) {
-	item := e.pks.Get(&index{key: key})
-	if item == nil {
-		return 0, errors.Wrapf(ErrDocumentNotFound, "search by primary key %s", key)
+func (e *Engine) remove(key PK) error {
+	ent := e.pks.Get(&entry{key: key})
+	if ent == nil {
+		return errors.Wrapf(ErrDocumentNotFound, "key %s does not exist in DB", key.String())
 	}
 
-	found := item.(*index)
+	e.pks.Delete(&entry{key: key})
 
-	return found.offset, nil
+	return nil
 }
 
-func (e *Engine) RemoveByKeys(pks ...string) error {
-	for _, pk := range pks {
-		if err := e.removeByKeyFromDataModel(pk); err != nil {
-			return err
-		}
+func (e *Engine) update(ent *entry) error {
+	existing := e.pks.Set(ent)
+	if existing == nil {
+		return errors.Wrapf(ErrDocumentNotFound, "could not update non existing document with key %s", ent.key.String())
+	}
+
+	existingEnt, ok := existing.(*entry)
+	if !ok {
+		panic(castPanic)
+	}
+
+	if existingEnt.tags != nil {
+		e.clearEntityTags(ent)
+	}
+
+	if ent.tags != nil {
+		e.setEntityTags(ent)
 	}
 
 	return nil
 }
 
-func (e *Engine) removeByKeyFromDataModel(key string) error {
-	offset, err := e.findOffsetByKey(key)
-	if err != nil {
-		return err
+func (e *Engine) setEntityTags(ent *entry) {
+	for _, bt := range ent.tags.Booleans {
+		e.boolTags.add(bt.Name, bt.Value, ent)
 	}
 
-	if err := e.storage.removeAt(offset); err != nil {
-		return err
+	for _, st := range ent.tags.Strings {
+		e.strTags.add(st.Name, st.Value, ent)
 	}
-
-	e.pks.Delete(&index{key: key})
-
-	e.pks.Ascend(func(i btree.Item) bool {
-		pk := i.(*index)
-		if pk.offset > offset {
-			pk.offset--
-		}
-		return true
-	})
-
-	return nil
 }
 
-func (e *Engine) Insert(key string, d interface{}, tags *Tags) error {
-	_, err := e.findOffsetByKey(key)
-	if err == nil {
-		return errors.Wrapf(ErrKeyAlreadyExists, "%s", key)
+func (e *Engine) clearEntityTags(ent *entry) {
+	for _, bt := range ent.tags.Booleans {
+		e.boolTags.removeEntry(bt.Name, bt.Value, ent)
 	}
 
-	v, err := serializeToValue(d)
-	if err != nil {
-		return err
+	for _, st := range ent.tags.Strings {
+		e.strTags.removeEntry(st.Name, st.Value, ent)
 	}
-
-	offset := e.storage.append(key, v, tags)
-	e.pks.ReplaceOrInsert(&index{key: key, offset: offset})
-
-	if tags != nil {
-		for _, t := range tags.Strings {
-			e.sTags.add(t.Name, t.Value, offset)
-		}
-
-		for _, t := range tags.Booleans {
-			e.bTags.add(t.Name, t.Value, offset)
-		}
-	}
-
-	return nil
-}
-
-func (e *Engine) Update(key string, d interface{}, tags *Tags) error {
-	offset, err := e.findOffsetByKey(key)
-	if err != nil {
-		return err
-	}
-
-	v, err := serializeToValue(d)
-	if err != nil {
-		return err
-	}
-
-	existingTags, err := e.storage.getTagsAt(offset)
-	if err != nil {
-		return err
-	}
-
-	if err := e.storage.replaceValueAt(offset, v, tags); err != nil {
-		return err
-	}
-
-	// removing existing tags
-	if existingTags != nil {
-		for _, bt := range existingTags.Booleans {
-			e.bTags.removeOffset(bt.Name, bt.Value, offset)
-		}
-
-		for _, st := range existingTags.Strings {
-			e.sTags.removeOffset(st.Name, st.Value, offset)
-		}
-	}
-
-	if tags != nil {
-		for _, t := range tags.Strings {
-			e.sTags.add(t.Name, t.Value, offset)
-		}
-
-		for _, t := range tags.Booleans {
-			e.bTags.add(t.Name, t.Value, offset)
-		}
-	}
-
-	return nil
 }
 
 func (e *Engine) Count() int {
-	return e.storage.len()
+	return e.pks.Len()
 }
 
 func (e *Engine) scanBetweenDescend(
 	ctx context.Context,
 	from string,
 	to string,
-	ir ItemReceiver,
-	fo *filterOffsets,
+	ir entryReceiver,
+	fo *filterEntries,
 ) (err error) {
 	// Descend required a reverse order of `from` and `to`
-	e.pks.DescendRange(&index{key: to}, &index{key: from}, func(i btree.Item) bool {
+	descendRange(e.pks, &entry{key: newPK(from)}, &entry{key: newPK(to)}, func(ent *entry) bool {
 		if ctx.Err() != nil {
 			err = ctx.Err()
 			return false
 		}
 
-		idx := i.(*index)
-		if fo != nil && !fo.exists(idx.offset) {
-			return true
-		}
-
-		v, vErr := e.storage.getValueAt(idx.offset)
-		if vErr != nil {
-			err = vErr
-			return false
-		}
-
-		tags, tErr := e.storage.getTagsAt(idx.offset)
-		if tErr != nil {
-			err = tErr
-			return false
-		}
-
-		return ir(idx.key, v, tags)
+		return ir(ent)
 	})
 
 	return
@@ -276,33 +202,16 @@ func (e *Engine) scanBetweenAscend(
 	ctx context.Context,
 	from string,
 	to string,
-	ir ItemReceiver,
-	fo *filterOffsets,
+	ir entryReceiver,
+	fo *filterEntries,
 ) (err error) {
-	e.pks.AscendRange(&index{key: from}, &index{key: to}, func(i btree.Item) bool {
+	ascendRange(e.pks, &entry{key: newPK(from)}, &entry{key: newPK(to)}, func(ent *entry) bool {
 		if ctx.Err() != nil {
 			err = ctx.Err()
 			return false
 		}
 
-		idx := i.(*index)
-		if fo != nil && !fo.exists(idx.offset) {
-			return true
-		}
-
-		v, vErr := e.storage.getValueAt(idx.offset)
-		if vErr != nil {
-			err = vErr
-			return false
-		}
-
-		tags, tErr := e.storage.getTagsAt(idx.offset)
-		if tErr != nil {
-			err = tErr
-			return false
-		}
-
-		return ir(idx.key, v, tags)
+		return ir(ent)
 	})
 
 	return
@@ -311,38 +220,10 @@ func (e *Engine) scanBetweenAscend(
 func (e *Engine) scanPrefixAscend(
 	ctx context.Context,
 	prefix string,
-	ir ItemReceiver,
-	fo *filterOffsets,
+	ir entryReceiver,
+	fe *filterEntries,
 ) (err error) {
-	e.pks.AscendGreaterOrEqual(&index{key: prefix}, func(i btree.Item) bool {
-		if ctx.Err() != nil {
-			err = ctx.Err()
-			return false
-		}
-
-		idx := i.(*index)
-		if !strings.HasPrefix(idx.key, prefix) {
-			return false
-		}
-
-		if fo != nil && !fo.exists(idx.offset) {
-			return true
-		}
-
-		v, vErr := e.storage.getValueAt(idx.offset);
-		if vErr != nil {
-			err = vErr
-			return false
-		}
-
-		tags, tErr := e.storage.getTagsAt(idx.offset)
-		if tErr != nil {
-			err = tErr
-			return false
-		}
-
-		return ir(idx.key, v, tags)
-	})
+	e.pks.Ascend(&entry{key: newPK(prefix)}, filteringBTreeIterator(ctx, fe, ir))
 
 	return
 }
@@ -350,154 +231,80 @@ func (e *Engine) scanPrefixAscend(
 func (e *Engine) scanPrefixDescend(
 	ctx context.Context,
 	prefix string,
-	ir ItemReceiver,
-	fo *filterOffsets,
+	ir entryReceiver,
+	fe *filterEntries,
 ) (err error) {
-	e.pks.DescendGreaterThan(&index{key: prefix}, func(i btree.Item) bool {
-		if ctx.Err() != nil {
-			err = ctx.Err()
-			return false
-		}
-
-		idx := i.(*index)
-		if !strings.HasPrefix(idx.key, prefix) {
-			return false
-		}
-
-		if fo != nil && !fo.exists(idx.offset) {
-			return true
-		}
-
-		v, vErr := e.storage.getValueAt(idx.offset)
-		if vErr != nil {
-			err = vErr
-			return false
-		}
-
-		tags, tErr := e.storage.getTagsAt(idx.offset)
-		if tErr != nil {
-			err = tErr
-			return false
-		}
-
-		return ir(idx.key, v, tags)
-	})
+	e.pks.Descend(&entry{key: newPK(prefix)}, filteringBTreeIterator(ctx, fe, ir))
 
 	return
 }
 
-type filterOffsets struct {
-	sync.RWMutex
-	offsets map[int]bool
-}
+func filteringBTreeIterator(ctx context.Context, fe *filterEntries, ir entryReceiver) func(item interface{}) bool {
+	return func(item interface{}) bool {
+		if ctx.Err() != nil {
+			return false
+		}
 
-func newFilterOffsets() *filterOffsets {
-	return &filterOffsets{
-		offsets: make(map[int]bool),
+		ent, ok := item.(*entry)
+		if !ok {
+			panic(castPanic)
+		}
+
+		if fe != nil && !fe.exists(ent) {
+			return true
+		}
+
+		return ir(ent)
 	}
-}
-
-func (fo *filterOffsets) add(offsets []int) {
-	fo.Lock()
-	defer fo.Unlock()
-	for _, o := range offsets {
-		fo.offsets[o] = true
-	}
-}
-
-func (fo *filterOffsets) exists(offset int) bool {
-	fo.RLock()
-	defer fo.RUnlock()
-	return fo.offsets[offset]
 }
 
 func (e *Engine) scanAscend(
 	ctx context.Context,
-	ir ItemReceiver,
-	fo *filterOffsets,
+	ir entryReceiver,
+	fe *filterEntries,
 ) (err error) {
-	e.pks.Ascend(func(i btree.Item) bool {
-		if ctx.Err() != nil {
-			err = ctx.Err()
-			return false
-		}
-
-		idx := i.(*index)
-		if fo != nil && !fo.exists(idx.offset) {
-			return true
-		}
-
-		v, vErr := e.storage.getValueAt(idx.offset)
-		if vErr != nil {
-			err = vErr
-			return false
-		}
-
-		tags, tErr := e.storage.getTagsAt(idx.offset)
-		if tErr != nil {
-			err = tErr
-			return false
-		}
-
-		return ir(idx.key, v, tags)
-	})
-
+	e.pks.Ascend(nil, filteringBTreeIterator(ctx, fe, ir))
 	return
 }
 
 func (e *Engine) scanDescend(
 	ctx context.Context,
-	ir ItemReceiver,
-	fo *filterOffsets,
+	ir entryReceiver,
+	fe *filterEntries,
 ) (err error) {
-	e.pks.Descend(func(i btree.Item) bool {
-		if ctx.Err() != nil {
-			err = ctx.Err()
-			return false
-		}
-
-		idx := i.(*index)
-		if fo != nil && !fo.exists(idx.offset) {
-			return true
-		}
-
-		v, vErr := e.storage.getValueAt(idx.offset)
-		if vErr != nil {
-			err = vErr
-			return false
-		}
-
-		tags, tagsErr := e.storage.getTagsAt(idx.offset)
-		if tagsErr != nil {
-			err = tagsErr
-			return false
-		}
-
-		return ir(idx.key, v, tags)
-	})
-
+	e.pks.Descend(nil, filteringBTreeIterator(ctx, fe, ir))
 	return
 }
 
-func (e *Engine) LastOffset() int {
-	return e.storage.lastOffset()
-}
-
-func (e *Engine) getFilteredOffsets(tags *queryTags) *filterOffsets {
-	if tags == nil {
+func (e *Engine) filterEntities(qTags *queryTags) *filterEntries {
+	if qTags == nil {
 		return nil
 	}
 
-	ft := newFilterOffsets()
-	if tags.boolTags != nil && e.bTags != nil {
-		for _, bt := range tags.boolTags {
-			go ft.add(e.bTags.findOffsets(bt.Name, bt.Value))
+	ft := newFilterEntries()
+	if qTags.boolTags != nil && e.boolTags != nil {
+		for _, bt := range qTags.boolTags {
+			entries := e.boolTags[bt.Name][bt.Value]
+			if entries == nil {
+				continue
+			}
+
+			for _, ent := range entries {
+				ft.add(ent)
+			}
 		}
 	}
 
-	if tags.strTags != nil && e.sTags != nil {
-		for _, st := range tags.strTags {
-			go ft.add(e.sTags.findOffsets(st.Name, st.Value))
+	if qTags.strTags != nil && e.strTags != nil {
+		for _, st := range qTags.strTags {
+			entries := e.strTags[st.Name][st.Value]
+			if entries == nil {
+				continue
+			}
+
+			for _, ent := range entries {
+				ft.add(ent)
+			}
 		}
 	}
 
@@ -518,4 +325,3 @@ func serializeToValue(d interface{}) ([]byte, error) {
 
 	return v, nil
 }
-

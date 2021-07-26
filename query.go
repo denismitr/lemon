@@ -1,5 +1,7 @@
 package lemon
 
+import "sync"
+
 type D map[string]interface{}
 
 type KeyRange struct {
@@ -51,4 +53,30 @@ func (fo *queryOptions) BoolTag(name string, v bool) *queryOptions {
 
 func Q() *queryOptions {
 	return &queryOptions{order: Ascend}
+}
+
+type filterEntries struct {
+	sync.RWMutex
+	entries map[string]*entry
+}
+
+func newFilterEntries() *filterEntries {
+	return &filterEntries{
+		entries: make(map[string]*entry),
+	}
+}
+
+func (fe *filterEntries) add(ent *entry) {
+	fe.Lock()
+	defer fe.Unlock()
+
+	if fe.entries[ent.key.String()] == nil {
+		fe.entries[ent.key.String()] = ent
+	}
+}
+
+func (fe *filterEntries) exists(ent *entry) bool {
+	fe.RLock()
+	defer fe.RUnlock()
+	return fe.entries[ent.key.String()] != nil
 }
