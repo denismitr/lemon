@@ -11,6 +11,10 @@ type entry struct {
 	tags *Tags
 }
 
+func (ent *entry) deserialize(e *Engine) error {
+	return e.insert(ent)
+}
+
 func newEntry(key string, value []byte, tags *Tags) *entry {
 	return &entry{key: PK(key), value: value, tags: tags}
 }

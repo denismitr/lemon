@@ -3,8 +3,10 @@ package lemon
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"io"
 	"testing"
 )
 
@@ -39,15 +41,17 @@ func Test_resolveRespArrayFromLine(t *testing.T) {
 }
 
 func Test_resolveRespSimpleString(t *testing.T) {
-	tt := []struct{
+	validInputs := []struct{
 		in string
 		bytesExpected int
 		expected string
 	}{
 		{in: "+6\r\nfoo123\r\n", bytesExpected: 8, expected: "foo123"},
+		{in: "+2\r\nab\r\n", bytesExpected: 8, expected: "ab"},
+		{in: "+3\r\n123\r\n", bytesExpected: 8, expected: "123"},
 	}
 
-	for _, tc := range tt {
+	for _, tc := range validInputs {
 		t.Run(tc.in, func(t *testing.T) {
 			b := &bytes.Buffer{}
 			b.WriteString(tc.in)
@@ -56,8 +60,32 @@ func Test_resolveRespSimpleString(t *testing.T) {
 			result, bytesLen, err := resolveRespSimpleString(r)
 			require.NoError(t, err)
 			assert.Equal(t, tc.expected, result)
-			assert.Equal(t, tc.bytesExpected, bytesLen)
+			assert.Equal(t, len([]byte(tc.in)), bytesLen)
 		})
 	}
 
+	invalidInputs := []struct{
+		in string
+		bytesExpected int
+		expectedErr error
+	}{
+		{in: "+5\r\nfoo123\r\n", bytesExpected: 4, expectedErr: ErrCommandInvalid},
+		{in: "+3\r\nab\r\n", bytesExpected: 4, expectedErr: ErrCommandInvalid},
+		{in: "+0\r\n123\r\n", bytesExpected: 4, expectedErr: ErrCommandInvalid},
+		{in: "+3\r\n123", bytesExpected: 4, expectedErr: io.ErrUnexpectedEOF},
+	}
+
+	for _, tc := range invalidInputs {
+		t.Run(tc.in, func(t *testing.T) {
+			b := &bytes.Buffer{}
+			b.WriteString(tc.in)
+			r := bufio.NewReader(b)
+
+			result, bytesLen, err := resolveRespSimpleString(r)
+			require.Error(t, err)
+			require.Equal(t, "", result)
+			require.Equal(t, tc.bytesExpected, bytesLen)
+			assert.True(t, errors.Is(err, tc.expectedErr))
+		})
+	}
 }

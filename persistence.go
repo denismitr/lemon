@@ -59,14 +59,13 @@ func (p *persistence) load(cb func(d deserializer) error) error {
 	return nil
 }
 
-func (p *persistence) readCommands(cb func(d deserializer) error) (int64, error) {
-	r := bufio.NewReader(p.f)
-
+func readCommands(r *bufio.Reader, cb func(d deserializer) error) (int, error) {
 	n := int64(0)
-	totalSize := int64(0)
+	totalSize := 0
 	bufBytes := [1024]byte{}
 
 	for {
+		cmdByteSize := 0
 		firstByte, err := r.ReadByte()
 		if err != nil {
 			if err == io.EOF {
@@ -106,23 +105,53 @@ func (p *persistence) readCommands(cb func(d deserializer) error) (int64, error)
 			return totalSize, err
 		}
 
-		totalSize += int64(bytesInLine)
+		cmdByteSize += bytesInLine
 
 		cmdCode, bytesInLine, err := resolveRespCommandCode(r)
 		if err != nil {
 			return totalSize, err
 		}
 
+		cmdByteSize += bytesInLine
+
 		switch cmdCode {
 		case delCode:
+			key, bytesInLine, err := resolveRespSimpleString(r)
+			if err != nil {
+				return totalSize, err
+			}
+			cmdByteSize += bytesInLine
+			if err := cb(&deleteCmd{key: newPK(key)}); err != nil {
+				return totalSize, err
+			}
+		case setCode:
+			key, bytesInLine, err := resolveRespSimpleString(r)
+			if err != nil {
+				return totalSize, err
+			}
+			cmdByteSize += bytesInLine
 
+			ent := &entry{key: newPK(key)}
+			value, bytesInBlob, err := resolveRespBlobString(r)
+			if err != nil {
+				return totalSize, err
+			}
+
+			ent.value = value
+			cmdByteSize += bytesInBlob
+
+			// subtracting command, key and value
+			segments -= 3
+			for j := 0; j < segments; j++ {
+
+			}
+
+			if err := cb(ent); err != nil {
+				return totalSize, err
+			}
 		}
 
-		for j := 0; j < segments; j++ {
-
-		}
-
-
+		totalSize += cmdByteSize
 	}
 }
 
@@ -206,14 +235,46 @@ func resolveRespSimpleString(r *bufio.Reader) (string, int, error) {
 
 	line, err := r.ReadBytes('\n')
 	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return "", len(strInfoLine), io.ErrUnexpectedEOF
+		}
+
 		return "", len(strInfoLine), errors.Wrap(ErrCommandInvalid, err.Error())
 	}
 
-	if len(line) < strLen {
+	if len(line) - 2 != strLen {
 		return "", len(strInfoLine), errors.Wrapf(ErrCommandInvalid, "line %s is invalid", string(strInfoLine))
 	}
 
-	return string(line[0:strLen]), len(line), nil
+	return string(line[0:strLen]), len(line) + len(strInfoLine), nil
+}
+
+func resolveRespBlobString(r *bufio.Reader) ([]byte, int, error) {
+	strInfoLine, err := r.ReadBytes('\n')
+	if err != nil {
+		return nil, 0, errors.Wrap(ErrCommandInvalid, err.Error())
+	}
+
+	if len(strInfoLine) == 0 || strInfoLine[0] != '$' {
+		return nil, len(strInfoLine), errors.Wrapf(ErrCommandInvalid, "line %s is invalid", string(strInfoLine))
+	}
+
+	blobLen, err := strconv.Atoi(string(strInfoLine[1:len(strInfoLine) - 2]))
+	if err != nil {
+		return nil, len(strInfoLine), errors.Wrap(ErrCommandInvalid, err.Error())
+	}
+
+	blob := make([]byte, blobLen)
+	n, err := io.ReadFull(r, blob)
+	if err != nil {
+		return nil, len(strInfoLine), errors.Wrap(ErrCommandInvalid, err.Error())
+	}
+
+	if n < blobLen {
+		return nil, len(strInfoLine), errors.Wrapf(ErrCommandInvalid, "line %s blob is invalid", string(strInfoLine))
+	}
+
+	return blob, n + len(strInfoLine), nil
 }
 
 func respArray(segments int, buf *bytes.Buffer) {
