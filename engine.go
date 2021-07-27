@@ -3,11 +3,8 @@ package lemon
 import (
 	"context"
 	"encoding/json"
-	"github.com/google/btree"
 	"github.com/pkg/errors"
 	btr "github.com/tidwall/btree"
-	"strings"
-	"sync"
 )
 
 var ErrDocumentNotFound = errors.New("document not found")
@@ -33,45 +30,47 @@ type (
 )
 
 type Engine struct {
-	storage    *jsonStorage
-	persistent bool
-	pks        *btr.BTree
-	boolTags   boolIndex
-	strTags    stringIndex
+	persistence *persistence
+	pks         *btr.BTree
+	boolTags    boolIndex
+	strTags     stringIndex
 }
 
-func newEngine(fullPath string) *Engine {
-	s := newJsonStorage(fullPath)
+func newEngine(fullPath string) (*Engine, error) {
+	p, err := newPersistence(fullPath, Sync)
+	if err != nil {
+		return nil, err
+	}
 
 	return &Engine{
-		storage:  s,
+		persistence:  p,
 		pks:      btr.New(byPrimaryKeys),
 		boolTags: newBoolIndex(),
-		strTags: newStringIndex(),
-	}
+		strTags:  newStringIndex(),
+	}, nil
 }
 
-func (e *Engine) Init() error {
-	if err := e.storage.load(); err != nil {
-		return err
-	}
-
-	e.storage.iterate(func(o int, k string, v []byte, t *Tags) {
-		e.pks.ReplaceOrInsert(&index{key: k, offset: o})
-
-		if t != nil {
-			for _, bt := range t.Booleans {
-				e.bTags.add(bt.Name, bt.Value, o)
-			}
-
-			for _, st := range t.Strings {
-				e.sTags.add(st.Name, st.Value, o)
-			}
-		}
-	})
-
-	return nil
-}
+//func (e *Engine) init() error {
+//	if err := e.storage.load(); err != nil {
+//		return err
+//	}
+//
+//	e.storage.iterate(func(o int, k string, v []byte, t *Tags) {
+//		e.pks.ReplaceOrInsert(&index{key: k, offset: o})
+//
+//		if t != nil {
+//			for _, bt := range t.Booleans {
+//				e.bTags.add(bt.Name, bt.Value, o)
+//			}
+//
+//			for _, st := range t.Strings {
+//				e.sTags.add(st.Name, st.Value, o)
+//			}
+//		}
+//	})
+//
+//	return nil
+//}
 
 func (e *Engine) insert(ent *entry) error {
 	existing := e.pks.Set(ent)
@@ -86,9 +85,9 @@ func (e *Engine) insert(ent *entry) error {
 	return nil
 }
 
-func (e *Engine) persist() error {
-	return e.storage.persist()
-}
+//func (e *Engine) persist() error {
+//	return e.storage.persist()
+//}
 
 func (e *Engine) findByKey(key string) (*entry, error) {
 	found := e.pks.Get(newPK(key))
@@ -166,11 +165,11 @@ func (e *Engine) setEntityTags(ent *entry) {
 
 func (e *Engine) clearEntityTags(ent *entry) {
 	for _, bt := range ent.tags.Booleans {
-		e.boolTags.removeEntry(bt.Name, bt.Value, ent)
+		e.boolTags.removeEntryByTag(bt.Name, bt.Value, ent)
 	}
 
 	for _, st := range ent.tags.Strings {
-		e.strTags.removeEntry(st.Name, st.Value, ent)
+		e.strTags.removeEntryByTag(st.Name, st.Value, ent)
 	}
 }
 

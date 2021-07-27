@@ -14,11 +14,14 @@ type LemonDB struct {
 type UserCallback func(tx *Tx) error
 
 func New(path string) (*LemonDB, error) {
-	e := newEngine(path)
-
-	if initErr := e.Init(); initErr != nil {
-		return nil, initErr
+	e, err := newEngine(path)
+	if err != nil {
+		return nil, err
 	}
+
+	//if initErr := e.init(); initErr != nil {
+	//	return nil, initErr
+	//}
 
 	return &LemonDB{e: e}, nil
 }
@@ -53,9 +56,9 @@ func (db *LemonDB) MultiUpdate(ctx context.Context, cb UserCallback) error {
 		return errors.Wrap(err, "db write failed")
 	}
 
-	if err := db.e.persist(); err != nil {
-		return err
-	}
+	//if err := db.e.persist(); err != nil {
+	//	return err
+	//}
 
 	return nil
 }

@@ -2,6 +2,12 @@ package lemon
 
 import "bytes"
 
-type serializable interface {
+type serializer interface {
 	serialize(buf *bytes.Buffer)
 }
+
+type deserializer interface {
+	deserialize(e *Engine) error
+}
+
+

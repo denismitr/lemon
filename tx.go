@@ -14,11 +14,11 @@ type Tx struct {
 	buf *bytes.Buffer
 	e *Engine
 	ctx context.Context
-	commands []serializable
+	commands []serializer
 }
 
 func (x *Tx) Commit() error {
-	if x.e.persistent {
+	if x.e.persistence != nil {
 		for _, cmd := range x.commands{
 			cmd.serialize(x.buf)
 		}

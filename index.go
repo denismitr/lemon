@@ -1,7 +1,6 @@
 package lemon
 
 import (
-	"github.com/google/btree"
 	btr "github.com/tidwall/btree"
 	"strings"
 )
@@ -74,7 +73,7 @@ func (si stringIndex) findEntries(k, v string) []*entry {
 	return si[k][v]
 }
 
-func (si stringIndex) removeEntry(tagName, v string, ent *entry) bool {
+func (si stringIndex) removeEntryByTag(tagName, v string, ent *entry) bool {
 	if si[tagName] == nil {
 		return false
 	}
@@ -87,6 +86,24 @@ func (si stringIndex) removeEntry(tagName, v string, ent *entry) bool {
 	}
 
 	return false
+}
+
+func (si stringIndex) removeEntry(ent *entry) {
+	if ent.tags == nil || ent.tags.Booleans == nil {
+		return
+	}
+
+	for _, sTag := range ent.tags.Strings {
+		if si[sTag.Name] == nil {
+			continue
+		}
+
+		for i, e := range si[sTag.Name][sTag.Value] {
+			if e.key == ent.key {
+				si[sTag.Name][sTag.Value] = append(si[sTag.Name][sTag.Value][:i], si[sTag.Name][sTag.Value][i+1:]...)
+			}
+		}
+	}
 }
 
 type boolIndex map[string]map[bool][]*entry
@@ -107,7 +124,7 @@ func (bi boolIndex) findEntries(name string, v bool) []*entry {
 	return bi[name][v]
 }
 
-func (bi boolIndex) removeEntry(tagName string, v bool, ent *entry) bool {
+func (bi boolIndex) removeEntryByTag(tagName string, v bool, ent *entry) bool {
 	if bi[tagName] == nil {
 		return false
 	}
@@ -120,6 +137,24 @@ func (bi boolIndex) removeEntry(tagName string, v bool, ent *entry) bool {
 	}
 
 	return false
+}
+
+func (bi boolIndex) removeEntry(ent *entry) {
+	if ent.tags == nil || ent.tags.Booleans == nil {
+		return
+	}
+
+	for _, bTag := range ent.tags.Booleans {
+		if bi[bTag.Name] == nil {
+			continue
+		}
+
+		for i, e := range bi[bTag.Name][bTag.Value] {
+			if e.key == ent.key {
+				bi[bTag.Name][bTag.Value] = append(bi[bTag.Name][bTag.Value][:i], bi[bTag.Name][bTag.Value][i+1:]...)
+			}
+		}
+	}
 }
 
 func lt(tr *btr.BTree, a, b interface{}) bool { return tr.Less(a, b) }
@@ -147,12 +182,4 @@ func descendRange(
 		// todo: check item type
 		return gt(btr, item, greaterOrEqual) && iter(item.(*entry))
 	})
-}
-
-func descendLessOrEqual(
-	tr *btr.BTree,
-	pivot interface{},
-	iter func(ent *entry) bool,
-) {
-	tr.Descend(pivot, iter)
 }
