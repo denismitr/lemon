@@ -18,6 +18,14 @@ var ErrUnexpectedEof = errors.New("unexpected end of file")
 
 type persistenceStrategy string
 
+type commandCode int8
+
+const (
+	invalidCode commandCode = iota
+	setCode
+	delCode
+)
+
 const (
 	Async persistenceStrategy = "async"
 	Sync persistenceStrategy = "sync"
@@ -93,12 +101,22 @@ func (p *persistence) readCommands(cb func(d deserializer) error) (int64, error)
 			return totalSize, ErrCommandInvalid
 		}
 
-		segments, bytesInLine, err := parseArrayCmdFromLine(bufBytes[:], line)
+		segments, bytesInLine, err := resolveRespArrayFromLine(bufBytes[:], line)
 		if err != nil {
 			return totalSize, err
 		}
 
 		totalSize += int64(bytesInLine)
+
+		cmdCode, bytesInLine, err := resolveRespCommandCode(r)
+		if err != nil {
+			return totalSize, err
+		}
+
+		switch cmdCode {
+		case delCode:
+
+		}
 
 		for j := 0; j < segments; j++ {
 
@@ -135,7 +153,7 @@ func (p *persistence) write(buf bytes.Buffer) error {
 	return nil
 }
 
-func parseArrayCmdFromLine(cmdBuf []byte, line []byte) (int, int, error) {
+func resolveRespArrayFromLine(cmdBuf []byte, line []byte) (int, int, error) {
 	for _, r := range line[1:] {
 		if r >= '0' && r <= '9' {
 			cmdBuf = append(cmdBuf, r)
@@ -150,6 +168,54 @@ func parseArrayCmdFromLine(cmdBuf []byte, line []byte) (int, int, error) {
 	return n, len(line), nil
 }
 
+func resolveRespCommandCode(r *bufio.Reader) (commandCode, int, error) {
+	line, err := r.ReadBytes('\n')
+	if err != nil {
+		return invalidCode, 0, err
+	}
+
+	if len(line) < 3 {
+		return invalidCode, 0, ErrCommandInvalid
+	}
+
+	if line[0] == 's' && line[1] == 'e' && line[2] == 't' {
+		return setCode, len(line), nil
+	}
+
+	if line[0] == 'd' && line[1] == 'e' && line[2] == 'l' {
+		return delCode, len(line), nil
+	}
+
+	return invalidCode, 0, errors.Wrapf(ErrCommandInvalid, "line %s is invalid", string(line))
+}
+
+func resolveRespSimpleString(r *bufio.Reader) (string, int, error) {
+	strInfoLine, err := r.ReadBytes('\n')
+	if err != nil {
+		return "", 0, errors.Wrap(ErrCommandInvalid, err.Error())
+	}
+
+	if len(strInfoLine) == 0 || strInfoLine[0] != '+' {
+		return "", len(strInfoLine), errors.Wrapf(ErrCommandInvalid, "line %s is invalid", string(strInfoLine))
+	}
+
+	strLen, err := strconv.Atoi(string(strInfoLine[1:len(strInfoLine) - 2]))
+	if err != nil {
+		return "", len(strInfoLine), errors.Wrap(ErrCommandInvalid, err.Error())
+	}
+
+	line, err := r.ReadBytes('\n')
+	if err != nil {
+		return "", len(strInfoLine), errors.Wrap(ErrCommandInvalid, err.Error())
+	}
+
+	if len(line) < strLen {
+		return "", len(strInfoLine), errors.Wrapf(ErrCommandInvalid, "line %s is invalid", string(strInfoLine))
+	}
+
+	return string(line[0:strLen]), len(line), nil
+}
+
 func respArray(segments int, buf *bytes.Buffer) {
 	buf.WriteRune('*')
 	buf.WriteString(strconv.FormatInt(int64(segments), 10))
@@ -158,15 +224,15 @@ func respArray(segments int, buf *bytes.Buffer) {
 }
 
 func respBoolTag(bt *boolTag, buf *bytes.Buffer) {
-	respBulString(fmt.Sprintf("btg(%s,%v)", bt.Name, bt.Value), buf)
+	respSimpleString(fmt.Sprintf("btg(%s,%v)", bt.Name, bt.Value), buf)
 }
 
 func respStrTag(st *strTag, buf *bytes.Buffer) {
-	respBulString(fmt.Sprintf("stg(%s,%s)", st.Name, st.Value), buf)
+	respSimpleString(fmt.Sprintf("stg(%s,%s)", st.Name, st.Value), buf)
 }
 
-func respBulString(s string, buf *bytes.Buffer) {
-	buf.WriteRune('$')
+func respSimpleString(s string, buf *bytes.Buffer) {
+	buf.WriteRune('+')
 	buf.WriteString(strconv.FormatInt(int64(len(s)), 10))
 	buf.WriteRune('\n')
 	buf.WriteRune('\r')
