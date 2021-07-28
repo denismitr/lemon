@@ -37,40 +37,38 @@ type Engine struct {
 }
 
 func newEngine(fullPath string) (*Engine, error) {
-	p, err := newPersistence(fullPath, Sync)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Engine{
-		persistence:  p,
+	e := &Engine{
 		pks:      btr.New(byPrimaryKeys),
 		boolTags: newBoolIndex(),
 		strTags:  newStringIndex(),
-	}, nil
+	}
+
+	if fullPath != ":memory:" {
+		p, err := newPersistence(fullPath, Sync)
+		if err != nil {
+			return nil, err
+		}
+		e.persistence = p
+	}
+
+	if err := e.init(); err != nil {
+		return nil, err
+	}
+
+	return e, nil
 }
 
-//func (e *Engine) init() error {
-//	if err := e.storage.load(); err != nil {
-//		return err
-//	}
-//
-//	e.storage.iterate(func(o int, k string, v []byte, t *Tags) {
-//		e.pks.ReplaceOrInsert(&index{key: k, offset: o})
-//
-//		if t != nil {
-//			for _, bt := range t.Booleans {
-//				e.bTags.add(bt.Name, bt.Value, o)
-//			}
-//
-//			for _, st := range t.Strings {
-//				e.sTags.add(st.Name, st.Value, o)
-//			}
-//		}
-//	})
-//
-//	return nil
-//}
+func (e *Engine) init() error {
+	if e.persistence != nil {
+		if err := e.persistence.load(func(d deserializer) error {
+			return d.deserialize(e)
+		}); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
 
 func (e *Engine) insert(ent *entry) error {
 	existing := e.pks.Set(ent)

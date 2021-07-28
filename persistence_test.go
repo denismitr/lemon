@@ -6,7 +6,7 @@ import (
 	"errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"io"
+	"strings"
 	"testing"
 )
 
@@ -20,22 +20,19 @@ func Test_resolveRespArrayFromLine(t *testing.T) {
 		{in: "*3\r\n$3\r\ndel\r\n$6foo123", bytesExpected: 4, segments: 3},
 		{in: "*34\r\n", bytesExpected: 5, segments: 34},
 	}
-	cmdBuf := [1024]byte{}
 
 	for _, tc := range tt {
 		t.Run("valid array cmd", func(t *testing.T) {
-			b := bytes.Buffer{}
+			p := &parser{}
+
+			b := &bytes.Buffer{}
 			b.WriteString(tc.in)
+			r := bufio.NewReader(b)
 
-			in, err := b.ReadBytes('\n')
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			segments, bytesLen, err := resolveRespArrayFromLine(cmdBuf[:0], in)
+			segments, err := p.resolveRespArrayFromLine(r)
 			require.NoError(t, err)
 			assert.Equal(t, tc.segments, segments)
-			assert.Equal(t, tc.bytesExpected, bytesLen)
+			assert.Equal(t, tc.bytesExpected, p.currentCmdSize)
 		})
 	}
 }
@@ -46,21 +43,22 @@ func Test_resolveRespSimpleString(t *testing.T) {
 		bytesExpected int
 		expected string
 	}{
-		{in: "+6\r\nfoo123\r\n", bytesExpected: 8, expected: "foo123"},
-		{in: "+2\r\nab\r\n", bytesExpected: 8, expected: "ab"},
-		{in: "+3\r\n123\r\n", bytesExpected: 8, expected: "123"},
+		{in: "+foo123\r\n", bytesExpected: 8, expected: "foo123"},
+		{in: "+ab\r\n", bytesExpected: 8, expected: "ab"},
+		{in: "+123\r\n", bytesExpected: 8, expected: "123"},
 	}
 
 	for _, tc := range validInputs {
 		t.Run(tc.in, func(t *testing.T) {
+			p := parser{}
 			b := &bytes.Buffer{}
 			b.WriteString(tc.in)
 			r := bufio.NewReader(b)
 
-			result, bytesLen, err := resolveRespSimpleString(r)
+			result, err := p.resolveRespSimpleString(r)
 			require.NoError(t, err)
 			assert.Equal(t, tc.expected, result)
-			assert.Equal(t, len([]byte(tc.in)), bytesLen)
+			assert.Equal(t, len([]byte(tc.in)), p.currentCmdSize)
 		})
 	}
 
@@ -69,23 +67,89 @@ func Test_resolveRespSimpleString(t *testing.T) {
 		bytesExpected int
 		expectedErr error
 	}{
-		{in: "+5\r\nfoo123\r\n", bytesExpected: 4, expectedErr: ErrCommandInvalid},
-		{in: "+3\r\nab\r\n", bytesExpected: 4, expectedErr: ErrCommandInvalid},
-		{in: "+0\r\n123\r\n", bytesExpected: 4, expectedErr: ErrCommandInvalid},
-		{in: "+3\r\n123", bytesExpected: 4, expectedErr: io.ErrUnexpectedEOF},
+		{in: "+\r\n", bytesExpected: 3, expectedErr: ErrCommandInvalid},
+		{in: "\r\n", bytesExpected: 2, expectedErr: ErrCommandInvalid},
 	}
 
 	for _, tc := range invalidInputs {
 		t.Run(tc.in, func(t *testing.T) {
+			p := parser{}
+
 			b := &bytes.Buffer{}
 			b.WriteString(tc.in)
 			r := bufio.NewReader(b)
 
-			result, bytesLen, err := resolveRespSimpleString(r)
+			result, err := p.resolveRespSimpleString(r)
 			require.Error(t, err)
 			require.Equal(t, "", result)
-			require.Equal(t, tc.bytesExpected, bytesLen)
+			require.Equal(t, tc.bytesExpected, p.currentCmdSize)
 			assert.True(t, errors.Is(err, tc.expectedErr))
 		})
 	}
+}
+
+type commandsMock struct {
+	commands []deserializer
+	delCommands int
+	setCommands int
+}
+
+func (cm *commandsMock) acceptWithSuccess(d deserializer) error {
+	cm.commands = append(cm.commands, d)
+
+	if _, ok := d.(*deleteCmd); ok {
+		cm.delCommands++
+	}
+
+	if _, ok := d.(*entry); ok {
+		cm.setCommands++
+	}
+
+	return nil
+}
+
+func Test_parser(t *testing.T) {
+	t.Run("it can process valid set and del commands without tags", func(t *testing.T) {
+		mock := &commandsMock{}
+		prs := &parser{}
+
+		cmds := strings.Join([]string{
+			"*3\r\nset\r\n+user:123\r\n$13\r\n" + `{"foo":"bar"}` + "\r\n",
+			"*3\r\nset\r\n+user:456\r\n$11\r\n" + `{"baz":123}` + "\r\n",
+			"*2\r\ndel\r\n+user:123\r\n",
+			"*3\r\nset\r\n+products\r\n$15\r\n" + `[1,4,6,7,8,985]` + "\r\n",
+		}, "")
+
+		r := bufio.NewReader(strings.NewReader(cmds))
+		n, err := prs.parse(r, mock.acceptWithSuccess)
+
+		require.NoError(t, err)
+		require.Equal(t, len([]byte(cmds)), n)
+
+		require.NotNil(t, mock.commands)
+		require.Len(t, mock.commands, 4)
+		assert.Equal(t, 3, mock.setCommands)
+		assert.Equal(t, 1, mock.delCommands)
+
+		cmd1, ok := mock.commands[0].(*entry)
+		require.True(t, ok)
+		assert.Equal(t, cmd1.key, PK("user:123"))
+		assert.Equal(t, cmd1.value, []byte(`{"foo":"bar"}`))
+
+		cmd2, ok := mock.commands[1].(*entry)
+		require.True(t, ok)
+		assert.Equal(t, cmd2.key, PK("user:456"))
+		assert.Equal(t, cmd2.value, []byte(`{"baz":123}`))
+		assert.Nil(t, cmd2.tags)
+
+		cmd3, ok := mock.commands[2].(*deleteCmd)
+		require.True(t, ok)
+		assert.Equal(t, cmd3.key, PK("user:123"))
+
+		cmd4, ok := mock.commands[3].(*entry)
+		require.True(t, ok)
+		assert.Equal(t, cmd4.key, PK("products"))
+		assert.Equal(t, cmd4.value, []byte(`[1,4,6,7,8,985]`))
+		assert.Nil(t, cmd2.tags)
+	})
 }

@@ -15,6 +15,7 @@ var ErrDbFileWriteFailed = errors.New("database write failed")
 var ErrSourceFileReadFailed = errors.New("source file read failed")
 var ErrCommandInvalid = errors.New("command invalid")
 var ErrUnexpectedEof = errors.New("unexpected end of file")
+var ErrParseFailed = errors.New("commands parse error")
 
 type persistenceStrategy string
 
@@ -34,6 +35,7 @@ const (
 
 type persistence struct {
 	strategy persistenceStrategy
+	parser *parser
 	f *os.File
 	flushes int
 }
@@ -56,89 +58,85 @@ func (p *persistence) load(cb func(d deserializer) error) error {
 		return errors.Wrapf(err, "could not collect file %s stats", p.f.Name())
 	}
 
+	prs := &parser{}
+
+	r := bufio.NewReader(p.f)
+
+	n, err := prs.parse(r, cb)
+	if err != nil {
+		// todo: maybe only on EOF
+		if tErr := p.f.Truncate(int64(n)); tErr != nil {
+			return errors.Wrapf(tErr, "could not truncate file after pare error")
+		}
+
+		return err
+	}
+
 	return nil
 }
 
-func readCommands(r *bufio.Reader, cb func(d deserializer) error) (int, error) {
-	n := int64(0)
-	totalSize := 0
-	bufBytes := [1024]byte{}
+type parser struct {
+	totalSize      int
+	buf            [1024]byte
+	currentCmdSize int
+	totalCommands  int
+	n int
+}
 
+func (p *parser) parse(r *bufio.Reader, cb func(d deserializer) error) (int, error) {
 	for {
-		cmdByteSize := 0
+		p.currentCmdSize = 0
+
 		firstByte, err := r.ReadByte()
 		if err != nil {
 			if err == io.EOF {
-				return totalSize, nil
+				return p.totalSize, nil
 			} else {
-				return totalSize, errors.Wrap(ErrSourceFileReadFailed, err.Error())
+				return p.totalSize, errors.Wrap(ErrSourceFileReadFailed, err.Error())
 			}
 		}
 
 		if firstByte == 0 {
-			n += 1
+			p.n += 1
 			continue
 		}
 
 		if err := r.UnreadByte(); err != nil {
-			return totalSize, errors.Wrap(ErrSourceFileReadFailed, err.Error())
+			return p.totalSize, errors.Wrap(ErrSourceFileReadFailed, err.Error())
 		}
 
-		// read a command
-		line, err := r.ReadBytes('\n')
+		segments, err := p.resolveRespArrayFromLine(r)
 		if err != nil {
-			if errors.Is(err, io.EOF) {
-				return totalSize, io.ErrUnexpectedEOF
-			}
-
-			return totalSize, errors.Wrap(ErrSourceFileReadFailed, err.Error())
+			return p.totalSize, err
 		}
 
-		// should be \*\d{1,}\\r
-		// for now we only expects array like commands
-		if len(line) < 3 || line[0] != '*' {
-			return totalSize, ErrCommandInvalid
-		}
-
-		segments, bytesInLine, err := resolveRespArrayFromLine(bufBytes[:], line)
+		cmdCode, err := p.resolveRespCommandCode(r)
 		if err != nil {
-			return totalSize, err
+			return p.totalSize, err
 		}
-
-		cmdByteSize += bytesInLine
-
-		cmdCode, bytesInLine, err := resolveRespCommandCode(r)
-		if err != nil {
-			return totalSize, err
-		}
-
-		cmdByteSize += bytesInLine
 
 		switch cmdCode {
 		case delCode:
-			key, bytesInLine, err := resolveRespSimpleString(r)
+			key, err := p.resolveRespSimpleString(r)
 			if err != nil {
-				return totalSize, err
+				return p.totalSize, err
 			}
-			cmdByteSize += bytesInLine
+
 			if err := cb(&deleteCmd{key: newPK(key)}); err != nil {
-				return totalSize, err
+				return p.totalSize, err
 			}
 		case setCode:
-			key, bytesInLine, err := resolveRespSimpleString(r)
+			key, err := p.resolveRespSimpleString(r)
 			if err != nil {
-				return totalSize, err
-			}
-			cmdByteSize += bytesInLine
-
-			ent := &entry{key: newPK(key)}
-			value, bytesInBlob, err := resolveRespBlobString(r)
-			if err != nil {
-				return totalSize, err
+				return p.totalSize, err
 			}
 
-			ent.value = value
-			cmdByteSize += bytesInBlob
+			value, err := p.resolveRespBlobString(r)
+			if err != nil {
+				return p.totalSize, err
+			}
+
+			ent := &entry{key: newPK(key), value: value}
 
 			// subtracting command, key and value
 			segments -= 3
@@ -147,11 +145,12 @@ func readCommands(r *bufio.Reader, cb func(d deserializer) error) (int, error) {
 			}
 
 			if err := cb(ent); err != nil {
-				return totalSize, err
+				return p.totalSize, err
 			}
 		}
 
-		totalSize += cmdByteSize
+		p.totalCommands += 1
+		p.totalSize += p.currentCmdSize
 	}
 }
 
@@ -182,7 +181,28 @@ func (p *persistence) write(buf bytes.Buffer) error {
 	return nil
 }
 
-func resolveRespArrayFromLine(cmdBuf []byte, line []byte) (int, int, error) {
+func (p *parser) resolveRespArrayFromLine(r *bufio.Reader) (int, error) {
+	// read a command
+	line, err := r.ReadBytes('\n')
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return 0, io.ErrUnexpectedEOF
+		}
+
+		return 0, errors.Wrap(ErrSourceFileReadFailed, err.Error())
+	}
+
+	if len(line) == 2 {
+		line, _  = r.ReadBytes('\n')
+	}
+
+	// should be \*\d{1,}\\r
+	// for now we only expects array like commands
+	if len(line) < 2 || line[0] != '*' {
+		return p.totalSize, ErrCommandInvalid
+	}
+
+	cmdBuf := p.buf[:0]
 	for _, r := range line[1:] {
 		if r >= '0' && r <= '9' {
 			cmdBuf = append(cmdBuf, r)
@@ -191,90 +211,84 @@ func resolveRespArrayFromLine(cmdBuf []byte, line []byte) (int, int, error) {
 
 	n, err := strconv.Atoi(string(cmdBuf))
 	if err != nil {
-		return 0, len(line), errors.Wrap(ErrCommandInvalid, err.Error())
+		return 0, errors.Wrap(ErrCommandInvalid, err.Error())
 	}
 
-	return n, len(line), nil
+	p.currentCmdSize += len(line)
+
+	return n, nil
 }
 
-func resolveRespCommandCode(r *bufio.Reader) (commandCode, int, error) {
+func (p *parser) resolveRespCommandCode(r *bufio.Reader) (commandCode, error) {
 	line, err := r.ReadBytes('\n')
 	if err != nil {
-		return invalidCode, 0, err
+		return invalidCode, err
 	}
 
 	if len(line) < 3 {
-		return invalidCode, 0, ErrCommandInvalid
+		return invalidCode, ErrCommandInvalid
 	}
 
+	p.currentCmdSize += len(line)
+
 	if line[0] == 's' && line[1] == 'e' && line[2] == 't' {
-		return setCode, len(line), nil
+		return setCode, nil
 	}
 
 	if line[0] == 'd' && line[1] == 'e' && line[2] == 'l' {
-		return delCode, len(line), nil
+		return delCode, nil
 	}
 
-	return invalidCode, 0, errors.Wrapf(ErrCommandInvalid, "line %s is invalid", string(line))
+	return invalidCode, errors.Wrapf(ErrCommandInvalid, "line %s is invalid", string(line))
 }
 
-func resolveRespSimpleString(r *bufio.Reader) (string, int, error) {
-	strInfoLine, err := r.ReadBytes('\n')
+func (p *parser) resolveRespSimpleString(r *bufio.Reader) (string, error) {
+	strLine, err := r.ReadBytes('\n')
 	if err != nil {
-		return "", 0, errors.Wrap(ErrCommandInvalid, err.Error())
+		return "", errors.Wrap(ErrCommandInvalid, err.Error())
 	}
 
-	if len(strInfoLine) == 0 || strInfoLine[0] != '+' {
-		return "", len(strInfoLine), errors.Wrapf(ErrCommandInvalid, "line %s is invalid", string(strInfoLine))
+	p.currentCmdSize += len(strLine)
+
+	if len(strLine) < 4 || strLine[0] != '+' {
+		return "", errors.Wrapf(ErrCommandInvalid, "line %s is invalid", string(strLine))
 	}
 
-	strLen, err := strconv.Atoi(string(strInfoLine[1:len(strInfoLine) - 2]))
-	if err != nil {
-		return "", len(strInfoLine), errors.Wrap(ErrCommandInvalid, err.Error())
-	}
+	token := string(strLine[1:len(strLine) - 2])
 
-	line, err := r.ReadBytes('\n')
-	if err != nil {
-		if errors.Is(err, io.EOF) {
-			return "", len(strInfoLine), io.ErrUnexpectedEOF
-		}
-
-		return "", len(strInfoLine), errors.Wrap(ErrCommandInvalid, err.Error())
-	}
-
-	if len(line) - 2 != strLen {
-		return "", len(strInfoLine), errors.Wrapf(ErrCommandInvalid, "line %s is invalid", string(strInfoLine))
-	}
-
-	return string(line[0:strLen]), len(line) + len(strInfoLine), nil
+	return token, nil
 }
 
-func resolveRespBlobString(r *bufio.Reader) ([]byte, int, error) {
+func (p *parser) resolveRespBlobString(r *bufio.Reader) ([]byte, error) {
 	strInfoLine, err := r.ReadBytes('\n')
 	if err != nil {
-		return nil, 0, errors.Wrap(ErrCommandInvalid, err.Error())
+		return nil, errors.Wrap(ErrCommandInvalid, err.Error())
 	}
+
+	p.currentCmdSize += len(strInfoLine)
 
 	if len(strInfoLine) == 0 || strInfoLine[0] != '$' {
-		return nil, len(strInfoLine), errors.Wrapf(ErrCommandInvalid, "line %s is invalid", string(strInfoLine))
+		return nil, errors.Wrapf(ErrCommandInvalid, "line %s is invalid", string(strInfoLine))
 	}
 
 	blobLen, err := strconv.Atoi(string(strInfoLine[1:len(strInfoLine) - 2]))
 	if err != nil {
-		return nil, len(strInfoLine), errors.Wrap(ErrCommandInvalid, err.Error())
+		return nil, errors.Wrap(ErrCommandInvalid, err.Error())
 	}
 
-	blob := make([]byte, blobLen)
+	blob := make([]byte, blobLen + 2)
 	n, err := io.ReadFull(r, blob)
 	if err != nil {
-		return nil, len(strInfoLine), errors.Wrap(ErrCommandInvalid, err.Error())
+		return nil, errors.Wrap(ErrCommandInvalid, err.Error())
 	}
 
-	if n < blobLen {
-		return nil, len(strInfoLine), errors.Wrapf(ErrCommandInvalid, "line %s blob is invalid", string(strInfoLine))
+	p.currentCmdSize += n
+
+	if n - 2 != blobLen {
+		return nil, errors.Wrapf(ErrCommandInvalid, "line %s blob is invalid", string(strInfoLine))
 	}
 
-	return blob, n + len(strInfoLine), nil
+	return blob[:blobLen], nil
 }
 
 func respArray(segments int, buf *bytes.Buffer) {
@@ -285,19 +299,23 @@ func respArray(segments int, buf *bytes.Buffer) {
 }
 
 func respBoolTag(bt *boolTag, buf *bytes.Buffer) {
-	respSimpleString(fmt.Sprintf("btg(%s,%v)", bt.Name, bt.Value), buf)
+	respFunc(fmt.Sprintf("btg(%s,%v)", bt.Name, bt.Value), buf)
 }
 
 func respStrTag(st *strTag, buf *bytes.Buffer) {
-	respSimpleString(fmt.Sprintf("stg(%s,%s)", st.Name, st.Value), buf)
+	respFunc(fmt.Sprintf("stg(%s,%s)", st.Name, st.Value), buf)
 }
 
 func respSimpleString(s string, buf *bytes.Buffer) {
 	buf.WriteRune('+')
-	buf.WriteString(strconv.FormatInt(int64(len(s)), 10))
+	buf.WriteString(s)
 	buf.WriteRune('\n')
 	buf.WriteRune('\r')
-	buf.WriteString(s)
+}
+
+func respFunc(fn string, buf *bytes.Buffer) {
+	buf.WriteRune('@')
+	buf.WriteString(fn)
 	buf.WriteRune('\n')
 	buf.WriteRune('\r')
 }
