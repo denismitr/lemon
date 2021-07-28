@@ -1,1 +1,10 @@
-{"records":[{"k":"product:8976","v":"eyIxMDAiOiJmb29iYXIiLCJiYXoiOjg5ODk3NjQsImZvbyI6ImJhciJ9","t":{"b":null,"f":null,"i":null,"s":null}},{"k":"product:1145","v":"eyI5OTkiOm51bGwsImJhejEyIjoxMjMuODc5LCJmb28iOiJiYXI1Njc0In0=","t":{"b":null,"f":null,"i":null,"s":null}}]}
+*3
++set
++product:8976
+$42
+{"100":"foobar","baz":8989764,"foo":"bar"}
+*3
++set
++product:1145
+$44
+{"999":null,"baz12":123.879,"foo":"bar5674"}

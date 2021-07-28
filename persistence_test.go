@@ -114,10 +114,10 @@ func Test_parser(t *testing.T) {
 		prs := &parser{}
 
 		cmds := strings.Join([]string{
-			"*3\r\nset\r\n+user:123\r\n$13\r\n" + `{"foo":"bar"}` + "\r\n",
-			"*3\r\nset\r\n+user:456\r\n$11\r\n" + `{"baz":123}` + "\r\n",
-			"*2\r\ndel\r\n+user:123\r\n",
-			"*3\r\nset\r\n+products\r\n$15\r\n" + `[1,4,6,7,8,985]` + "\r\n",
+			"*3\r\n+set\r\n+user:123\r\n$13\r\n" + `{"foo":"bar"}` + "\r\n",
+			"*3\r\n+set\r\n+user:456\r\n$11\r\n" + `{"baz":123}` + "\r\n",
+			"*2\r\n+del\r\n+user:123\r\n",
+			"*3\r\n+set\r\n+products\r\n$15\r\n" + `[1,4,6,7,8,985]` + "\r\n",
 		}, "")
 
 		r := bufio.NewReader(strings.NewReader(cmds))

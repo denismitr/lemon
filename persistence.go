@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/pkg/errors"
 	"io"
+	"log"
 	"strconv"
 
 	"os"
@@ -37,8 +38,11 @@ type persistence struct {
 	strategy persistenceStrategy
 	parser *parser
 	f *os.File
+	closer fileCloser
 	flushes int
 }
+
+type fileCloser func() error
 
 func newPersistence(filepath string, strategy persistenceStrategy) (*persistence, error) {
 	f, err := os.OpenFile(filepath, os.O_CREATE|os.O_RDWR, 0666)
@@ -48,6 +52,7 @@ func newPersistence(filepath string, strategy persistenceStrategy) (*persistence
 
 	return &persistence{
 		f: f,
+		closer: f.Close,
 		strategy: strategy,
 	}, nil
 }
@@ -64,10 +69,11 @@ func (p *persistence) load(cb func(d deserializer) error) error {
 
 	n, err := prs.parse(r, cb)
 	if err != nil {
+		log.Printf("should truncate %d", n)
 		// todo: maybe only on EOF
-		if tErr := p.f.Truncate(int64(n)); tErr != nil {
-			return errors.Wrapf(tErr, "could not truncate file after pare error")
-		}
+		//if tErr := p.f.Truncate(int64(n)); tErr != nil {
+		//	return errors.Wrapf(tErr, "could not truncate file after pare error")
+		//}
 
 		return err
 	}
@@ -154,7 +160,7 @@ func (p *parser) parse(r *bufio.Reader, cb func(d deserializer) error) (int, err
 	}
 }
 
-func (p *persistence) write(buf bytes.Buffer) error {
+func (p *persistence) write(buf *bytes.Buffer) error {
 	n, err := p.f.Write(buf.Bytes())
 	if err != nil {
 		if n > 0 {
@@ -225,21 +231,25 @@ func (p *parser) resolveRespCommandCode(r *bufio.Reader) (commandCode, error) {
 		return invalidCode, err
 	}
 
-	if len(line) < 3 {
+	if len(line) < 4 {
 		return invalidCode, ErrCommandInvalid
+	}
+
+	if line[0] != '+' {
+		return invalidCode, errors.Wrap(ErrCommandInvalid, "any command should start with + symbol")
 	}
 
 	p.currentCmdSize += len(line)
 
-	if line[0] == 's' && line[1] == 'e' && line[2] == 't' {
+	if line[1] == 's' && line[2] == 'e' && line[3] == 't' {
 		return setCode, nil
 	}
 
-	if line[0] == 'd' && line[1] == 'e' && line[2] == 'l' {
+	if line[1] == 'd' && line[2] == 'e' && line[3] == 'l' {
 		return delCode, nil
 	}
 
-	return invalidCode, errors.Wrapf(ErrCommandInvalid, "line %s is invalid", string(line))
+	return invalidCode, errors.Wrapf(ErrCommandInvalid, "command [%s] is unknown", string(line))
 }
 
 func (p *parser) resolveRespSimpleString(r *bufio.Reader) (string, error) {
@@ -309,23 +319,23 @@ func respStrTag(st *strTag, buf *bytes.Buffer) {
 func respSimpleString(s string, buf *bytes.Buffer) {
 	buf.WriteRune('+')
 	buf.WriteString(s)
-	buf.WriteRune('\n')
 	buf.WriteRune('\r')
+	buf.WriteRune('\n')
 }
 
 func respFunc(fn string, buf *bytes.Buffer) {
 	buf.WriteRune('@')
 	buf.WriteString(fn)
-	buf.WriteRune('\n')
 	buf.WriteRune('\r')
+	buf.WriteRune('\n')
 }
 
 func respBlob(blob []byte, buf *bytes.Buffer) {
 	buf.WriteRune('$')
 	buf.WriteString(strconv.FormatInt(int64(len(blob)), 10))
-	buf.WriteRune('\n')
 	buf.WriteRune('\r')
+	buf.WriteRune('\n')
 	buf.Write(blob)
-	buf.WriteRune('\n')
 	buf.WriteRune('\r')
+	buf.WriteRune('\n')
 }

@@ -18,9 +18,13 @@ type Tx struct {
 }
 
 func (x *Tx) Commit() error {
-	if x.e.persistence != nil {
+	if x.e.persistence != nil && x.commands != nil {
 		for _, cmd := range x.commands{
 			cmd.serialize(x.buf)
+		}
+
+		if err := x.e.persistence.write(x.buf); err != nil {
+			return err
 		}
 	}
 

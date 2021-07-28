@@ -51,11 +51,15 @@ func newEngine(fullPath string) (*Engine, error) {
 		e.persistence = p
 	}
 
-	if err := e.init(); err != nil {
-		return nil, err
+	return e, nil
+}
+
+func (e *Engine) close() error {
+	if e.persistence != nil {
+		return e.persistence.closer()
 	}
 
-	return e, nil
+	return nil
 }
 
 func (e *Engine) init() error {
@@ -88,7 +92,7 @@ func (e *Engine) insert(ent *entry) error {
 //}
 
 func (e *Engine) findByKey(key string) (*entry, error) {
-	found := e.pks.Get(newPK(key))
+	found := e.pks.Get(&entry{key: newPK(key)})
 	if found == nil {
 		return nil, errors.Wrapf(ErrDocumentNotFound, "key %s does not exist in database", key)
 	}

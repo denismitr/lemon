@@ -1,6 +1,7 @@
 package lemon
 
 import (
+	"bytes"
 	"context"
 	"github.com/pkg/errors"
 	"sync"
@@ -19,9 +20,9 @@ func New(path string) (*LemonDB, error) {
 		return nil, err
 	}
 
-	//if initErr := e.init(); initErr != nil {
-	//	return nil, initErr
-	//}
+	if initErr := e.init(); initErr != nil {
+		return nil, initErr
+	}
 
 	return &LemonDB{e: e}, nil
 }
@@ -37,10 +38,14 @@ func (db *LemonDB) MultiRead(ctx context.Context, cb UserCallback) error {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
-	tx := Tx{e: db.e, ctx: ctx, readOnly: true}
+	tx := Tx{e: db.e, ctx: ctx, readOnly: true, buf: &bytes.Buffer{}}
 	err := cb(&tx)
 	if err != nil {
 		return errors.Wrap(err, "db read failed")
+	}
+
+	if err := tx.Commit(); err != nil {
+		return err
 	}
 
 	return nil
@@ -50,15 +55,16 @@ func (db *LemonDB) MultiUpdate(ctx context.Context, cb UserCallback) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	tx := Tx{e: db.e, ctx: ctx, readOnly: false}
+	tx := Tx{e: db.e, ctx: ctx, readOnly: false, buf: &bytes.Buffer{}}
 	err := cb(&tx)
 	if err != nil {
+		// todo: rollback
 		return errors.Wrap(err, "db write failed")
 	}
 
-	//if err := db.e.persist(); err != nil {
-	//	return err
-	//}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
 
 	return nil
 }
