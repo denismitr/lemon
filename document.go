@@ -31,7 +31,6 @@ func newDocumentFromEntry(ent *entry) *Document {
 	d :=  &Document{
 		key: ent.key.String(),
 		value: ent.value,
-		//tags: *ent.tags,
 	}
 
 	if ent.tags != nil {

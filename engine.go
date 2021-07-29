@@ -235,8 +235,7 @@ func (e *Engine) scanPrefixDescend(
 	ir entryReceiver,
 	fe *filterEntries,
 ) (err error) {
-	e.pks.Descend(&entry{key: newPK(prefix)}, filteringBTreeIterator(ctx, fe, ir))
-
+	descendGreaterThan(e.pks, &entry{key: newPK(prefix)}, filteringBTreeIterator(ctx, fe, ir))
 	return
 }
 

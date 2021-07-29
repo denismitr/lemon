@@ -183,3 +183,14 @@ func descendRange(
 		return gt(btr, item, greaterOrEqual) && iter(item.(*entry))
 	})
 }
+
+func descendGreaterThan(
+	btr *btr.BTree,
+	greaterOrEqual interface{},
+	iter func(item interface{}) bool,
+) {
+	btr.Descend(nil, func(item interface{}) bool {
+		// todo: check item type
+		return gt(btr, item, greaterOrEqual) && iter(item)
+	})
+}

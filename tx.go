@@ -123,55 +123,55 @@ func (x *Tx) Scan(ctx context.Context, opts *queryOptions, cb func(d Document) b
 	return nil
 }
 
-func (x *Tx) Find(ctx context.Context, opts *queryOptions, dest *[]Document) error {
+func (x *Tx) Find(ctx context.Context, q *queryOptions, dest *[]Document) error {
 	ir := func(ent *entry) bool {
 		*dest = append(*dest, *newDocumentFromEntry(ent))
 		return true
 	}
 
-	if err := x.applyScanner(ctx, opts, ir); err != nil {
+	if err := x.applyScanner(ctx, q, ir); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (x *Tx) applyScanner(ctx context.Context, opts *queryOptions, ir entryReceiver) error {
-	if opts == nil {
-		opts = Q()
+func (x *Tx) applyScanner(ctx context.Context, q *queryOptions, ir entryReceiver) error {
+	if q == nil {
+		q = Q()
 	}
 
-	fe := x.e.filterEntities(opts.tags)
+	fe := x.e.filterEntities(q.tags)
 
-	if opts.keyRange != nil {
+	if q.keyRange != nil {
 		var sc rangeScanner
-		if opts.order == Ascend {
+		if q.order == Ascend {
 			sc = x.e.scanBetweenAscend
 		} else {
 			sc = x.e.scanBetweenDescend
 		}
 
-		if err := sc(ctx, opts.keyRange.From, opts.keyRange.To, ir, fe); err != nil {
+		if err := sc(ctx, q.keyRange.From, q.keyRange.To, ir, fe); err != nil {
 			return err
 		}
 
 		return nil
-	} else if opts.prefix != "" {
+	} else if q.prefix != "" {
 		var sc prefixScanner
-		if opts.order == Ascend {
+		if q.order == Ascend {
 			sc = x.e.scanPrefixAscend
 		} else {
 			sc = x.e.scanPrefixDescend
 		}
 
-		if err := sc(ctx, opts.prefix, ir, fe); err != nil {
+		if err := sc(ctx, q.prefix, ir, fe); err != nil {
 			return err
 		}
 
 		return nil
 	} else {
 		var sc scanner
-		if opts.order == Ascend {
+		if q.order == Ascend {
 			sc = x.e.scanAscend
 		} else {
 			sc = x.e.scanDescend
