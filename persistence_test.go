@@ -170,22 +170,22 @@ func Test_parser(t *testing.T) {
 
 		cmd1, ok := mock.commands[0].(*entry)
 		require.True(t, ok)
-		assert.Equal(t, cmd1.key, PK("user:123"))
+		assert.Equal(t, cmd1.key, newPK("user:123"))
 		assert.Equal(t, cmd1.value, []byte(`{"foo":"bar"}`))
 
 		cmd2, ok := mock.commands[1].(*entry)
 		require.True(t, ok)
-		assert.Equal(t, cmd2.key, PK("user:456"))
+		assert.Equal(t, cmd2.key, newPK("user:456"))
 		assert.Equal(t, cmd2.value, []byte(`{"baz":123}`))
 		assert.Nil(t, cmd2.tags)
 
 		cmd3, ok := mock.commands[2].(*deleteCmd)
 		require.True(t, ok)
-		assert.Equal(t, cmd3.key, PK("user:123"))
+		assert.Equal(t, cmd3.key, newPK("user:123"))
 
 		cmd4, ok := mock.commands[3].(*entry)
 		require.True(t, ok)
-		assert.Equal(t, cmd4.key, PK("products"))
+		assert.Equal(t, cmd4.key, newPK("products"))
 		assert.Equal(t, cmd4.value, []byte(`[1,4,6,7,8,985]`))
 		assert.Nil(t, cmd2.tags)
 	})
@@ -214,7 +214,7 @@ func Test_parser(t *testing.T) {
 
 		cmd1, ok := mock.commands[0].(*entry)
 		require.True(t, ok)
-		assert.Equal(t, cmd1.key, PK("user:123"))
+		assert.Equal(t, cmd1.key, newPK("user:123"))
 		assert.Equal(t, cmd1.value, []byte(`{"foo":"bar"}`))
 		require.NotNil(t, cmd1.tags)
 		require.Len(t, cmd1.tags.Strings, 1)
@@ -223,7 +223,7 @@ func Test_parser(t *testing.T) {
 
 		cmd2, ok := mock.commands[1].(*entry)
 		require.True(t, ok)
-		assert.Equal(t, cmd2.key, PK("user:456"))
+		assert.Equal(t, cmd2.key, newPK("user:456"))
 		assert.Equal(t, cmd2.value, []byte(`{"baz":123}`))
 		require.NotNil(t, cmd2.tags)
 		require.Len(t, cmd2.tags.Booleans, 1)
@@ -232,11 +232,11 @@ func Test_parser(t *testing.T) {
 
 		cmd3, ok := mock.commands[2].(*deleteCmd)
 		require.True(t, ok)
-		assert.Equal(t, cmd3.key, PK("user:123"))
+		assert.Equal(t, cmd3.key, newPK("user:123"))
 
 		cmd4, ok := mock.commands[3].(*entry)
 		require.True(t, ok)
-		assert.Equal(t, cmd4.key, PK("products"))
+		assert.Equal(t, cmd4.key, newPK("products"))
 		assert.Equal(t, cmd4.value, []byte(`[1,4,6,7,8,985]`))
 		assert.Nil(t, cmd4.tags)
 	})

@@ -12,7 +12,7 @@ var ErrJsonPathInvalid = errors.New("json path is invalid")
 type Document struct {
 	key   string
 	value []byte
-	tags Tags
+	tags *Tags
 }
 
 func (d *Document) Key() string {
@@ -20,11 +20,7 @@ func (d *Document) Key() string {
 }
 
 func (d *Document) Tags() Tags {
-	return d.tags
-}
-
-func newDocument(k string, v []byte, tags *Tags) *Document {
-	return &Document{key: k, value: v, tags: *tags}
+	return *d.tags
 }
 
 func newDocumentFromEntry(ent *entry) *Document {
@@ -34,14 +30,14 @@ func newDocumentFromEntry(ent *entry) *Document {
 	}
 
 	if ent.tags != nil {
-		d.tags = *ent.tags
+		d.tags = ent.tags
 	}
 
 	return d
 }
 
 func createDocument(k string, v []byte, tags *Tags) Document {
-	return Document{key: k, value: v, tags: *tags}
+	return Document{key: k, value: v, tags: tags}
 }
 
 func (d *Document) Err() error {
