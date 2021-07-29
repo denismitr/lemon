@@ -20,18 +20,18 @@ func newEntry(key string, value []byte, tags *Tags) *entry {
 }
 
 func (ent *entry) serialize(buf *bytes.Buffer) {
-	respArray(3 + ent.tagCount(), buf)
-	respSimpleString("set", buf)
-	respSimpleString(ent.key.String(), buf)
-	respBlob(ent.value, buf)
+	writeRespArray(3 + ent.tagCount(), buf)
+	writeRespSimpleString("set", buf)
+	writeRespSimpleString(ent.key.String(), buf)
+	writeRespBlob(ent.value, buf)
 
 	if ent.tagCount() > 0 {
 		for _, bt := range ent.tags.Booleans {
-			respBoolTag(&bt, buf)
+			writeRespBoolTag(&bt, buf)
 		}
 
 		for _, st := range ent.tags.Strings {
-			respStrTag(&st, buf)
+			writeRespStrTag(&st, buf)
 		}
 	}
 }
@@ -54,9 +54,9 @@ type deleteCmd struct {
 }
 
 func (cmd *deleteCmd) serialize(buf *bytes.Buffer) {
-	respArray(2, buf)
-	respSimpleString("del", buf)
-	respSimpleString(cmd.key.String(), buf)
+	writeRespArray(2, buf)
+	writeRespSimpleString("del", buf)
+	writeRespSimpleString(cmd.key.String(), buf)
 }
 
 func (cmd *deleteCmd) deserialize(e *Engine) error {

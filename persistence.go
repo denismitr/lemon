@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"strconv"
+	"strings"
 
 	"os"
 )
@@ -142,12 +143,20 @@ func (p *parser) parse(r *bufio.Reader, cb func(d deserializer) error) (int, err
 				return p.totalSize, err
 			}
 
-			ent := &entry{key: newPK(key), value: value}
+			ent := newEntry(key, value, nil)
 
 			// subtracting command, key and value
 			segments -= 3
-			for j := 0; j < segments; j++ {
+			if segments > 0 {
+				ent.tags = &Tags{} // fixme
+			}
 
+			for j := 0; j < segments; j++ {
+				tagger, err := p.resolveTagger(r)
+				if err != nil {
+					return p.totalSize, err
+				}
+				tagger(ent.tags)
 			}
 
 			if err := cb(ent); err != nil {
@@ -195,9 +204,10 @@ func (p *parser) resolveRespArrayFromLine(r *bufio.Reader) (int, error) {
 			return 0, io.ErrUnexpectedEOF
 		}
 
-		return 0, errors.Wrap(ErrSourceFileReadFailed, err.Error())
+		return 0, errors.Wrapf(ErrSourceFileReadFailed, "could not parse array from line: %s", err.Error())
 	}
 
+	// fixme
 	if len(line) == 2 {
 		line, _  = r.ReadBytes('\n')
 	}
@@ -205,7 +215,7 @@ func (p *parser) resolveRespArrayFromLine(r *bufio.Reader) (int, error) {
 	// should be \*\d{1,}\\r
 	// for now we only expects array like commands
 	if len(line) < 2 || line[0] != '*' {
-		return p.totalSize, ErrCommandInvalid
+		return p.totalSize, errors.Wrapf(ErrCommandInvalid, "line %s should actually start with *", string(line))
 	}
 
 	cmdBuf := p.buf[:0]
@@ -217,7 +227,7 @@ func (p *parser) resolveRespArrayFromLine(r *bufio.Reader) (int, error) {
 
 	n, err := strconv.Atoi(string(cmdBuf))
 	if err != nil {
-		return 0, errors.Wrap(ErrCommandInvalid, err.Error())
+		return 0, errors.Wrapf(ErrCommandInvalid, "could not parse command size %s", err.Error())
 	}
 
 	p.currentCmdSize += len(line)
@@ -255,6 +265,10 @@ func (p *parser) resolveRespCommandCode(r *bufio.Reader) (commandCode, error) {
 func (p *parser) resolveRespSimpleString(r *bufio.Reader) (string, error) {
 	strLine, err := r.ReadBytes('\n')
 	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return "", io.ErrUnexpectedEOF
+		}
+
 		return "", errors.Wrap(ErrCommandInvalid, err.Error())
 	}
 
@@ -269,10 +283,75 @@ func (p *parser) resolveRespSimpleString(r *bufio.Reader) (string, error) {
 	return token, nil
 }
 
+const (
+	boolTagFn = "btg"
+	strTagFn = "stg"
+)
+
+func (p *parser) resolveTagger(r *bufio.Reader) (Tagger, error) {
+	line, err := r.ReadBytes('\n')
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil, io.ErrUnexpectedEOF
+		}
+
+		return nil, errors.Wrap(ErrCommandInvalid, err.Error())
+	}
+
+	if len(line) < 3 || line[0] != '@' || line[len(line) - 1] == ')' {
+		return nil, errors.Wrapf(ErrCommandInvalid, "line %s does not contain a valid function", string(line))
+	}
+
+	fn := string(line[1:len(line) - 2])
+	prefix, args, err := resolveTagFnTypeAndArguments(fn)
+	if err != nil {
+		return nil, err
+	}
+
+	p.currentCmdSize += len(line)
+
+	switch prefix {
+	case boolTagFn:
+		return BoolTag(args[0], args[1] == "true"), nil
+	case strTagFn:
+		return StrTag(args[0], args[1]), nil
+	default:
+		panic(fmt.Sprintf("tag function %s not supported", prefix))
+	}
+}
+
+func resolveTagFnTypeAndArguments(expression string) (prefix string, args []string, err error) {
+	for _, p := range []string{boolTagFn, strTagFn} {
+		if strings.HasPrefix(expression, p) {
+			prefix = p
+			break
+		}
+	}
+
+	if prefix == "" {
+		err = errors.Wrapf(ErrCommandInvalid, "expression %s is invalid", expression)
+		return
+	}
+
+	argsExp := strings.TrimPrefix(expression, prefix + "(")
+	argsExp = strings.TrimSuffix(argsExp, ")")
+	args = strings.Split(argsExp, ",")
+
+	if len(args) < 2 {
+		panic("how args can be less than 2 for tag function")
+	}
+
+	return
+}
+
 func (p *parser) resolveRespBlobString(r *bufio.Reader) ([]byte, error) {
 	strInfoLine, err := r.ReadBytes('\n')
 	if err != nil {
-		return nil, errors.Wrap(ErrCommandInvalid, err.Error())
+		if errors.Is(err, io.EOF) {
+			return nil, io.ErrUnexpectedEOF
+		}
+
+		return nil, errors.Wrapf(ErrCommandInvalid, "could not resolve blob: %s", err.Error())
 	}
 
 	p.currentCmdSize += len(strInfoLine)
@@ -301,36 +380,36 @@ func (p *parser) resolveRespBlobString(r *bufio.Reader) ([]byte, error) {
 	return blob[:blobLen], nil
 }
 
-func respArray(segments int, buf *bytes.Buffer) {
+func writeRespArray(segments int, buf *bytes.Buffer) {
 	buf.WriteRune('*')
 	buf.WriteString(strconv.FormatInt(int64(segments), 10))
 	buf.WriteRune('\r')
 	buf.WriteRune('\n')
 }
 
-func respBoolTag(bt *boolTag, buf *bytes.Buffer) {
-	respFunc(fmt.Sprintf("btg(%s,%v)", bt.Name, bt.Value), buf)
+func writeRespBoolTag(bt *boolTag, buf *bytes.Buffer) {
+	writeRespFunc(fmt.Sprintf("btg(%s,%v)", bt.Name, bt.Value), buf)
 }
 
-func respStrTag(st *strTag, buf *bytes.Buffer) {
-	respFunc(fmt.Sprintf("stg(%s,%s)", st.Name, st.Value), buf)
+func writeRespStrTag(st *strTag, buf *bytes.Buffer) {
+	writeRespFunc(fmt.Sprintf("stg(%s,%s)", st.Name, st.Value), buf)
 }
 
-func respSimpleString(s string, buf *bytes.Buffer) {
+func writeRespSimpleString(s string, buf *bytes.Buffer) {
 	buf.WriteRune('+')
 	buf.WriteString(s)
 	buf.WriteRune('\r')
 	buf.WriteRune('\n')
 }
 
-func respFunc(fn string, buf *bytes.Buffer) {
+func writeRespFunc(fn string, buf *bytes.Buffer) {
 	buf.WriteRune('@')
 	buf.WriteString(fn)
 	buf.WriteRune('\r')
 	buf.WriteRune('\n')
 }
 
-func respBlob(blob []byte, buf *bytes.Buffer) {
+func writeRespBlob(blob []byte, buf *bytes.Buffer) {
 	buf.WriteRune('$')
 	buf.WriteString(strconv.FormatInt(int64(len(blob)), 10))
 	buf.WriteRune('\r')
