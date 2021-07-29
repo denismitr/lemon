@@ -184,18 +184,10 @@ func (e *Engine) scanBetweenDescend(
 	from string,
 	to string,
 	ir entryReceiver,
-	fo *filterEntries,
+	fe *filterEntries,
 ) (err error) {
 	// Descend required a reverse order of `from` and `to`
-	descendRange(e.pks, &entry{key: newPK(from)}, &entry{key: newPK(to)}, func(ent *entry) bool {
-		if ctx.Err() != nil {
-			err = ctx.Err()
-			return false
-		}
-
-		return ir(ent)
-	})
-
+	descendRange(e.pks, &entry{key: newPK(from)}, &entry{key: newPK(to)}, filteringBTreeIterator(ctx, fe, ir))
 	return
 }
 
@@ -204,16 +196,9 @@ func (e *Engine) scanBetweenAscend(
 	from string,
 	to string,
 	ir entryReceiver,
-	fo *filterEntries,
+	fe *filterEntries,
 ) (err error) {
-	ascendRange(e.pks, &entry{key: newPK(from)}, &entry{key: newPK(to)}, func(ent *entry) bool {
-		if ctx.Err() != nil {
-			err = ctx.Err()
-			return false
-		}
-
-		return ir(ent)
-	})
+	ascendRange(e.pks, &entry{key: newPK(from)}, &entry{key: newPK(to)}, filteringBTreeIterator(ctx, fe, ir))
 
 	return
 }
@@ -237,25 +222,6 @@ func (e *Engine) scanPrefixDescend(
 ) (err error) {
 	descendGreaterThan(e.pks, &entry{key: newPK(prefix)}, filteringBTreeIterator(ctx, fe, ir))
 	return
-}
-
-func filteringBTreeIterator(ctx context.Context, fe *filterEntries, ir entryReceiver) func(item interface{}) bool {
-	return func(item interface{}) bool {
-		if ctx.Err() != nil {
-			return false
-		}
-
-		ent, ok := item.(*entry)
-		if !ok {
-			panic(castPanic)
-		}
-
-		if fe != nil && !fe.exists(ent) {
-			return true
-		}
-
-		return ir(ent)
-	}
 }
 
 func (e *Engine) scanAscend(
@@ -309,6 +275,25 @@ func (e *Engine) filterEntities(qTags *queryTags) *filterEntries {
 	}
 
 	return ft
+}
+
+func filteringBTreeIterator(ctx context.Context, fe *filterEntries, ir entryReceiver) func(item interface{}) bool {
+	return func(item interface{}) bool {
+		if ctx.Err() != nil {
+			return false
+		}
+
+		ent, ok := item.(*entry)
+		if !ok {
+			panic(castPanic)
+		}
+
+		if fe != nil && !fe.exists(ent) {
+			return true
+		}
+
+		return ir(ent)
+	}
 }
 
 func serializeToValue(d interface{}) ([]byte, error) {

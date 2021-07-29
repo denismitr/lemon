@@ -16,7 +16,7 @@ func (ent *entry) deserialize(e *Engine) error {
 }
 
 func newEntry(key string, value []byte, tags *Tags) *entry {
-	return &entry{key: PK(key), value: value, tags: tags}
+	return &entry{key: newPK(key), value: value, tags: tags}
 }
 
 func (ent *entry) serialize(buf *bytes.Buffer) {

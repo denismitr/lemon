@@ -1,26 +1,37 @@
 package lemon
 
 import (
-	"github.com/google/btree"
 	"strconv"
 	"strings"
 )
 
-type index struct {
+type PK struct {
 	key string
-	offset int
+	segments []string
 }
 
-func (p *index) Less(than btree.Item) bool {
-	other := than.(*index)
-	ourSegments := strings.Split(p.key, ":")
-	otherSegments := strings.Split(other.key, ":")
-	l := smallestSegmentLen(ourSegments, otherSegments)
+func newPK(k string) PK {
+	return PK {
+		key: k,
+		segments: strings.Split(k, ":"),
+	}
+}
+
+func (pk *PK) Equal(other *PK) bool {
+	return pk.key == other.key
+}
+
+func (pk *PK) String() string {
+	return pk.key
+}
+
+func (pk *PK) Less(other PK) bool {
+	l := smallestSegmentLen(pk.segments, other.segments)
 
 	prevEq := false
 	for i := 0; i < l; i++ {
 		// try to compare as ints
-		bothInts, a, b := convertToINTs(ourSegments[i], otherSegments[i])
+		bothInts, a, b := convertToINTs(pk.segments[i], other.segments[i])
 		if bothInts {
 			if a != b {
 				return a < b
@@ -31,14 +42,19 @@ func (p *index) Less(than btree.Item) bool {
 		}
 
 		// try to compare as strings
-		if ourSegments[i] != otherSegments[i]  {
-			return ourSegments[i] < otherSegments[i]
+		if pk.segments[i] != other.segments[i]  {
+			return pk.segments[i] < other.segments[i]
 		} else {
-			prevEq = ourSegments[i] == otherSegments[i]
+			prevEq = pk.segments[i] == other.segments[i]
 		}
 	}
 
-	return prevEq && len(otherSegments) > len(ourSegments)
+	return prevEq && len(other.segments) > len(pk.segments)
+}
+
+func byPrimaryKeys(a, b interface{}) bool {
+	i1, i2 := a.(*entry), b.(*entry)
+	return i1.key.Less(i2.key) // todo: call PK comparison function
 }
 
 func smallestSegmentLen(a, b []string) int {

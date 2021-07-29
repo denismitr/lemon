@@ -1,6 +1,9 @@
 package lemon
 
-import "sync"
+import (
+	"strings"
+	"sync"
+)
 
 type D map[string]interface{}
 
@@ -24,7 +27,13 @@ type queryOptions struct {
 	order    Order
 	keyRange *KeyRange
 	prefix   string
+	patterns []string
 	tags     *queryTags
+}
+
+func (fo *queryOptions) Match(patten string) *queryOptions {
+	fo.patterns = strings.Split(patten, ":")
+	return fo
 }
 
 func (fo *queryOptions) Order(o Order) *queryOptions {

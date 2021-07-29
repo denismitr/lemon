@@ -30,10 +30,10 @@ func TestIndex_Less_2segments(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.key1+"_"+tc.key2, func(t *testing.T) {
-			idxA := index{key: tc.key1}
-			idxB := index{key: tc.key2}
+			idxA := newPK(tc.key1)
+			idxB := newPK(tc.key2)
 
-			assert.Equal(t, tc.less, idxA.Less(&idxB))
+			assert.Equal(t, tc.less, idxA.Less(idxB))
 		})
 	}
 }
