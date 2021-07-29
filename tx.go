@@ -1,8 +1,8 @@
 package lemon
 
 import (
+	"bytes"
 	"context"
-	"github.com/denismitr/lemon/internal/engine"
 	"github.com/pkg/errors"
 )
 
@@ -11,27 +11,39 @@ var ErrTxIsReadOnly = errors.New("transaction is read only")
 
 type Tx struct {
 	readOnly bool
-	e *engine.Engine
+	buf *bytes.Buffer
+	e *Engine
 	ctx context.Context
+	commands []serializer
+}
+
+func (x *Tx) Commit() error {
+	if x.e.persistence != nil && x.commands != nil {
+		for _, cmd := range x.commands{
+			cmd.serialize(x.buf)
+		}
+
+		if err := x.e.persistence.write(x.buf); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (x *Tx) Get(key string) (*Document, error) { // fixme: decide on ref or value
-	v, err := x.e.FindByKey(key)
+	ent, err := x.e.findByKey(key)
 	if err != nil {
-		if errors.Is(err, engine.ErrDocumentNotFound) {
-			return nil, errors.Wrapf(ErrKeyDoesNotExist, "%s", key)
-		}
-
 		return nil, err
 	}
 
-	return newDocument(key, v), nil
+	return newDocumentFromEntry(ent), nil
 }
 
 func (x *Tx) MGet(key ...string) ([]*Document, error) { // fixme: decide on ref or value
 	docs := make([]*Document, 0)
-	if err := x.e.FindByKeys(key, func(k string, b []byte) bool {
-		docs = append(docs, newDocument(k, b))
+	if err := x.e.findByKeys(key, func(ent *entry) bool {
+		docs = append(docs, newDocumentFromEntry(ent))
 		return true
 	}); err != nil {
 		return nil, err
@@ -40,25 +52,52 @@ func (x *Tx) MGet(key ...string) ([]*Document, error) { // fixme: decide on ref 
 	return docs, nil
 }
 
-func (x *Tx) Insert(key string, data interface{}) error {
+func (x *Tx) Insert(key string, data interface{}, taggers ...Tagger) error {
 	if x.readOnly {
 		return ErrTxIsReadOnly
 	}
 
-	if err := x.e.Insert(key, data); err != nil {
+	ts := Tags{}
+	for _, t := range taggers {
+		t(&ts)
+	}
+
+	v, err := serializeToValue(data)
+	if err != nil {
 		return err
 	}
+
+	ent := newEntry(key, v, &ts)
+
+	if err := x.e.insert(ent); err != nil {
+		return err
+	}
+
+	x.commands = append(x.commands, ent)
+
 	return nil
 }
 
-func (x *Tx) InsertOrReplace(key string, data interface{}) error {
+func (x *Tx) InsertOrReplace(key string, data interface{}, taggers ...Tagger) error {
 	if x.readOnly {
 		return ErrTxIsReadOnly
 	}
 
-	if err := x.e.Insert(key, data); err != nil {
-		if errors.Is(err, engine.ErrKeyAlreadyExists) {
-			if updateErr := x.e.Update(key, data); updateErr != nil {
+	ts := Tags{}
+	for _, t := range taggers {
+		t(&ts)
+	}
+
+	v, err := serializeToValue(data)
+	if err != nil {
+		return err
+	}
+
+	ent := newEntry(key, v, &ts)
+
+	if err := x.e.insert(ent); err != nil {
+		if errors.Is(err, ErrKeyAlreadyExists) {
+			if updateErr := x.e.update(ent); updateErr != nil {
 				return updateErr
 			} else {
 				return nil
@@ -71,10 +110,10 @@ func (x *Tx) InsertOrReplace(key string, data interface{}) error {
 	return nil
 }
 
-func (x *Tx) Scan(ctx context.Context, opts *QueryOptions, cb func(d Document) bool) error {
-	ir := func(k string, v []byte) bool {
-		d := createDocument(k, v)
-		return cb(d)
+func (x *Tx) Scan(ctx context.Context, opts *queryOptions, cb func(d Document) bool) error {
+	ir := func(ent *entry) bool {
+		d := newDocumentFromEntry(ent)
+		return cb(*d)
 	}
 
 	if err := x.applyScanner(ctx, opts, ir); err != nil {
@@ -84,59 +123,61 @@ func (x *Tx) Scan(ctx context.Context, opts *QueryOptions, cb func(d Document) b
 	return nil
 }
 
-func (x *Tx) Find(ctx context.Context, opts *QueryOptions, dest *[]Document) error {
-	ir := func(k string, v []byte) bool {
-		*dest = append(*dest, createDocument(k, v))
+func (x *Tx) Find(ctx context.Context, q *queryOptions, dest *[]Document) error {
+	ir := func(ent *entry) bool {
+		*dest = append(*dest, *newDocumentFromEntry(ent))
 		return true
 	}
 
-	if err := x.applyScanner(ctx, opts, ir); err != nil {
+	if err := x.applyScanner(ctx, q, ir); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (x *Tx) applyScanner(ctx context.Context, opts *QueryOptions, ir engine.ItemReceiver) error {
-	if opts == nil {
-		opts = Q()
+func (x *Tx) applyScanner(ctx context.Context, q *queryOptions, ir entryReceiver) error {
+	if q == nil {
+		q = Q()
 	}
 
-	if opts.KR != nil {
-		var scanner engine.RangeScanner
-		if opts.O == Ascend {
-			scanner = x.e.ScanBetweenAscend
+	fe := x.e.filterEntities(q.tags)
+
+	if q.keyRange != nil {
+		var sc rangeScanner
+		if q.order == Ascend {
+			sc = x.e.scanBetweenAscend
 		} else {
-			scanner = x.e.ScanBetweenDescend
+			sc = x.e.scanBetweenDescend
 		}
 
-		if err := scanner(ctx, opts.KR.From, opts.KR.To, ir); err != nil {
+		if err := sc(ctx, q.keyRange.From, q.keyRange.To, ir, fe); err != nil {
 			return err
 		}
 
 		return nil
-	} else if opts.Px != "" {
-		var scanner engine.PrefixScanner
-		if opts.O == Ascend {
-			scanner = x.e.ScanPrefixAscend
+	} else if q.prefix != "" {
+		var sc prefixScanner
+		if q.order == Ascend {
+			sc = x.e.scanPrefixAscend
 		} else {
-			scanner = x.e.ScanPrefixDescend
+			sc = x.e.scanPrefixDescend
 		}
 
-		if err := scanner(ctx, opts.Px, ir); err != nil {
+		if err := sc(ctx, q.prefix, ir, fe); err != nil {
 			return err
 		}
 
 		return nil
 	} else {
-		var scanner engine.Scanner
-		if opts.O == Ascend {
-			scanner = x.e.ScanAscend
+		var sc scanner
+		if q.order == Ascend {
+			sc = x.e.scanAscend
 		} else {
-			scanner = x.e.ScanDescend
+			sc = x.e.scanDescend
 		}
 
-		if err := scanner(ctx, ir); err != nil {
+		if err := sc(ctx, ir, fe); err != nil {
 			return err
 		}
 
@@ -149,9 +190,15 @@ func (x *Tx) Remove(keys ...string) error {
 		return ErrTxIsReadOnly
 	}
 
-	if err := x.e.RemoveByKeys(keys...); err != nil {
-		return err
+	for _, k := range keys {
+		pk := newPK(k)
+		if err := x.e.remove(pk); err != nil {
+			x.commands = append(x.commands, &deleteCmd{pk})
+		} else {
+			return err
+		}
 	}
+
 	return nil
 }
 

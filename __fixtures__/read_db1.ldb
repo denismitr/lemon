@@ -1,1 +1,10 @@
-{"pks":["product:8976","product:1145"],"documents":["eyIxMDAiOiJmb29iYXIiLCJiYXoiOjg5ODk3NjQsImZvbyI6ImJhciJ9","eyI5OTkiOm51bGwsImJhejEyIjoxMjMuODc5LCJmb28iOiJiYXI1Njc0In0="]}
+*3
++set
++product:8976
+$42
+{"100":"foobar","baz":8989764,"foo":"bar"}
+*3
++set
++product:1145
+$44
+{"999":null,"baz12":123.879,"foo":"bar5674"}

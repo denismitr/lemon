@@ -12,18 +12,36 @@ var ErrJsonPathInvalid = errors.New("json path is invalid")
 type Document struct {
 	key   string
 	value []byte
+	tags Tags
 }
 
-func (d Document) Key() string {
+func (d *Document) Key() string {
 	return d.key
 }
 
-func newDocument(k string, v []byte) *Document {
-	return &Document{key: k, value: v}
+func (d *Document) Tags() Tags {
+	return d.tags
 }
 
-func createDocument(k string, v []byte) Document {
-	return Document{key: k, value: v}
+func newDocument(k string, v []byte, tags *Tags) *Document {
+	return &Document{key: k, value: v, tags: *tags}
+}
+
+func newDocumentFromEntry(ent *entry) *Document {
+	d :=  &Document{
+		key: ent.key.String(),
+		value: ent.value,
+	}
+
+	if ent.tags != nil {
+		d.tags = *ent.tags
+	}
+
+	return d
+}
+
+func createDocument(k string, v []byte, tags *Tags) Document {
+	return Document{key: k, value: v, tags: *tags}
 }
 
 func (d *Document) Err() error {
@@ -35,7 +53,7 @@ func (d *Document) RawString() string {
 }
 
 func (d *Document) Unmarshal(dest interface{}) error {
-	err := json.Unmarshal([]byte(d.value), &dest)
+	err := json.Unmarshal(d.value, &dest)
 	if err != nil {
 		return errors.Wrap(ErrResultCouldNotBeUnmarshalled, err.Error())
 	}
@@ -44,11 +62,11 @@ func (d *Document) Unmarshal(dest interface{}) error {
 }
 
 func (d *Document) String(path string) (string, error) {
-	get := gjson.GetBytes(d.value, path)
-	if !get.Exists() {
+	raw := gjson.GetBytes(d.value, path)
+	if !raw.Exists() {
 		return "", ErrJsonPathInvalid
 	}
-	return get.String(), nil
+	return raw.String(), nil
 }
 
 func (d *Document) StringOrDefault(path, def string) string {

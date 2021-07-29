@@ -6,57 +6,12 @@ import (
 	"github.com/denismitr/lemon"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"io/ioutil"
 	"os"
+	"strings"
 	"testing"
 )
-
-func TestLemonDB_Read(t *testing.T) {
-	db, err := lemon.New("./__fixtures__/read_db1.ldb")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-
-	t.Run("get existing keys", func(t *testing.T) {
-		var result1 *lemon.Document
-		var result2 *lemon.Document
-		if err := db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
-			doc1, err := tx.Get("product:8976")
-			if err != nil {
-				return err
-			}
-
-			doc2, err := tx.Get("product:1145")
-			if err != nil {
-				return err
-			}
-
-			result1 = doc1
-			result2 = doc2
-			return nil
-		}); err != nil {
-			t.Fatal(err)
-		}
-
-		json1 := result1.RawString()
-		assert.Equal(t, `{"100":"foobar","baz":8989764,"foo":"bar"}`, json1)
-		foo, err := result1.String("foo")
-		require.NoError(t, err)
-		assert.Equal(t, "bar", foo)
-
-		json2 := result2.RawString()
-		assert.Equal(t, `{"999":null,"baz12":123.879,"foo":"bar5674"}`, json2)
-		bar5674, err := result2.String("foo")
-		require.NoError(t, err)
-		assert.Equal(t, "bar5674", bar5674)
-		baz12, err := result2.Float("baz12")
-		require.NoError(t, err)
-		assert.Equal(t, 123.879, baz12)
-	})
-}
 
 type writeTestSuite struct {
 	suite.Suite
@@ -206,7 +161,7 @@ func (wts *writeTestSuite) Test_ReplaceInsertedDocs() {
 			"foo1":   "0",
 			"baz": 123.879,
 			"999":   "bar",
-		}); err != nil {
+		}, lemon.BoolTag("valid", true)); err != nil {
 			return err
 		}
 
@@ -242,9 +197,16 @@ func (wts *writeTestSuite) Test_ReplaceInsertedDocs() {
 
 	readJson1 := readResult1.RawString()
 	wts.Assert().Equal(`{"bar":null,"baz":1,"foo":"bar22"}`, readJson1)
+	wts.Assert().Equal("bar22", readResult1.StringOrDefault("foo", ""))
+	wts.Assert().Equal(1, readResult1.IntOrDefault("baz", 0))
 
 	readJson2 := readResult2.RawString()
 	wts.Assert().Equal(`{"999":"bar","baz":123.879,"foo1":"0"}`, readJson2)
+	wts.Assert().Equal(123.879, readResult2.FloatOrDefault("baz", 0))
+	wts.Assert().Equal("bar", readResult2.StringOrDefault("999", ""))
+
+	//expectedContent := ``
+	//AssertFileContents(wts.T(), wts.fixture, expectedContent)
 }
 
 func Test_Write(t *testing.T) {
@@ -315,7 +277,7 @@ func (rts *removeTestSuite) TestLemonDB_RemoveItemInTheMiddle() {
 		doc, err := tx.Get("item:1145")
 		rts.Require().Error(err)
 		rts.Assert().Nil(doc)
-		rts.Assert().True(errors.Is(err, lemon.ErrKeyDoesNotExist))
+		rts.Assert().True(errors.Is(err, lemon.ErrDocumentNotFound))
 
 		return nil
 	}); err != nil {
@@ -323,7 +285,11 @@ func (rts *removeTestSuite) TestLemonDB_RemoveItemInTheMiddle() {
 	}
 }
 
-func seedUserData(t *testing.T, db *lemon.LemonDB, n int) {
+type seedTags struct {
+	hashes bool
+}
+
+func seedUserData(t *testing.T, db *lemon.LemonDB, n int, tags seedTags) {
 	t.Helper()
 
 	type userData struct {
@@ -350,9 +316,24 @@ func seedUserData(t *testing.T, db *lemon.LemonDB, n int) {
 				Logins:   i,
 			}
 
-			if err := tx.Insert(fmt.Sprintf("user:%d", i), user); err != nil {
-				return err
+			if tags.hashes {
+				var taggers []lemon.Tagger
+				if i % 4 == 0 {
+					taggers = append(taggers, lemon.BoolTag("foo", i % 2 == 0))
+					taggers = append(taggers, lemon.BoolTag("bar", i % 2 != 0))
+					taggers = append(taggers, lemon.StrTag("baz", "abc123"))
+					taggers = append(taggers, lemon.StrTag("foobar", fmt.Sprintf("country_%d", i % 2)))
+				}
+
+				if err := tx.Insert(fmt.Sprintf("user:%d", i), user, taggers...); err != nil {
+					return err
+				}
+			} else {
+				if err := tx.Insert(fmt.Sprintf("user:%d", i), user); err != nil {
+					return err
+				}
 			}
+
 		}
 
 		return nil
@@ -365,7 +346,7 @@ func seedUserPets(t *testing.T, db *lemon.LemonDB, firstUserId, lastUserId, pets
 	t.Helper()
 
 	type petData struct {
-		Name   string `json:"name"`
+		Name   string `json:"Name"`
 		Age    int    `json:"age"`
 		Weight float64 `json:"weight"`
 		Kind   string `json:"kind"`
@@ -397,7 +378,7 @@ func seedProductData(t *testing.T, db *lemon.LemonDB, n int) {
 	t.Helper()
 
 	type productData struct {
-		Name     string  `json:"name"`
+		Name     string  `json:"Name"`
 		Buyers   []int   `json:"buyers"`
 		ID       int     `json:"id"`
 		OwnerID  int     `json:"ownerId"`
@@ -444,7 +425,10 @@ func AssertFileContents(t *testing.T, path string, expectedContents string) {
 		t.Errorf("file %s could not be opened\nbecause:  %v", path, err)
 	}
 
-	if string(b) != expectedContents {
+	expectedContents = strings.Trim(expectedContents, " \n")
+	str := strings.Trim(string(b), " \n")
+	if str != expectedContents {
+
 		t.Errorf("file %s contents\n%s\ndoes not match expected\n%s", path, string(b), expectedContents)
 	}
 
