@@ -34,10 +34,10 @@ func StrTag(name string, value string) Tagger {
 }
 
 type Tags struct {
-	Booleans []boolTag  `json:"b"`
-	FloatTag []floatTag `json:"f"`
-	IntTag   []intTag   `json:"i"`
-	Strings  []strTag   `json:"s"`
+	Booleans []boolTag
+	FloatTag []floatTag
+	IntTag   []intTag
+	Strings  []strTag
 }
 
 type TagIndex interface {
@@ -75,30 +75,9 @@ func (st *strTag) setPk(pk PK) {
 	st.pk = pk
 }
 
-func byBooleans(a, b interface{}) bool {
-	i1, i2 := a.(*boolTag), b.(*boolTag)
-	if i1.Value == false && i2.Value == true {
-		return true
-	}
-
-	if i1.Value == true && i2.Value == false {
-		return false
-	}
-
-	return i1.pk.Less(i2.pk) // todo: call PK comparison function
-}
-
 func byStrings(a, b interface{}) bool {
 	i1, i2 := a.(*strTag), b.(*strTag)
-	if i1.Value < i2.Value {
-		return true
-	}
-
-	if i1.Value > i2.Value {
-		return false
-	}
-
-	return i1.pk.Less(i2.pk) // todo: call PK comparison function
+	return i1.Value < i2.Value
 }
 
 
