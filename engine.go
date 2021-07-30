@@ -278,6 +278,31 @@ func (e *Engine) filterEntities(q *queryOptions) *filterEntries {
 	return ft
 }
 
+func (e *Engine) put(ent *entry, replace bool) error {
+	existing := e.pks.Set(ent)
+	if existing != nil {
+		if !replace {
+			_ = e.pks.Set(existing)
+			return errors.Wrapf(ErrKeyAlreadyExists, "key %s", ent.key.String())
+		}
+
+		existingEnt, ok := existing.(*entry)
+		if !ok {
+			panic(castPanic)
+		}
+
+		if existingEnt.tags != nil {
+			e.clearEntityTags(ent)
+		}
+	}
+
+	if ent.tags != nil {
+		e.setEntityTags(ent)
+	}
+
+	return nil
+}
+
 func filteringBTreeIterator(ctx context.Context, fe *filterEntries, ir entryReceiver) func(item interface{}) bool {
 	return func(item interface{}) bool {
 		if ctx.Err() != nil {

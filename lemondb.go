@@ -7,14 +7,14 @@ import (
 	"sync"
 )
 
-type LemonDB struct {
+type DB struct {
 	e *Engine
 	mu sync.RWMutex
 }
 
 type UserCallback func(tx *Tx) error
 
-func New(path string) (*LemonDB, error) {
+func New(path string) (*DB, error) {
 	e, err := newEngine(path)
 	if err != nil {
 		return nil, err
@@ -24,24 +24,43 @@ func New(path string) (*LemonDB, error) {
 		return nil, initErr
 	}
 
-	return &LemonDB{e: e}, nil
+	return &DB{e: e}, nil
 }
 
-func (db *LemonDB) Count() int {
+func (db *DB) Begin(ctx context.Context, readOnly bool) (*Tx, error) {
+	tx := Tx{
+		e: db.e,
+		ctx: ctx,
+		readOnly: readOnly,
+		buf: &bytes.Buffer{},
+	}
+
+	return &tx, nil
+}
+
+func (db *DB) Count() int {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
 	return db.e.Count()
 }
 
-func (db *LemonDB) MultiRead(ctx context.Context, cb UserCallback) error {
+func (db *DB) MultiRead(ctx context.Context, cb UserCallback) error {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
-	tx := Tx{e: db.e, ctx: ctx, readOnly: true, buf: &bytes.Buffer{}}
-	err := cb(&tx)
+	tx, err := db.Begin(ctx, true)
 	if err != nil {
-		return errors.Wrap(err, "db read failed")
+		return err
+	}
+
+	err = cb(tx)
+	if err != nil {
+		if rbErr := tx.Rollback(); rbErr != nil {
+			return errors.Wrap(err, rbErr.Error())
+		}
+
+		return errors.Wrap(err, "db read failed. rolled back")
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -51,15 +70,22 @@ func (db *LemonDB) MultiRead(ctx context.Context, cb UserCallback) error {
 	return nil
 }
 
-func (db *LemonDB) MultiUpdate(ctx context.Context, cb UserCallback) error {
+func (db *DB) MultiUpdate(ctx context.Context, cb UserCallback) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	tx := Tx{e: db.e, ctx: ctx, readOnly: false, buf: &bytes.Buffer{}}
-	err := cb(&tx)
+	tx, err := db.Begin(ctx, false)
 	if err != nil {
-		// todo: rollback
-		return errors.Wrap(err, "db write failed")
+		return err
+	}
+
+	err = cb(tx)
+	if err != nil {
+		if rbErr := tx.Rollback(); rbErr != nil {
+			return errors.Wrap(err, rbErr.Error())
+		}
+
+		return errors.Wrap(err, "db write failed. rolled back")
 	}
 
 	if err := tx.Commit(); err != nil {

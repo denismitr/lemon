@@ -215,7 +215,7 @@ func Test_Write(t *testing.T) {
 
 type removeTestSuite struct {
 	suite.Suite
-	db       *lemon.LemonDB
+	db       *lemon.DB
 	fileName string
 }
 
@@ -289,7 +289,7 @@ type seedTags struct {
 	hashes bool
 }
 
-func seedUserData(t *testing.T, db *lemon.LemonDB, n int, tags seedTags) {
+func seedUserData(t *testing.T, db *lemon.DB, n int, tags seedTags) {
 	t.Helper()
 
 	type userData struct {
@@ -342,7 +342,7 @@ func seedUserData(t *testing.T, db *lemon.LemonDB, n int, tags seedTags) {
 	}
 }
 
-func seedUserPets(t *testing.T, db *lemon.LemonDB, firstUserId, lastUserId, pets int) {
+func seedUserPets(t *testing.T, db *lemon.DB, firstUserId, lastUserId, pets int) {
 	t.Helper()
 
 	type petData struct {
@@ -374,7 +374,7 @@ func seedUserPets(t *testing.T, db *lemon.LemonDB, firstUserId, lastUserId, pets
 	}
 }
 
-func seedProductData(t *testing.T, db *lemon.LemonDB, n int) {
+func seedProductData(t *testing.T, db *lemon.DB, n int) {
 	t.Helper()
 
 	type productData struct {

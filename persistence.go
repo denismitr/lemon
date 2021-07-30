@@ -246,6 +246,10 @@ func (p *parser) resolveRespArrayFromLine(r *bufio.Reader) (int, error) {
 func (p *parser) resolveRespCommandCode(r *bufio.Reader) (commandCode, error) {
 	line, err := r.ReadBytes('\n')
 	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return invalidCode, io.ErrUnexpectedEOF
+		}
+
 		return invalidCode, err
 	}
 
@@ -376,6 +380,10 @@ func (p *parser) resolveRespBlobString(r *bufio.Reader) ([]byte, error) {
 	blob := make([]byte, blobLen + 2)
 	n, err := io.ReadFull(r, blob)
 	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil, io.ErrUnexpectedEOF
+		}
+
 		return nil, errors.Wrap(ErrCommandInvalid, err.Error())
 	}
 

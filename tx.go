@@ -8,6 +8,7 @@ import (
 
 var ErrKeyDoesNotExist = errors.New("key does not exist in DB")
 var ErrTxIsReadOnly = errors.New("transaction is read only")
+var ErrTxAlreadyClosed = errors.New("transaction already closed")
 
 type Tx struct {
 	readOnly bool
@@ -15,9 +16,14 @@ type Tx struct {
 	e *Engine
 	ctx context.Context
 	commands []serializer
+	modified []*entry
 }
 
 func (x *Tx) Commit() error {
+	if x.e == nil {
+		return ErrTxAlreadyClosed
+	}
+
 	if x.e.persistence != nil && x.commands != nil {
 		for _, cmd := range x.commands{
 			cmd.serialize(x.buf)
@@ -27,6 +33,20 @@ func (x *Tx) Commit() error {
 			return err
 		}
 	}
+
+	x.e = nil
+
+	return nil
+}
+
+func (x *Tx) Rollback() error {
+	for _, ent := range x.modified {
+		if err := x.e.put(ent, true); err != nil {
+			return err
+		}
+	}
+
+	x.e = nil
 
 	return nil
 }
