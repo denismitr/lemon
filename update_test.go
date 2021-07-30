@@ -22,10 +22,16 @@ func (wts *writeTestSuite) SetupSuite() {
 	wts.fixture = "./__fixtures__/write_db1.ldb"
 
 	// only init new database
-	_, err := lemon.New(wts.fixture)
+	_, closer, err := lemon.New(wts.fixture)
 	if err != nil {
 		wts.Require().NoError(err)
 	}
+
+	defer func() {
+		if err := closer(); err != nil {
+			wts.T().Errorf("ERROR: %v", err)
+		}
+	}()
 
 	assert.FileExists(wts.T(), wts.fixture)
 }
@@ -37,10 +43,16 @@ func (wts *writeTestSuite) TearDownSuite() {
 }
 
 func (wts *writeTestSuite) Test_WriteAndRead_InTwoTransactions() {
-	db, err := lemon.New(wts.fixture)
+	db, closer, err := lemon.New(wts.fixture)
 	if err != nil {
 		wts.Require().NoError(err)
 	}
+
+	defer func() {
+		if err := closer(); err != nil {
+			wts.T().Errorf("ERROR: %v", err)
+		}
+	}()
 
 	var result1 *lemon.Document
 	var result2 *lemon.Document
@@ -119,10 +131,16 @@ func (wts *writeTestSuite) Test_WriteAndRead_InTwoTransactions() {
 }
 
 func (wts *writeTestSuite) Test_ReplaceInsertedDocs() {
-	db, err := lemon.New(wts.fixture)
+	db, closer, err := lemon.New(wts.fixture)
 	if err != nil {
 		wts.Require().NoError(err)
 	}
+
+	defer func() {
+		if err := closer(); err != nil {
+			wts.T().Errorf("ERROR: %v", err)
+		}
+	}()
 
 	if txErr := db.MultiUpdate(context.Background(), func(tx *lemon.Tx) error {
 		if err := tx.Insert("item:77", lemon.D{
@@ -216,13 +234,16 @@ func Test_Write(t *testing.T) {
 type removeTestSuite struct {
 	suite.Suite
 	db       *lemon.DB
+	closer lemon.Closer
 	fileName string
 }
 
 func (rts *removeTestSuite) SetupTest() {
-	db, err := lemon.New("./__fixtures__/db3.ldb")
+	db, closer, err := lemon.New("./__fixtures__/db3.ldb")
 	rts.Require().NoError(err)
+
 	rts.db = db
+	rts.closer = closer
 
 	if err := db.MultiUpdate(context.Background(), func(tx *lemon.Tx) error {
 		if err := tx.Insert("item:8976", lemon.D{
@@ -257,6 +278,12 @@ func (rts *removeTestSuite) SetupTest() {
 }
 
 func (rts *removeTestSuite) TearDownTest() {
+	defer func() {
+		if err := rts.closer(); err != nil {
+			rts.T().Errorf("ERROR: %v", err)
+		}
+	}()
+
 	if err := os.Remove("./__fixtures__/db3.ldb"); err != nil {
 		rts.Require().NoError(err)
 	}

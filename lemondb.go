@@ -10,21 +10,35 @@ import (
 type DB struct {
 	e *Engine
 	mu sync.RWMutex
+	closed bool
 }
 
 type UserCallback func(tx *Tx) error
 
-func New(path string) (*DB, error) {
+type Closer func() error
+func NullCloser() error { return nil }
+
+func New(path string) (*DB, Closer, error) {
 	e, err := newEngine(path)
 	if err != nil {
-		return nil, err
+		return nil, NullCloser, err
 	}
 
-	if initErr := e.init(); initErr != nil {
-		return nil, initErr
+	db := DB{e: e}
+
+	return &db, db.close, nil
+}
+
+func (db *DB) close() error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	if err := db.e.close(); err != nil {
+		return err
 	}
 
-	return &DB{e: e}, nil
+	db.e = nil
+	db.closed = true
+	return nil
 }
 
 func (db *DB) Begin(ctx context.Context, readOnly bool) (*Tx, error) {

@@ -51,12 +51,23 @@ func newEngine(fullPath string) (*Engine, error) {
 		e.persistence = p
 	}
 
+	if initErr := e.init(); initErr != nil {
+		return nil, initErr
+	}
+
 	return e, nil
 }
 
 func (e *Engine) close() error {
+	defer func() {
+		e.pks = nil
+		e.boolTags = nil
+		e.strTags = nil
+		e.persistence = nil
+	}()
+
 	if e.persistence != nil {
-		return e.persistence.closer()
+		return e.persistence.close()
 	}
 
 	return nil
@@ -77,7 +88,7 @@ func (e *Engine) init() error {
 func (e *Engine) insert(ent *entry) error {
 	existing := e.pks.Set(ent)
 	if existing != nil {
-		return ErrKeyAlreadyExists
+		return errors.Wrapf(ErrKeyAlreadyExists, "key: %s", ent.key.String())
 	}
 
 	if ent.tags != nil {
@@ -86,10 +97,6 @@ func (e *Engine) insert(ent *entry) error {
 
 	return nil
 }
-
-//func (e *Engine) persist() error {
-//	return e.storage.persist()
-//}
 
 func (e *Engine) findByKey(key string) (*entry, error) {
 	found := e.pks.Get(&entry{key: newPK(key)})

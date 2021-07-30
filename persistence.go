@@ -8,6 +8,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"sync"
 
 	"os"
 )
@@ -36,15 +37,13 @@ const (
 )
 
 type persistence struct {
+	mu sync.RWMutex
 	strategy persistenceStrategy
 	parser *parser
 	f *os.File
-	closer fileCloser
 	flushes int
 	cursor int
 }
-
-type fileCloser func() error
 
 func newPersistence(filepath string, strategy persistenceStrategy) (*persistence, error) {
 	f, err := os.OpenFile(filepath, os.O_CREATE|os.O_RDWR, 0666)
@@ -54,9 +53,27 @@ func newPersistence(filepath string, strategy persistenceStrategy) (*persistence
 
 	return &persistence{
 		f: f,
-		closer: f.Close,
 		strategy: strategy,
 	}, nil
+}
+
+func (p *persistence) close() (err error) {
+	p.mu.Lock()
+	defer func() {
+		p.parser = nil
+		p.f = nil
+
+		p.mu.Unlock()
+	}()
+
+	err = p.f.Sync()
+	err = p.f.Close()
+
+	if err != nil {
+		err = errors.Wrap(err, "could not close file")
+	}
+
+	return
 }
 
 func (p *persistence) load(cb func(d deserializer) error) error {

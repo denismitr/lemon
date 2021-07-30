@@ -14,10 +14,16 @@ import (
 )
 
 func TestLemonDB_Read(t *testing.T) {
-	db, err := lemon.New("./__fixtures__/read_db1.ldb")
+	db, closer, err := lemon.New("./__fixtures__/read_db1.ldb")
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	defer func() {
+		if err := closer(); err != nil {
+			t.Errorf("ERROR: %v", err)
+		}
+	}()
 
 	//t.Run("seed", func(t *testing.T) {
 	//	if err := db.MultiUpdate(context.Background(), func(tx *lemon.Tx) error {
@@ -88,8 +94,14 @@ type findByTagsTestSuite struct {
 
 func (fts *findByTagsTestSuite) SetupSuite() {
 	fts.fixture = "./__fixtures__/find_by_tags_db1.ldb"
-	db, err := lemon.New(fts.fixture)
+	db, closer, err := lemon.New(fts.fixture)
 	fts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			fts.T().Errorf("ERROR: %v", err)
+		}
+	}()
 
 	seedUserData(fts.T(), db, 1_000, seedTags{hashes: true})
 	seedProductData(fts.T(), db, 1_000)
@@ -102,8 +114,14 @@ func (fts *findByTagsTestSuite) TearDownSuite() {
 }
 
 func (fts *findByTagsTestSuite) TestLemonDB_FindByBoolTag() {
-	db, err := lemon.New(fts.fixture)
+	db, closer, err := lemon.New(fts.fixture)
 	fts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			fts.T().Errorf("ERROR: %v", err)
+		}
+	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
 	defer cancel()
@@ -137,8 +155,14 @@ type findTestSuite struct {
 
 func (fts *findTestSuite) SetupSuite() {
 	fts.fixture = "./__fixtures__/find_db1.ldb"
-	db, err := lemon.New(fts.fixture)
+	db, closer, err := lemon.New(fts.fixture)
 	fts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			fts.T().Errorf("ERROR: %v", err)
+		}
+	}()
 
 	seedUserData(fts.T(), db, 1_000, seedTags{})
 	seedProductData(fts.T(), db, 1_000)
@@ -151,8 +175,14 @@ func (fts *findTestSuite) TearDownSuite() {
 }
 
 func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Descend() {
-	db, err := lemon.New(fts.fixture)
+	db, closer, err := lemon.New(fts.fixture)
 	fts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			fts.T().Errorf("ERROR: %v", err)
+		}
+	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
 	defer cancel()
@@ -179,8 +209,14 @@ func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Descend() {
 }
 
 func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Ascend() {
-	db, err := lemon.New(fts.fixture)
+	db, closer, err := lemon.New(fts.fixture)
 	fts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			fts.T().Errorf("ERROR: %v", err)
+		}
+	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
 	defer cancel()
@@ -207,8 +243,14 @@ func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Ascend() {
 }
 
 func (fts *findTestSuite) TestLemonDB_FindAllUsers_Ascend() {
-	db, err := lemon.New(fts.fixture)
+	db, closer, err := lemon.New(fts.fixture)
 	fts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			fts.T().Errorf("ERROR: %v", err)
+		}
+	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
 	defer cancel()
@@ -236,8 +278,14 @@ func (fts *findTestSuite) TestLemonDB_FindAllUsers_Ascend() {
 }
 
 func (fts *findTestSuite) TestLemonDB_FindAllUsers_Descend() {
-	db, err := lemon.New(fts.fixture)
+	db, closer, err := lemon.New(fts.fixture)
 	fts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			fts.T().Errorf("ERROR: %v", err)
+		}
+	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
 	defer cancel()
@@ -267,8 +315,14 @@ func (fts *findTestSuite) TestLemonDB_FindAllUsers_Descend() {
 }
 
 func (fts *findTestSuite) TestLemonDB_FindAllDocs_Descend() {
-	db, err := lemon.New(fts.fixture)
+	db, closer, err := lemon.New(fts.fixture)
 	fts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			fts.T().Errorf("ERROR: %v", err)
+		}
+	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
 	defer cancel()
@@ -303,8 +357,14 @@ func (fts *findTestSuite) TestLemonDB_FindAllDocs_Descend() {
 }
 
 func (fts *findTestSuite) TestLemonDB_FindAllDocs_Ascend() {
-	db, err := lemon.New(fts.fixture)
+	db, closer, err := lemon.New(fts.fixture)
 	fts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			fts.T().Errorf("ERROR: %v", err)
+		}
+	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
 	defer cancel()
@@ -345,8 +405,14 @@ type scanTestSuite struct {
 
 func (sts *scanTestSuite) SetupSuite() {
 	sts.fixture = "./__fixtures__/scan_db1.ldb"
-	db, err := lemon.New(sts.fixture)
+	db, closer, err := lemon.New(sts.fixture)
 	sts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			sts.T().Errorf("ERROR: %v", err)
+		}
+	}()
 
 	seedUserData(sts.T(), db, 1_000, seedTags{})
 	seedProductData(sts.T(), db, 1_000)
@@ -361,8 +427,14 @@ func (sts *scanTestSuite) TearDownSuite() {
 }
 
 func (sts *scanTestSuite) Test_ScanUserPets() {
-	db, err := lemon.New(sts.fixture)
+	db, closer, err := lemon.New(sts.fixture)
 	sts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			sts.T().Errorf("ERROR: %v", err)
+		}
+	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
 	defer cancel()
@@ -391,8 +463,14 @@ func (sts *scanTestSuite) Test_ScanUserPets() {
 }
 
 func (sts *scanTestSuite) Test_ScanUserPetsWithManualLimit() {
-	db, err := lemon.New(sts.fixture)
+	db, closer, err := lemon.New(sts.fixture)
 	sts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			sts.T().Errorf("ERROR: %v", err)
+		}
+	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
 	defer cancel()

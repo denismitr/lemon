@@ -12,11 +12,12 @@ var ErrTxAlreadyClosed = errors.New("transaction already closed")
 
 type Tx struct {
 	readOnly bool
-	buf *bytes.Buffer
-	e *Engine
-	ctx context.Context
+	buf      *bytes.Buffer
+	e        *Engine
+	ctx      context.Context
 	commands []serializer
 	modified []*entry
+	added    []*entry
 }
 
 func (x *Tx) Commit() error {
@@ -25,7 +26,7 @@ func (x *Tx) Commit() error {
 	}
 
 	if x.e.persistence != nil && x.commands != nil {
-		for _, cmd := range x.commands{
+		for _, cmd := range x.commands {
 			cmd.serialize(x.buf)
 		}
 
@@ -42,6 +43,12 @@ func (x *Tx) Commit() error {
 func (x *Tx) Rollback() error {
 	for _, ent := range x.modified {
 		if err := x.e.put(ent, true); err != nil {
+			return err
+		}
+	}
+
+	for _, ent := range x.added {
+		if err := x.e.remove(ent.key); err != nil {
 			return err
 		}
 	}
@@ -94,6 +101,7 @@ func (x *Tx) Insert(key string, data interface{}, taggers ...Tagger) error {
 	}
 
 	x.commands = append(x.commands, ent)
+	x.added = append(x.added, ent)
 
 	return nil
 }
@@ -115,17 +123,27 @@ func (x *Tx) InsertOrReplace(key string, data interface{}, taggers ...Tagger) er
 
 	ent := newEntry(key, v, &ts)
 
-	if err := x.e.insert(ent); err != nil {
-		if errors.Is(err, ErrKeyAlreadyExists) {
-			if updateErr := x.e.update(ent); updateErr != nil {
-				return updateErr
-			} else {
-				return nil
-			}
-		}
-
+	existing, err := x.e.findByKey(key)
+	if err != nil && !errors.Is(err, ErrKeyDoesNotExist) {
 		return err
 	}
+
+	if existing != nil {
+		if updateErr := x.e.update(ent); updateErr != nil {
+			return updateErr
+		}
+
+		x.commands = append(x.commands, &deleteCmd{key: existing.key})
+		x.modified = append(x.modified, existing)
+	} else {
+		if insertErr := x.e.insert(ent); insertErr != nil {
+			return insertErr
+		}
+
+		x.added = append(x.added, ent)
+	}
+
+	x.commands = append(x.commands, ent)
 
 	return nil
 }
@@ -211,12 +229,18 @@ func (x *Tx) Remove(keys ...string) error {
 	}
 
 	for _, k := range keys {
-		pk := newPK(k)
-		if err := x.e.remove(pk); err != nil {
-			x.commands = append(x.commands, &deleteCmd{pk})
-		} else {
+		found, err := x.e.findByKey(k)
+		if err != nil {
 			return err
 		}
+
+
+		if err := x.e.remove(found.key); err != nil {
+			return err
+		}
+
+		x.modified = append(x.modified, found)
+		x.commands = append(x.commands, &deleteCmd{found.key})
 	}
 
 	return nil
