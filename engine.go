@@ -22,11 +22,23 @@ type (
 		upperBoundPK string,
 		ir entryReceiver,
 		fo *filterEntries,
+		patters []string,
 	) error
 
-	prefixScanner func(ctx context.Context, prefix string, ir entryReceiver, fo *filterEntries) error
+	prefixScanner func(
+		ctx context.Context,
+		prefix string,
+		ir entryReceiver,
+		fo *filterEntries,
+		patters []string,
+	) error
 
-	scanner func(ctx context.Context, ir entryReceiver, fo *filterEntries) error
+	scanner func(
+		ctx context.Context,
+		ir entryReceiver,
+		fo *filterEntries,
+		patters []string,
+	) error
 )
 
 type Engine struct {
@@ -192,9 +204,10 @@ func (e *Engine) scanBetweenDescend(
 	to string,
 	ir entryReceiver,
 	fe *filterEntries,
+	patterns []string,
 ) (err error) {
 	// Descend required a reverse order of `from` and `to`
-	descendRange(e.pks, &entry{key: newPK(from)}, &entry{key: newPK(to)}, filteringBTreeIterator(ctx, fe, ir))
+	descendRange(e.pks, &entry{key: newPK(from)}, &entry{key: newPK(to)}, filteringBTreeIterator(ctx, fe, patterns, ir))
 	return
 }
 
@@ -204,8 +217,9 @@ func (e *Engine) scanBetweenAscend(
 	to string,
 	ir entryReceiver,
 	fe *filterEntries,
+	patterns []string,
 ) (err error) {
-	ascendRange(e.pks, &entry{key: newPK(from)}, &entry{key: newPK(to)}, filteringBTreeIterator(ctx, fe, ir))
+	ascendRange(e.pks, &entry{key: newPK(from)}, &entry{key: newPK(to)}, filteringBTreeIterator(ctx, fe, patterns, ir))
 
 	return
 }
@@ -215,8 +229,9 @@ func (e *Engine) scanPrefixAscend(
 	prefix string,
 	ir entryReceiver,
 	fe *filterEntries,
+	patterns []string,
 ) (err error) {
-	e.pks.Ascend(&entry{key: newPK(prefix)}, filteringBTreeIterator(ctx, fe, ir))
+	e.pks.Ascend(&entry{key: newPK(prefix)}, filteringBTreeIterator(ctx, fe, patterns, ir))
 
 	return
 }
@@ -226,8 +241,9 @@ func (e *Engine) scanPrefixDescend(
 	prefix string,
 	ir entryReceiver,
 	fe *filterEntries,
+	patterns []string,
 ) (err error) {
-	descendGreaterThan(e.pks, &entry{key: newPK(prefix)}, filteringBTreeIterator(ctx, fe, ir))
+	descendGreaterThan(e.pks, &entry{key: newPK(prefix)}, filteringBTreeIterator(ctx, fe, patterns, ir))
 	return
 }
 
@@ -235,8 +251,9 @@ func (e *Engine) scanAscend(
 	ctx context.Context,
 	ir entryReceiver,
 	fe *filterEntries,
+	patterns []string,
 ) (err error) {
-	e.pks.Ascend(nil, filteringBTreeIterator(ctx, fe, ir))
+	e.pks.Ascend(nil, filteringBTreeIterator(ctx, fe, patterns, ir))
 	return
 }
 
@@ -244,8 +261,9 @@ func (e *Engine) scanDescend(
 	ctx context.Context,
 	ir entryReceiver,
 	fe *filterEntries,
+	patterns []string,
 ) (err error) {
-	e.pks.Descend(nil, filteringBTreeIterator(ctx, fe, ir))
+	e.pks.Descend(nil, filteringBTreeIterator(ctx, fe, patterns, ir))
 	return
 }
 
@@ -310,7 +328,12 @@ func (e *Engine) put(ent *entry, replace bool) error {
 	return nil
 }
 
-func filteringBTreeIterator(ctx context.Context, fe *filterEntries, ir entryReceiver) func(item interface{}) bool {
+func filteringBTreeIterator(
+	ctx context.Context,
+	fe *filterEntries,
+	patterns []string,
+	ir entryReceiver,
+) func(item interface{}) bool {
 	return func(item interface{}) bool {
 		if ctx.Err() != nil {
 			return false
@@ -321,7 +344,7 @@ func filteringBTreeIterator(ctx context.Context, fe *filterEntries, ir entryRece
 			panic(castPanic)
 		}
 
-		if fe != nil && !fe.exists(ent) {
+		if fe != nil && (!fe.exists(ent) || !ent.key.Match(patterns)) {
 			return true
 		}
 

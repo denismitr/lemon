@@ -189,7 +189,7 @@ func (x *Tx) applyScanner(ctx context.Context, q *queryOptions, ir entryReceiver
 			sc = x.e.scanBetweenDescend
 		}
 
-		if err := sc(ctx, q.keyRange.From, q.keyRange.To, ir, fe); err != nil {
+		if err := sc(ctx, q.keyRange.From, q.keyRange.To, ir, fe, q.patterns); err != nil {
 			return err
 		}
 
@@ -202,7 +202,7 @@ func (x *Tx) applyScanner(ctx context.Context, q *queryOptions, ir entryReceiver
 			sc = x.e.scanPrefixDescend
 		}
 
-		if err := sc(ctx, q.prefix, ir, fe); err != nil {
+		if err := sc(ctx, q.prefix, ir, fe, q.patterns); err != nil {
 			return err
 		}
 
@@ -215,7 +215,7 @@ func (x *Tx) applyScanner(ctx context.Context, q *queryOptions, ir entryReceiver
 			sc = x.e.scanDescend
 		}
 
-		if err := sc(ctx, ir, fe); err != nil {
+		if err := sc(ctx, ir, fe, q.patterns); err != nil {
 			return err
 		}
 
