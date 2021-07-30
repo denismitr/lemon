@@ -180,47 +180,33 @@ func (x *Tx) applyScanner(ctx context.Context, q *queryOptions, ir entryReceiver
 	}
 
 	fe := x.e.filterEntities(q)
+	var sc scanner
 
 	if q.keyRange != nil {
-		var sc rangeScanner
 		if q.order == Ascend {
 			sc = x.e.scanBetweenAscend
 		} else {
 			sc = x.e.scanBetweenDescend
 		}
-
-		if err := sc(ctx, q.keyRange.From, q.keyRange.To, ir, fe, q.patterns); err != nil {
-			return err
-		}
-
-		return nil
 	} else if q.prefix != "" {
-		var sc prefixScanner
 		if q.order == Ascend {
 			sc = x.e.scanPrefixAscend
 		} else {
 			sc = x.e.scanPrefixDescend
 		}
-
-		if err := sc(ctx, q.prefix, ir, fe, q.patterns); err != nil {
-			return err
-		}
-
-		return nil
 	} else {
-		var sc scanner
 		if q.order == Ascend {
 			sc = x.e.scanAscend
 		} else {
 			sc = x.e.scanDescend
 		}
-
-		if err := sc(ctx, ir, fe, q.patterns); err != nil {
-			return err
-		}
-
-		return nil
 	}
+
+	if err := sc(ctx, q, fe, ir); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (x *Tx) Remove(keys ...string) error {

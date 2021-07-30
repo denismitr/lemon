@@ -16,28 +16,11 @@ const castPanic = "how could primary keys item not be of type *entry"
 type (
 	entryReceiver func(ent *entry) bool
 
-	rangeScanner func(
-		ctx context.Context,
-		lowerBoundPK string,
-		upperBoundPK string,
-		ir entryReceiver,
-		fo *filterEntries,
-		patters []string,
-	) error
-
-	prefixScanner func(
-		ctx context.Context,
-		prefix string,
-		ir entryReceiver,
-		fo *filterEntries,
-		patters []string,
-	) error
-
 	scanner func(
 		ctx context.Context,
+		q *queryOptions,
+		fe *filterEntries,
 		ir entryReceiver,
-		fo *filterEntries,
-		patters []string,
 	) error
 )
 
@@ -200,70 +183,75 @@ func (e *Engine) Count() int {
 
 func (e *Engine) scanBetweenDescend(
 	ctx context.Context,
-	from string,
-	to string,
-	ir entryReceiver,
+	q *queryOptions,
 	fe *filterEntries,
-	patterns []string,
+	ir entryReceiver,
 ) (err error) {
 	// Descend required a reverse order of `from` and `to`
-	descendRange(e.pks, &entry{key: newPK(from)}, &entry{key: newPK(to)}, filteringBTreeIterator(ctx, fe, patterns, ir))
+	descendRange(
+		e.pks,
+		&entry{key: newPK(q.keyRange.From)},
+		&entry{key: newPK(q.keyRange.To)},
+		filteringBTreeIterator(ctx, fe, q, ir),
+	)
+
 	return
 }
 
 func (e *Engine) scanBetweenAscend(
 	ctx context.Context,
-	from string,
-	to string,
-	ir entryReceiver,
+	q *queryOptions,
 	fe *filterEntries,
-	patterns []string,
+	ir entryReceiver,
 ) (err error) {
-	ascendRange(e.pks, &entry{key: newPK(from)}, &entry{key: newPK(to)}, filteringBTreeIterator(ctx, fe, patterns, ir))
+	ascendRange(
+		e.pks,
+		&entry{key: newPK(q.keyRange.From)},
+		&entry{key: newPK(q.keyRange.To)},
+		filteringBTreeIterator(ctx, fe, q, ir),
+	)
 
 	return
 }
 
 func (e *Engine) scanPrefixAscend(
 	ctx context.Context,
-	prefix string,
-	ir entryReceiver,
+	q *queryOptions,
 	fe *filterEntries,
-	patterns []string,
+	ir entryReceiver,
 ) (err error) {
-	e.pks.Ascend(&entry{key: newPK(prefix)}, filteringBTreeIterator(ctx, fe, patterns, ir))
+	e.pks.Ascend(&entry{key: newPK(q.prefix)}, filteringBTreeIterator(ctx, fe, q, ir))
 
 	return
 }
 
 func (e *Engine) scanPrefixDescend(
 	ctx context.Context,
-	prefix string,
-	ir entryReceiver,
+	q *queryOptions,
 	fe *filterEntries,
-	patterns []string,
+	ir entryReceiver,
 ) (err error) {
-	descendGreaterThan(e.pks, &entry{key: newPK(prefix)}, filteringBTreeIterator(ctx, fe, patterns, ir))
+	descendGreaterThan(e.pks, &entry{key: newPK(q.prefix)}, filteringBTreeIterator(ctx, fe, q, ir))
 	return
 }
 
 func (e *Engine) scanAscend(
 	ctx context.Context,
-	ir entryReceiver,
+	q *queryOptions,
 	fe *filterEntries,
-	patterns []string,
+	ir entryReceiver,
 ) (err error) {
-	e.pks.Ascend(nil, filteringBTreeIterator(ctx, fe, patterns, ir))
+	e.pks.Ascend(nil, filteringBTreeIterator(ctx, fe, q, ir))
 	return
 }
 
 func (e *Engine) scanDescend(
 	ctx context.Context,
-	ir entryReceiver,
+	q *queryOptions,
 	fe *filterEntries,
-	patterns []string,
+	ir entryReceiver,
 ) (err error) {
-	e.pks.Descend(nil, filteringBTreeIterator(ctx, fe, patterns, ir))
+	e.pks.Descend(nil, filteringBTreeIterator(ctx, fe, q, ir))
 	return
 }
 
@@ -331,7 +319,7 @@ func (e *Engine) put(ent *entry, replace bool) error {
 func filteringBTreeIterator(
 	ctx context.Context,
 	fe *filterEntries,
-	patterns []string,
+	q *queryOptions,
 	ir entryReceiver,
 ) func(item interface{}) bool {
 	return func(item interface{}) bool {
@@ -344,7 +332,7 @@ func filteringBTreeIterator(
 			panic(castPanic)
 		}
 
-		if fe != nil && (!fe.exists(ent) || !ent.key.Match(patterns)) {
+		if fe != nil && (!fe.exists(ent) || !ent.key.Match(q.patterns)) {
 			return true
 		}
 
