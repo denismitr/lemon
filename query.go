@@ -66,11 +66,13 @@ func Q() *queryOptions {
 
 type filterEntries struct {
 	sync.RWMutex
+	patterns []string
 	entries map[string]*entry
 }
 
-func newFilterEntries() *filterEntries {
+func newFilterEntries(patterns []string) *filterEntries {
 	return &filterEntries{
+		patterns: patterns,
 		entries: make(map[string]*entry),
 	}
 }
@@ -78,6 +80,10 @@ func newFilterEntries() *filterEntries {
 func (fe *filterEntries) add(ent *entry) {
 	fe.Lock()
 	defer fe.Unlock()
+
+	if !ent.key.Match(fe.patterns) {
+		return
+	}
 
 	if fe.entries[ent.key.String()] == nil {
 		fe.entries[ent.key.String()] = ent

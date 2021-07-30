@@ -242,14 +242,15 @@ func (e *Engine) scanDescend(
 	return
 }
 
-func (e *Engine) filterEntities(qTags *queryTags) *filterEntries {
-	if qTags == nil {
+func (e *Engine) filterEntities(q *queryOptions) *filterEntries {
+	if q == nil || q.tags == nil {
 		return nil
 	}
 
-	ft := newFilterEntries()
-	if qTags.boolTags != nil && e.boolTags != nil {
-		for _, bt := range qTags.boolTags {
+	ft := newFilterEntries(q.patterns)
+
+	if q.tags.boolTags != nil && e.boolTags != nil {
+		for _, bt := range q.tags.boolTags {
 			entries := e.boolTags[bt.Name][bt.Value]
 			if entries == nil {
 				continue
@@ -261,8 +262,8 @@ func (e *Engine) filterEntities(qTags *queryTags) *filterEntries {
 		}
 	}
 
-	if qTags.strTags != nil && e.strTags != nil {
-		for _, st := range qTags.strTags {
+	if q.tags.strTags != nil && e.strTags != nil {
+		for _, st := range q.tags.strTags {
 			entries := e.strTags[st.Name][st.Value]
 			if entries == nil {
 				continue

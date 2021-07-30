@@ -1,9 +1,5 @@
 package lemon
 
-import (
-	"github.com/google/btree"
-)
-
 type TagType string
 
 const (
@@ -40,39 +36,24 @@ type Tags struct {
 	Strings  []strTag
 }
 
-type TagIndex interface {
-	btree.Item
-	setPk(int)
-}
-
 type boolTag struct {
 	Name   string
 	Value  bool
-	pk PK
-}
-
-func (bt *boolTag) setPk(pk PK) {
-	bt.pk = pk
 }
 
 type floatTag struct {
-	Key   string  `json:"k"`
-	Value float64 `json:"v"`
+	Key   string
+	Value float64
 }
 
 type intTag struct {
-	Key   string `json:"k"`
-	Value int    `json:"v"`
+	Key   string
+	Value int
 }
 
 type strTag struct {
 	Name  string
 	Value string
-	pk PK
-}
-
-func (st *strTag) setPk(pk PK) {
-	st.pk = pk
 }
 
 func byStrings(a, b interface{}) bool {

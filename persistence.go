@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/pkg/errors"
 	"io"
-	"log"
 	"strconv"
 	"strings"
 
@@ -18,6 +17,7 @@ var ErrSourceFileReadFailed = errors.New("source file read failed")
 var ErrCommandInvalid = errors.New("command invalid")
 var ErrUnexpectedEof = errors.New("unexpected end of file")
 var ErrParseFailed = errors.New("commands parse error")
+var ErrStorageFailed = errors.New("storage error")
 
 type persistenceStrategy string
 
@@ -41,6 +41,7 @@ type persistence struct {
 	f *os.File
 	closer fileCloser
 	flushes int
+	cursor int
 }
 
 type fileCloser func() error
@@ -70,14 +71,21 @@ func (p *persistence) load(cb func(d deserializer) error) error {
 
 	n, err := prs.parse(r, cb)
 	if err != nil {
-		log.Printf("should truncate %d", n)
-		// todo: maybe only on EOF
-		//if tErr := p.f.Truncate(int64(n)); tErr != nil {
-		//	return errors.Wrapf(tErr, "could not truncate file after pare error")
-		//}
+		if errors.Is(err, io.ErrUnexpectedEOF) {
+			if tErr := p.f.Truncate(int64(n)); tErr != nil {
+				return errors.Wrapf(tErr, "could not truncate file after pare error")
+			}
+		}
 
 		return err
 	}
+
+	pos, err := p.f.Seek(int64(n), 0)
+	if err != nil {
+		return errors.Wrapf(ErrStorageFailed, "could not move the cursor: %s", err.Error())
+	}
+
+	p.cursor = int(pos)
 
 	return nil
 }

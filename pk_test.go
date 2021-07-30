@@ -2,6 +2,7 @@ package lemon
 
 import (
 	"github.com/stretchr/testify/assert"
+	"strings"
 	"testing"
 )
 
@@ -34,6 +35,27 @@ func TestIndex_Less_2segments(t *testing.T) {
 			idxB := newPK(tc.key2)
 
 			assert.Equal(t, tc.less, idxA.Less(idxB))
+		})
+	}
+}
+
+func TestPK_Match(t *testing.T) {
+	tt := []struct {
+		key string
+		pattern string
+		exp bool
+	}{
+		{"user:11", "user:*", true},
+		{"product:kitchen", "product:*", true},
+		{"foo:bar", "*", true},
+		{"foo:bar", "foo", false},
+		{"foo:bar", "user:123:*", false},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.pattern, func(t *testing.T) {
+			pk := newPK(tc.key)
+			pk.Match(strings.Split(tc.pattern, ":"))
 		})
 	}
 }

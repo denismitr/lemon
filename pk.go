@@ -17,6 +17,24 @@ func newPK(k string) PK {
 	}
 }
 
+func (pk *PK) Match(patterns []string) bool {
+	if len(patterns) == 0 || patterns[0] == "*" {
+		return true
+	}
+
+	for i := 0; i < len(patterns); i++ {
+		if i > len(pk.segments) - 1 {
+			return patterns[i] == "*"
+		}
+
+		if patterns[i] != pk.segments[i] && patterns[i] != "*" {
+			return false
+		}
+	}
+
+	return true
+}
+
 func (pk *PK) Equal(other *PK) bool {
 	return pk.key == other.key
 }

@@ -141,7 +141,7 @@ func (x *Tx) applyScanner(ctx context.Context, q *queryOptions, ir entryReceiver
 		q = Q()
 	}
 
-	fe := x.e.filterEntities(q.tags)
+	fe := x.e.filterEntities(q)
 
 	if q.keyRange != nil {
 		var sc rangeScanner
