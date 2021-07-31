@@ -1,44 +1,45 @@
 package lemon
 
-type TagType string
-
-const (
-	BoolTagType TagType = "bool"
-	FloatTagType TagType = "float"
-	StrTagType TagType = "str"
-	IntTagType TagType = "int"
-)
-
 type Tagger func(t *Tags)
-
-type Tag interface {
-	Name() string
-	Type() TagType
-	String() string
-}
 
 func BoolTag(name string, value bool) Tagger {
 	return func(t *Tags) {
-		t.Booleans = append(t.Booleans, boolTag{Name: name, Value: value})
+		t.booleans = append(t.booleans, bTag{name: name, value: value})
 	}
 }
 
 func StrTag(name string, value string) Tagger {
 	return func(t *Tags) {
-		t.Strings = append(t.Strings, strTag{Name: name, Value: value})
+		t.strings = append(t.strings, strTag{name: name, value: value})
 	}
 }
 
 type Tags struct {
-	Booleans []boolTag
-	FloatTag []floatTag
-	IntTag   []intTag
-	Strings  []strTag
+	booleans []bTag
+	floats   []floatTag
+	integers []intTag
+	strings  []strTag
 }
 
-type boolTag struct {
-	Name   string
-	Value  bool
+func (t *Tags) Booleans() map[string]bool {
+	result := make(map[string]bool, len(t.booleans))
+	for _, bt := range t.booleans {
+		result[bt.name] = bt.value
+	}
+	return result
+}
+
+func (t *Tags) Strings() map[string]string {
+	result := make(map[string]string, len(t.strings))
+	for _, bt := range t.strings {
+		result[bt.name] = bt.value
+	}
+	return result
+}
+
+type bTag struct {
+	name  string
+	value bool
 }
 
 type floatTag struct {
@@ -52,13 +53,13 @@ type intTag struct {
 }
 
 type strTag struct {
-	Name  string
-	Value string
+	name  string
+	value string
 }
 
 func byStrings(a, b interface{}) bool {
 	i1, i2 := a.(*strTag), b.(*strTag)
-	return i1.Value < i2.Value
+	return i1.value < i2.value
 }
 
 

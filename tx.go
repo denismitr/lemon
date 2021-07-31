@@ -13,7 +13,7 @@ var ErrTxAlreadyClosed = errors.New("transaction already closed")
 type Tx struct {
 	readOnly bool
 	buf      *bytes.Buffer
-	e        *Engine
+	e        *engine
 	ctx      context.Context
 	commands []serializer
 	modified []*entry

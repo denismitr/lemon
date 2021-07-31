@@ -24,15 +24,15 @@ type (
 	) error
 )
 
-type Engine struct {
+type engine struct {
 	persistence *persistence
 	pks         *btr.BTree
 	boolTags    boolIndex
 	strTags     stringIndex
 }
 
-func newEngine(fullPath string) (*Engine, error) {
-	e := &Engine{
+func newEngine(fullPath string) (*engine, error) {
+	e := &engine{
 		pks:      btr.New(byPrimaryKeys),
 		boolTags: newBoolIndex(),
 		strTags:  newStringIndex(),
@@ -53,7 +53,7 @@ func newEngine(fullPath string) (*Engine, error) {
 	return e, nil
 }
 
-func (e *Engine) close() error {
+func (e *engine) close() error {
 	defer func() {
 		e.pks = nil
 		e.boolTags = nil
@@ -68,7 +68,7 @@ func (e *Engine) close() error {
 	return nil
 }
 
-func (e *Engine) init() error {
+func (e *engine) init() error {
 	if e.persistence != nil {
 		if err := e.persistence.load(func(d deserializer) error {
 			return d.deserialize(e)
@@ -80,7 +80,7 @@ func (e *Engine) init() error {
 	return nil
 }
 
-func (e *Engine) insert(ent *entry) error {
+func (e *engine) insert(ent *entry) error {
 	existing := e.pks.Set(ent)
 	if existing != nil {
 		return errors.Wrapf(ErrKeyAlreadyExists, "key: %s", ent.key.String())
@@ -93,7 +93,7 @@ func (e *Engine) insert(ent *entry) error {
 	return nil
 }
 
-func (e *Engine) findByKey(key string) (*entry, error) {
+func (e *engine) findByKey(key string) (*entry, error) {
 	found := e.pks.Get(&entry{key: newPK(key)})
 	if found == nil {
 		return nil, errors.Wrapf(ErrDocumentNotFound, "key %s does not exist in database", key)
@@ -107,7 +107,7 @@ func (e *Engine) findByKey(key string) (*entry, error) {
 	return ent, nil
 }
 
-func (e *Engine) findByKeys(pks []string, ir entryReceiver) error {
+func (e *engine) findByKeys(pks []string, ir entryReceiver) error {
 	for _, k := range pks {
 		found := e.pks.Get(newPK(k))
 		if found == nil {
@@ -124,7 +124,7 @@ func (e *Engine) findByKeys(pks []string, ir entryReceiver) error {
 	return nil
 }
 
-func (e *Engine) remove(key PK) error {
+func (e *engine) remove(key PK) error {
 	ent := e.pks.Get(&entry{key: key})
 	if ent == nil {
 		return errors.Wrapf(ErrDocumentNotFound, "key %s does not exist in DB", key.String())
@@ -135,7 +135,7 @@ func (e *Engine) remove(key PK) error {
 	return nil
 }
 
-func (e *Engine) update(ent *entry) error {
+func (e *engine) update(ent *entry) error {
 	existing := e.pks.Set(ent)
 	if existing == nil {
 		return errors.Wrapf(ErrDocumentNotFound, "could not update non existing document with key %s", ent.key.String())
@@ -157,31 +157,31 @@ func (e *Engine) update(ent *entry) error {
 	return nil
 }
 
-func (e *Engine) setEntityTags(ent *entry) {
-	for _, bt := range ent.tags.Booleans {
-		e.boolTags.add(bt.Name, bt.Value, ent)
+func (e *engine) setEntityTags(ent *entry) {
+	for _, bt := range ent.tags.booleans {
+		e.boolTags.add(bt.name, bt.value, ent)
 	}
 
-	for _, st := range ent.tags.Strings {
-		e.strTags.add(st.Name, st.Value, ent)
-	}
-}
-
-func (e *Engine) clearEntityTags(ent *entry) {
-	for _, bt := range ent.tags.Booleans {
-		e.boolTags.removeEntryByTag(bt.Name, bt.Value, ent)
-	}
-
-	for _, st := range ent.tags.Strings {
-		e.strTags.removeEntryByTag(st.Name, st.Value, ent)
+	for _, st := range ent.tags.strings {
+		e.strTags.add(st.name, st.value, ent)
 	}
 }
 
-func (e *Engine) Count() int {
+func (e *engine) clearEntityTags(ent *entry) {
+	for _, bt := range ent.tags.booleans {
+		e.boolTags.removeEntryByTag(bt.name, bt.value, ent)
+	}
+
+	for _, st := range ent.tags.strings {
+		e.strTags.removeEntryByTag(st.name, st.value, ent)
+	}
+}
+
+func (e *engine) Count() int {
 	return e.pks.Len()
 }
 
-func (e *Engine) scanBetweenDescend(
+func (e *engine) scanBetweenDescend(
 	ctx context.Context,
 	q *queryOptions,
 	fe *filterEntries,
@@ -198,7 +198,7 @@ func (e *Engine) scanBetweenDescend(
 	return
 }
 
-func (e *Engine) scanBetweenAscend(
+func (e *engine) scanBetweenAscend(
 	ctx context.Context,
 	q *queryOptions,
 	fe *filterEntries,
@@ -214,7 +214,7 @@ func (e *Engine) scanBetweenAscend(
 	return
 }
 
-func (e *Engine) scanPrefixAscend(
+func (e *engine) scanPrefixAscend(
 	ctx context.Context,
 	q *queryOptions,
 	fe *filterEntries,
@@ -225,7 +225,7 @@ func (e *Engine) scanPrefixAscend(
 	return
 }
 
-func (e *Engine) scanPrefixDescend(
+func (e *engine) scanPrefixDescend(
 	ctx context.Context,
 	q *queryOptions,
 	fe *filterEntries,
@@ -235,7 +235,7 @@ func (e *Engine) scanPrefixDescend(
 	return
 }
 
-func (e *Engine) scanAscend(
+func (e *engine) scanAscend(
 	ctx context.Context,
 	q *queryOptions,
 	fe *filterEntries,
@@ -245,7 +245,7 @@ func (e *Engine) scanAscend(
 	return
 }
 
-func (e *Engine) scanDescend(
+func (e *engine) scanDescend(
 	ctx context.Context,
 	q *queryOptions,
 	fe *filterEntries,
@@ -255,7 +255,7 @@ func (e *Engine) scanDescend(
 	return
 }
 
-func (e *Engine) filterEntities(q *queryOptions) *filterEntries {
+func (e *engine) filterEntities(q *queryOptions) *filterEntries {
 	if q == nil || q.tags == nil {
 		return nil
 	}
@@ -264,7 +264,7 @@ func (e *Engine) filterEntities(q *queryOptions) *filterEntries {
 
 	if q.tags.boolTags != nil && e.boolTags != nil {
 		for _, bt := range q.tags.boolTags {
-			entries := e.boolTags[bt.Name][bt.Value]
+			entries := e.boolTags[bt.name][bt.value]
 			if entries == nil {
 				continue
 			}
@@ -277,7 +277,7 @@ func (e *Engine) filterEntities(q *queryOptions) *filterEntries {
 
 	if q.tags.strTags != nil && e.strTags != nil {
 		for _, st := range q.tags.strTags {
-			entries := e.strTags[st.Name][st.Value]
+			entries := e.strTags[st.name][st.value]
 			if entries == nil {
 				continue
 			}
@@ -291,7 +291,7 @@ func (e *Engine) filterEntities(q *queryOptions) *filterEntries {
 	return ft
 }
 
-func (e *Engine) put(ent *entry, replace bool) error {
+func (e *engine) put(ent *entry, replace bool) error {
 	existing := e.pks.Set(ent)
 	if existing != nil {
 		if !replace {

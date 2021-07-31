@@ -11,7 +11,7 @@ type entry struct {
 	tags *Tags
 }
 
-func (ent *entry) deserialize(e *Engine) error {
+func (ent *entry) deserialize(e *engine) error {
 	return e.insert(ent)
 }
 
@@ -26,11 +26,11 @@ func (ent *entry) serialize(buf *bytes.Buffer) {
 	writeRespBlob(ent.value, buf)
 
 	if ent.tagCount() > 0 {
-		for _, bt := range ent.tags.Booleans {
+		for _, bt := range ent.tags.booleans {
 			writeRespBoolTag(&bt, buf)
 		}
 
-		for _, st := range ent.tags.Strings {
+		for _, st := range ent.tags.strings {
 			writeRespStrTag(&st, buf)
 		}
 	}
@@ -42,10 +42,10 @@ func (ent *entry) tagCount() int {
 	}
 
 	var count int
-	count += len(ent.tags.Booleans)
-	count += len(ent.tags.Strings)
-	count += len(ent.tags.FloatTag)
-	count += len(ent.tags.IntTag)
+	count += len(ent.tags.booleans)
+	count += len(ent.tags.strings)
+	count += len(ent.tags.floats)
+	count += len(ent.tags.integers)
 	return count
 }
 
@@ -59,7 +59,7 @@ func (cmd *deleteCmd) serialize(buf *bytes.Buffer) {
 	writeRespSimpleString(cmd.key.String(), buf)
 }
 
-func (cmd *deleteCmd) deserialize(e *Engine) error {
+func (cmd *deleteCmd) deserialize(e *engine) error {
 	ent, err := e.findByKey(cmd.key.String())
 	if err != nil {
 		return errors.Wrapf(err, "could not deserialize delete key %s command", cmd.key.String())

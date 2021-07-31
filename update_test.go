@@ -56,8 +56,8 @@ func (wts *writeTestSuite) Test_WriteAndRead_InTwoTransactions() {
 
 	var result1 *lemon.Document
 	var result2 *lemon.Document
-	if txErr := db.MultiUpdate(context.Background(), func(tx *lemon.Tx) error {
-		if err := tx.Insert("product:8976", lemon.D{
+	if txErr := db.Update(context.Background(), func(tx *lemon.Tx) error {
+		if err := tx.Insert("product:8976", lemon.M{
 			"foo": "bar",
 			"baz": 8989764,
 			"100": "username",
@@ -102,7 +102,7 @@ func (wts *writeTestSuite) Test_WriteAndRead_InTwoTransactions() {
 	var readResult2 *lemon.Document
 	// Confirm that those keys are accessible after previous transaction has committed
 	// and results should be identical
-	if txErr := db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
+	if txErr := db.View(context.Background(), func(tx *lemon.Tx) error {
 		doc1, err := tx.Get("product:8976")
 		if err != nil {
 			return err
@@ -142,8 +142,8 @@ func (wts *writeTestSuite) Test_ReplaceInsertedDocs() {
 		}
 	}()
 
-	if txErr := db.MultiUpdate(context.Background(), func(tx *lemon.Tx) error {
-		if err := tx.Insert("item:77", lemon.D{
+	if txErr := db.Update(context.Background(), func(tx *lemon.Tx) error {
+		if err := tx.Insert("item:77", lemon.M{
 			"foo": "bar",
 			"baz": 8989764,
 			"100": "username",
@@ -151,7 +151,7 @@ func (wts *writeTestSuite) Test_ReplaceInsertedDocs() {
 			return err
 		}
 
-		if err := tx.Insert("item:1145", lemon.D{
+		if err := tx.Insert("item:1145", lemon.M{
 			"foo":   "bar5674",
 			"baz12": 123.879,
 			"999":   nil,
@@ -166,8 +166,8 @@ func (wts *writeTestSuite) Test_ReplaceInsertedDocs() {
 
 	wts.Assert().Equal(2, db.Count())
 
-	if txErr := db.MultiUpdate(context.Background(), func(tx *lemon.Tx) error {
-		if err := tx.InsertOrReplace("item:77", lemon.D{
+	if txErr := db.Update(context.Background(), func(tx *lemon.Tx) error {
+		if err := tx.InsertOrReplace("item:77", lemon.M{
 			"foo": "bar22",
 			"baz": 1,
 			"bar": nil,
@@ -175,7 +175,7 @@ func (wts *writeTestSuite) Test_ReplaceInsertedDocs() {
 			return err
 		}
 
-		if err := tx.InsertOrReplace("item:1145", lemon.D{
+		if err := tx.InsertOrReplace("item:1145", lemon.M{
 			"foo1":   "0",
 			"baz": 123.879,
 			"999":   "bar",
@@ -194,7 +194,7 @@ func (wts *writeTestSuite) Test_ReplaceInsertedDocs() {
 	var readResult2 *lemon.Document
 	// Confirm that those keys are accessible after previous transaction has committed
 	// and results should be identical
-	if txErr := db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
+	if txErr := db.View(context.Background(), func(tx *lemon.Tx) error {
 		doc1, err := tx.Get("item:77")
 		if err != nil {
 			return err
@@ -245,8 +245,8 @@ func (rts *removeTestSuite) SetupTest() {
 	rts.db = db
 	rts.closer = closer
 
-	if err := db.MultiUpdate(context.Background(), func(tx *lemon.Tx) error {
-		if err := tx.Insert("item:8976", lemon.D{
+	if err := db.Update(context.Background(), func(tx *lemon.Tx) error {
+		if err := tx.Insert("item:8976", lemon.M{
 			"foo": "bar",
 			"baz": 8989764,
 			"100": "username",
@@ -254,7 +254,7 @@ func (rts *removeTestSuite) SetupTest() {
 			return err
 		}
 
-		if err := tx.Insert("item:1145", lemon.D{
+		if err := tx.Insert("item:1145", lemon.M{
 			"foo":   "bar5674",
 			"baz12": 123.879,
 			"999":   nil,
@@ -262,7 +262,7 @@ func (rts *removeTestSuite) SetupTest() {
 			return err
 		}
 
-		if err := tx.Insert("users", lemon.D{
+		if err := tx.Insert("users", lemon.M{
 			"user1": "abc123",
 			"user2": "John Smith",
 			"user3": "anyone",
@@ -290,7 +290,7 @@ func (rts *removeTestSuite) TearDownTest() {
 }
 
 func (rts *removeTestSuite) TestLemonDB_RemoveItemInTheMiddle() {
-	if err := rts.db.MultiUpdate(context.Background(), func(tx *lemon.Tx) error {
+	if err := rts.db.Update(context.Background(), func(tx *lemon.Tx) error {
 		if err := tx.Remove("item:1145"); err != nil {
 			return err
 		}
@@ -300,7 +300,7 @@ func (rts *removeTestSuite) TestLemonDB_RemoveItemInTheMiddle() {
 		rts.Require().NoError(err)
 	}
 
-	if err := rts.db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
+	if err := rts.db.View(context.Background(), func(tx *lemon.Tx) error {
 		doc, err := tx.Get("item:1145")
 		rts.Require().Error(err)
 		rts.Assert().Nil(doc)
@@ -333,7 +333,7 @@ func seedUserData(t *testing.T, db *lemon.DB, n int, tags seedTags) {
 		Address:  "Some street ap.",
 	}
 
-	if err := db.MultiUpdate(context.Background(), func(tx *lemon.Tx) error {
+	if err := db.Update(context.Background(), func(tx *lemon.Tx) error {
 		for i := 1; i < n+1; i++ {
 			user := userData{
 				Username: fmt.Sprintf("%s_%d", baseUser.Username, i),
@@ -379,7 +379,7 @@ func seedUserPets(t *testing.T, db *lemon.DB, firstUserId, lastUserId, pets int)
 		Kind   string `json:"kind"`
 	}
 
-	if err := db.MultiUpdate(context.Background(), func(tx *lemon.Tx) error {
+	if err := db.Update(context.Background(), func(tx *lemon.Tx) error {
 		for i := firstUserId; i <= lastUserId; i++ {
 			for j := 0; j < pets; j++ {
 				pet := petData{
@@ -418,7 +418,7 @@ func seedProductData(t *testing.T, db *lemon.DB, n int) {
 		ID:   0,
 	}
 
-	if err := db.MultiUpdate(context.Background(), func(tx *lemon.Tx) error {
+	if err := db.Update(context.Background(), func(tx *lemon.Tx) error {
 		for i := 0; i < n; i++ {
 			user := productData{
 				Name:     fmt.Sprintf("%s_%d", baseProduct.Name, i+1),

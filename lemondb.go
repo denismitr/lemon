@@ -8,7 +8,7 @@ import (
 )
 
 type DB struct {
-	e *Engine
+	e *engine
 	mu sync.RWMutex
 	closed bool
 }
@@ -59,7 +59,7 @@ func (db *DB) Count() int {
 	return db.e.Count()
 }
 
-func (db *DB) MultiRead(ctx context.Context, cb UserCallback) error {
+func (db *DB) View(ctx context.Context, cb UserCallback) error {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
@@ -84,7 +84,7 @@ func (db *DB) MultiRead(ctx context.Context, cb UserCallback) error {
 	return nil
 }
 
-func (db *DB) MultiUpdate(ctx context.Context, cb UserCallback) error {
+func (db *DB) Update(ctx context.Context, cb UserCallback) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 

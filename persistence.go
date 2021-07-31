@@ -420,12 +420,12 @@ func writeRespArray(segments int, buf *bytes.Buffer) {
 	buf.WriteRune('\n')
 }
 
-func writeRespBoolTag(bt *boolTag, buf *bytes.Buffer) {
-	writeRespFunc(fmt.Sprintf("btg(%s,%v)", bt.Name, bt.Value), buf)
+func writeRespBoolTag(bt *bTag, buf *bytes.Buffer) {
+	writeRespFunc(fmt.Sprintf("btg(%s,%v)", bt.name, bt.value), buf)
 }
 
 func writeRespStrTag(st *strTag, buf *bytes.Buffer) {
-	writeRespFunc(fmt.Sprintf("stg(%s,%s)", st.Name, st.Value), buf)
+	writeRespFunc(fmt.Sprintf("stg(%s,%s)", st.name, st.value), buf)
 }
 
 func writeRespSimpleString(s string, buf *bytes.Buffer) {

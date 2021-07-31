@@ -7,7 +7,7 @@ type serializer interface {
 }
 
 type deserializer interface {
-	deserialize(e *Engine) error
+	deserialize(e *engine) error
 }
 
 

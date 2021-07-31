@@ -19,8 +19,8 @@ func (d *Document) Key() string {
 	return d.key
 }
 
-func (d *Document) Tags() Tags {
-	return *d.tags
+func (d *Document) Tags() *Tags {
+	return d.tags
 }
 
 func newDocumentFromEntry(ent *entry) *Document {
@@ -31,6 +31,8 @@ func newDocumentFromEntry(ent *entry) *Document {
 
 	if ent.tags != nil {
 		d.tags = ent.tags
+	} else {
+		d.tags = &Tags{}
 	}
 
 	return d

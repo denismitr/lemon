@@ -52,7 +52,7 @@ func TestLemonDB_Read(t *testing.T) {
 	t.Run("get existing keys", func(t *testing.T) {
 		var result1 *lemon.Document
 		var result2 *lemon.Document
-		if err := db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
+		if err := db.View(context.Background(), func(tx *lemon.Tx) error {
 			doc1, err := tx.Get("product:8976")
 			if err != nil {
 				return err
@@ -127,7 +127,7 @@ func (fts *findByTagsTestSuite) TestLemonDB_FindByBoolTag() {
 	defer cancel()
 
 	var docs []lemon.Document
-	if err := db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
+	if err := db.View(context.Background(), func(tx *lemon.Tx) error {
 		opts := lemon.Q().Order(lemon.Descend).BoolTag("foo", true)
 		if err := tx.Find(ctx, opts, &docs); err != nil {
 			return err
@@ -188,7 +188,7 @@ func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Descend() {
 	defer cancel()
 
 	var docs []lemon.Document
-	if err := db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
+	if err := db.View(context.Background(), func(tx *lemon.Tx) error {
 		opts := lemon.Q().Order(lemon.Descend).KeyRange("user:100", "user:109")
 		if err := tx.Find(ctx, opts, &docs); err != nil {
 			return err
@@ -222,7 +222,7 @@ func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Ascend() {
 	defer cancel()
 
 	var docs []lemon.Document
-	if err := db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
+	if err := db.View(context.Background(), func(tx *lemon.Tx) error {
 		opts := lemon.Q().Order(lemon.Ascend).KeyRange("product:500", "product:750")
 		if err := tx.Find(ctx, opts, &docs); err != nil {
 			return err
@@ -256,7 +256,7 @@ func (fts *findTestSuite) TestLemonDB_FindAllUsers_Ascend() {
 	defer cancel()
 
 	var docs []lemon.Document
-	if err := db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
+	if err := db.View(context.Background(), func(tx *lemon.Tx) error {
 		opts := lemon.Q().Order(lemon.Ascend).Prefix("user")
 		if err := tx.Find(ctx, opts, &docs); err != nil {
 			return err
@@ -291,7 +291,7 @@ func (fts *findTestSuite) TestLemonDB_FindAllUsers_Descend() {
 	defer cancel()
 
 	var docs []lemon.Document
-	if err := db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
+	if err := db.View(context.Background(), func(tx *lemon.Tx) error {
 		q := lemon.Q().Order(lemon.Descend).Prefix("user")
 		if err := tx.Find(ctx, q, &docs); err != nil {
 			return err
@@ -328,7 +328,7 @@ func (fts *findTestSuite) TestLemonDB_FindAllDocs_Descend() {
 	defer cancel()
 
 	var docs []lemon.Document
-	if err := db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
+	if err := db.View(context.Background(), func(tx *lemon.Tx) error {
 		opts := lemon.Q().Order(lemon.Descend)
 		if err := tx.Find(ctx, opts, &docs); err != nil {
 			return err
@@ -370,7 +370,7 @@ func (fts *findTestSuite) TestLemonDB_FindAllDocs_Ascend() {
 	defer cancel()
 
 	var docs []lemon.Document
-	if err := db.MultiRead(context.Background(), func(tx *lemon.Tx) error {
+	if err := db.View(context.Background(), func(tx *lemon.Tx) error {
 		opts := lemon.Q().Order(lemon.Ascend)
 		if err := tx.Find(ctx, opts, &docs); err != nil {
 			return err
@@ -442,7 +442,7 @@ func (sts *scanTestSuite) Test_ScanUserPets() {
 	sts.Require().Equal(2158, db.Count())
 
 	var docs []lemon.Document
-	if err := db.MultiRead(ctx, func(tx *lemon.Tx) error {
+	if err := db.View(ctx, func(tx *lemon.Tx) error {
 		opts := lemon.Q().Order(lemon.Ascend).Prefix("user")
 		if scanErr := tx.Scan(ctx, opts, func (d lemon.Document) bool {
 			if strings.Contains(d.Key(), ":pet:") {
@@ -478,7 +478,7 @@ func (sts *scanTestSuite) Test_ScanUserPetsWithManualLimit() {
 	sts.Require().Equal(2158, db.Count())
 
 	var docs []lemon.Document
-	if err := db.MultiRead(ctx, func(tx *lemon.Tx) error {
+	if err := db.View(ctx, func(tx *lemon.Tx) error {
 		opts := lemon.Q().Order(lemon.Ascend).Prefix("user")
 		if scanErr := tx.Scan(ctx, opts, func (d lemon.Document) bool {
 			if strings.Contains(d.Key(), ":pet:") {

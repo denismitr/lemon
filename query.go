@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-type D map[string]interface{}
+type M map[string]interface{}
 
 type KeyRange struct {
 	From, To string
@@ -19,7 +19,7 @@ const (
 )
 
 type queryTags struct {
-	boolTags []boolTag
+	boolTags []bTag
 	strTags  []strTag
 }
 
@@ -56,7 +56,16 @@ func (fo *queryOptions) BoolTag(name string, v bool) *queryOptions {
 		fo.tags = &queryTags{}
 	}
 
-	fo.tags.boolTags = append(fo.tags.boolTags, boolTag{Name: name, Value: v})
+	fo.tags.boolTags = append(fo.tags.boolTags, bTag{name: name, value: v})
+	return fo
+}
+
+func (fo *queryOptions) StrTag(name string, v string) *queryOptions {
+	if fo.tags == nil {
+		fo.tags = &queryTags{}
+	}
+
+	fo.tags.strTags = append(fo.tags.strTags, strTag{name: name, value: v})
 	return fo
 }
 
