@@ -263,8 +263,8 @@ func (e *engine) filterEntities(q *queryOptions) *filterEntries {
 	ft := newFilterEntries(q.patterns)
 
 	if q.tags.boolTags != nil && e.boolTags != nil {
-		for _, bt := range q.tags.boolTags {
-			entries := e.boolTags[bt.name][bt.value]
+		for n, v := range q.tags.boolTags {
+			entries := e.boolTags[n][v]
 			if entries == nil {
 				continue
 			}
@@ -276,8 +276,8 @@ func (e *engine) filterEntities(q *queryOptions) *filterEntries {
 	}
 
 	if q.tags.strTags != nil && e.strTags != nil {
-		for _, st := range q.tags.strTags {
-			entries := e.strTags[st.name][st.value]
+		for n, v := range q.tags.strTags {
+			entries := e.strTags[n][v]
 			if entries == nil {
 				continue
 			}
@@ -332,7 +332,7 @@ func filteringBTreeIterator(
 			panic(castPanic)
 		}
 
-		if fe != nil && (!fe.exists(ent) || !ent.key.Match(q.patterns)) {
+		if fe != nil && (!q.matchTags(ent) || !ent.key.Match(q.patterns)) {
 			return true
 		}
 

@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"os"
 )
@@ -43,6 +44,7 @@ type persistence struct {
 	f *os.File
 	flushes int
 	cursor int
+	stopCh chan struct{}
 }
 
 func newPersistence(filepath string, strategy persistenceStrategy) (*persistence, error) {
@@ -51,10 +53,33 @@ func newPersistence(filepath string, strategy persistenceStrategy) (*persistence
 		return nil, err
 	}
 
-	return &persistence{
+	p := &persistence{
 		f: f,
 		strategy: strategy,
-	}, nil
+		stopCh: make(chan struct{}, 1),
+	}
+
+	if strategy == Async {
+		go p.asyncFlush(time.Second * 1)
+	}
+
+	return p, nil
+}
+
+func (p *persistence) asyncFlush(d time.Duration) {
+	t := time.NewTicker(d)
+
+	for {
+		select {
+		case <-p.stopCh:
+			t.Stop()
+			return
+		case <-t.C:
+			if err := p.f.Sync(); err != nil {
+				// todo: log
+			}
+		}
+	}
 }
 
 func (p *persistence) close() (err error) {
@@ -65,6 +90,8 @@ func (p *persistence) close() (err error) {
 
 		p.mu.Unlock()
 	}()
+
+	close(p.stopCh)
 
 	err = p.f.Sync()
 	err = p.f.Close()

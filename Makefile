@@ -15,7 +15,7 @@ vars:
 
 test:
 	@echo Starting to run tests locally with no coverage
-	$(GOTEST) -count=1 -cover ./...
+	$(GOTEST) -race -count=1 -cover ./...
 	@echo Done
 
 test/cover:

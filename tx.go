@@ -183,19 +183,19 @@ func (x *Tx) applyScanner(ctx context.Context, q *queryOptions, ir entryReceiver
 	var sc scanner
 
 	if q.keyRange != nil {
-		if q.order == Ascend {
+		if q.order == AscOrder {
 			sc = x.e.scanBetweenAscend
 		} else {
 			sc = x.e.scanBetweenDescend
 		}
 	} else if q.prefix != "" {
-		if q.order == Ascend {
+		if q.order == AscOrder {
 			sc = x.e.scanPrefixAscend
 		} else {
 			sc = x.e.scanPrefixDescend
 		}
 	} else {
-		if q.order == Ascend {
+		if q.order == AscOrder {
 			sc = x.e.scanAscend
 		} else {
 			sc = x.e.scanDescend

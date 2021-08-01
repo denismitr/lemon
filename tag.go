@@ -37,6 +37,24 @@ func (t *Tags) Strings() map[string]string {
 	return result
 }
 
+func (t *Tags) GetString(name string) string {
+	for _, st := range t.strings {
+		if st.name == name {
+			return st.value
+		}
+	}
+	return ""
+}
+
+func (t *Tags) GetBool(name string) bool {
+	for _, bt := range t.booleans {
+		if bt.name == name {
+			return bt.value
+		}
+	}
+	return false
+}
+
 type bTag struct {
 	name  string
 	value bool

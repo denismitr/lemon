@@ -14,13 +14,20 @@ type KeyRange struct {
 type Order string
 
 const (
-	Ascend  Order = "ASC"
-	Descend Order = "DESC"
+	AscOrder  Order = "ASC"
+	DescOrder Order = "DESC"
 )
 
 type queryTags struct {
-	boolTags []bTag
-	strTags  []strTag
+	boolTags map[string]bool
+	strTags  map[string]string
+}
+
+func newQueryTags() *queryTags {
+	return &queryTags{
+		boolTags: make(map[string]bool),
+		strTags: make(map[string]string),
+	}
 }
 
 type queryOptions struct {
@@ -51,26 +58,56 @@ func (fo *queryOptions) Prefix(p string) *queryOptions {
 	return fo
 }
 
-func (fo *queryOptions) BoolTag(name string, v bool) *queryOptions {
+func (fo *queryOptions) AndBoolTag(name string, v bool) *queryOptions {
 	if fo.tags == nil {
-		fo.tags = &queryTags{}
+		fo.tags = newQueryTags()
 	}
-
-	fo.tags.boolTags = append(fo.tags.boolTags, bTag{name: name, value: v})
+	fo.tags.boolTags[name] = v
 	return fo
 }
 
-func (fo *queryOptions) StrTag(name string, v string) *queryOptions {
+func (fo *queryOptions) AndStrTag(name string, v string) *queryOptions {
 	if fo.tags == nil {
-		fo.tags = &queryTags{}
+		fo.tags = newQueryTags()
+	}
+	fo.tags.strTags[name] = v
+	return fo
+}
+
+func (fo *queryOptions) matchTags(e *entry) bool {
+	if fo.tags == nil {
+		return true
 	}
 
-	fo.tags.strTags = append(fo.tags.strTags, strTag{name: name, value: v})
-	return fo
+	if e.tags == nil {
+		return false
+	}
+
+	matchesExpected := 0
+	actualMatches := 0
+	for n, v := range fo.tags.boolTags {
+		matchesExpected++
+		for _, bt := range e.tags.booleans {
+			if bt.name == n && bt.value == v {
+				actualMatches++
+			}
+		}
+	}
+
+	for n, v := range fo.tags.strTags {
+		matchesExpected++
+		for _, bt := range e.tags.strings {
+			if bt.name == n && bt.value == v {
+				actualMatches++
+			}
+		}
+	}
+
+	return matchesExpected == actualMatches
 }
 
 func Q() *queryOptions {
-	return &queryOptions{order: Ascend}
+	return &queryOptions{order: AscOrder}
 }
 
 type filterEntries struct {
