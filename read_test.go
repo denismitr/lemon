@@ -128,7 +128,7 @@ func (fts *findByTagsTestSuite) TestLemonDB_FindByBoolTag() {
 
 	var docs []lemon.Document
 	if err := db.View(context.Background(), func(tx *lemon.Tx) error {
-		opts := lemon.Q().Order(lemon.DescOrder).AndBoolTag("foo", true)
+		opts := lemon.Q().Order(lemon.DescOrder).AllTags(lemon.BoolTag("foo", true))
 		if err := tx.Find(ctx, opts, &docs); err != nil {
 			return err
 		}

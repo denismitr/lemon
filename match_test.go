@@ -47,7 +47,8 @@ func (mts *matchTestSuite) TestMatchSingleUserByPatternAndTag() {
 	docs := make([]lemon.Document, 0)
 	ctx := context.Background()
 	err = db.View(context.Background(), func(tx *lemon.Tx) error {
-		return tx.Find(ctx, lemon.Q().Match("user:*").AndStrTag("content", "list"), &docs)
+		q := lemon.Q().Match("user:*").AllTags(lemon.StrTag("content", "list"))
+		return tx.Find(ctx, q, &docs)
 	})
 
 	mts.Require().NoError(err)
@@ -74,8 +75,7 @@ func (mts *matchTestSuite) TestMatchMultipleUsersByPatternAndTagWithDescSorting(
 	err = db.View(context.Background(), func(tx *lemon.Tx) error {
 		q := lemon.Q().
 			Match("user:*").
-			AndStrTag("content", "doc").
-			AndBoolTag("valid", true).
+			AllTags(lemon.StrTag("content", "doc"), lemon.BoolTag("valid", true)).
 			Order(lemon.DescOrder)
 
 

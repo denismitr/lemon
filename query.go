@@ -18,24 +18,12 @@ const (
 	DescOrder Order = "DESC"
 )
 
-type queryTags struct {
-	boolTags map[string]bool
-	strTags  map[string]string
-}
-
-func newQueryTags() *queryTags {
-	return &queryTags{
-		boolTags: make(map[string]bool),
-		strTags: make(map[string]string),
-	}
-}
-
 type queryOptions struct {
 	order    Order
 	keyRange *KeyRange
 	prefix   string
 	patterns []string
-	allTags  *queryTags
+	allTags  *Tags
 }
 
 func (fo *queryOptions) Match(patten string) *queryOptions {
@@ -58,19 +46,15 @@ func (fo *queryOptions) Prefix(p string) *queryOptions {
 	return fo
 }
 
-func (fo *queryOptions) AndBoolTag(name string, v bool) *queryOptions {
+func (fo *queryOptions) AllTags(taggers ...Tagger) *queryOptions {
 	if fo.allTags == nil {
-		fo.allTags = newQueryTags()
+		fo.allTags = newTags()
 	}
-	fo.allTags.boolTags[name] = v
-	return fo
-}
 
-func (fo *queryOptions) AndStrTag(name string, v string) *queryOptions {
-	if fo.allTags == nil {
-		fo.allTags = newQueryTags()
+	for _, t := range taggers {
+		t(fo.allTags)
 	}
-	fo.allTags.strTags[name] = v
+
 	return fo
 }
 
@@ -85,14 +69,14 @@ func (fo *queryOptions) matchTags(e *entry) bool {
 
 	matchesExpected := 0
 	actualMatches := 0
-	for n, v := range fo.allTags.boolTags {
+	for n, v := range fo.allTags.booleans {
 		matchesExpected++
 		if e.tags.booleans[n] == v {
 			actualMatches++
 		}
 	}
 
-	for n, v := range fo.allTags.strTags {
+	for n, v := range fo.allTags.strings {
 		matchesExpected++
 		if e.tags.strings[n] == v {
 			actualMatches++
@@ -109,13 +93,13 @@ func Q() *queryOptions {
 type filterEntries struct {
 	sync.RWMutex
 	patterns []string
-	entries map[string]*entry
+	entries  map[string]*entry
 }
 
 func newFilterEntries(patterns []string) *filterEntries {
 	return &filterEntries{
 		patterns: patterns,
-		entries: make(map[string]*entry),
+		entries:  make(map[string]*entry),
 	}
 }
 
