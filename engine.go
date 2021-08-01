@@ -158,22 +158,22 @@ func (e *engine) update(ent *entry) error {
 }
 
 func (e *engine) setEntityTags(ent *entry) {
-	for _, bt := range ent.tags.booleans {
-		e.boolTags.add(bt.name, bt.value, ent)
+	for n, v := range ent.tags.booleans {
+		e.boolTags.add(n, v, ent)
 	}
 
-	for _, st := range ent.tags.strings {
-		e.strTags.add(st.name, st.value, ent)
+	for n, v := range ent.tags.strings {
+		e.strTags.add(n, v, ent)
 	}
 }
 
 func (e *engine) clearEntityTags(ent *entry) {
-	for _, bt := range ent.tags.booleans {
-		e.boolTags.removeEntryByTag(bt.name, bt.value, ent)
+	for n, v := range ent.tags.booleans {
+		e.boolTags.removeEntryByTag(n, v, ent)
 	}
 
-	for _, st := range ent.tags.strings {
-		e.strTags.removeEntryByTag(st.name, st.value, ent)
+	for n, v := range ent.tags.strings {
+		e.strTags.removeEntryByTag(n, v, ent)
 	}
 }
 
@@ -256,14 +256,14 @@ func (e *engine) scanDescend(
 }
 
 func (e *engine) filterEntities(q *queryOptions) *filterEntries {
-	if q == nil || q.tags == nil {
+	if q == nil || q.allTags == nil {
 		return nil
 	}
 
 	ft := newFilterEntries(q.patterns)
 
-	if q.tags.boolTags != nil && e.boolTags != nil {
-		for n, v := range q.tags.boolTags {
+	if q.allTags.boolTags != nil && e.boolTags != nil {
+		for n, v := range q.allTags.boolTags {
 			entries := e.boolTags[n][v]
 			if entries == nil {
 				continue
@@ -275,8 +275,8 @@ func (e *engine) filterEntities(q *queryOptions) *filterEntries {
 		}
 	}
 
-	if q.tags.strTags != nil && e.strTags != nil {
-		for n, v := range q.tags.strTags {
+	if q.allTags.strTags != nil && e.strTags != nil {
+		for n, v := range q.allTags.strTags {
 			entries := e.strTags[n][v]
 			if entries == nil {
 				continue

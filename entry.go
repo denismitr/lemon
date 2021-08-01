@@ -26,12 +26,12 @@ func (ent *entry) serialize(buf *bytes.Buffer) {
 	writeRespBlob(ent.value, buf)
 
 	if ent.tagCount() > 0 {
-		for _, bt := range ent.tags.booleans {
-			writeRespBoolTag(&bt, buf)
+		for n, v := range ent.tags.booleans {
+			writeRespBoolTag(n, v, buf)
 		}
 
-		for _, st := range ent.tags.strings {
-			writeRespStrTag(&st, buf)
+		for n, v := range ent.tags.strings {
+			writeRespStrTag(n, v, buf)
 		}
 	}
 }

@@ -39,18 +39,18 @@ func (si stringIndex) removeEntryByTag(tagName, v string, ent *entry) bool {
 }
 
 func (si stringIndex) removeEntry(ent *entry) {
-	if ent.tags == nil || ent.tags.booleans == nil {
+	if ent.tags == nil  {
 		return
 	}
 
-	for _, sTag := range ent.tags.strings {
-		if si[sTag.name] == nil {
+	for n, v := range ent.tags.strings {
+		if si[n] == nil {
 			continue
 		}
 
-		for i, e := range si[sTag.name][sTag.value] {
+		for i, e := range si[n][v] {
 			if e.key.Equal(&ent.key) {
-				si[sTag.name][sTag.value] = append(si[sTag.name][sTag.value][:i], si[sTag.name][sTag.value][i+1:]...)
+				si[n][v] = append(si[n][v][:i], si[n][v][i+1:]...)
 			}
 		}
 	}
@@ -90,18 +90,18 @@ func (bi boolIndex) removeEntryByTag(tagName string, v bool, ent *entry) bool {
 }
 
 func (bi boolIndex) removeEntry(ent *entry) {
-	if ent.tags == nil || ent.tags.booleans == nil {
+	if ent.tags == nil {
 		return
 	}
 
-	for _, bTag := range ent.tags.booleans {
-		if bi[bTag.name] == nil {
+	for n, v := range ent.tags.booleans {
+		if bi[n] == nil {
 			continue
 		}
 
-		for i, e := range bi[bTag.name][bTag.value] {
+		for i, e := range bi[n][v] {
 			if e.key.Equal(&ent.key) {
-				bi[bTag.name][bTag.value] = append(bi[bTag.name][bTag.value][:i], bi[bTag.name][bTag.value][i+1:]...)
+				bi[n][v] = append(bi[n][v][:i], bi[n][v][i+1:]...)
 			}
 		}
 	}

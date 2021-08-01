@@ -35,7 +35,7 @@ type queryOptions struct {
 	keyRange *KeyRange
 	prefix   string
 	patterns []string
-	tags     *queryTags
+	allTags  *queryTags
 }
 
 func (fo *queryOptions) Match(patten string) *queryOptions {
@@ -59,23 +59,23 @@ func (fo *queryOptions) Prefix(p string) *queryOptions {
 }
 
 func (fo *queryOptions) AndBoolTag(name string, v bool) *queryOptions {
-	if fo.tags == nil {
-		fo.tags = newQueryTags()
+	if fo.allTags == nil {
+		fo.allTags = newQueryTags()
 	}
-	fo.tags.boolTags[name] = v
+	fo.allTags.boolTags[name] = v
 	return fo
 }
 
 func (fo *queryOptions) AndStrTag(name string, v string) *queryOptions {
-	if fo.tags == nil {
-		fo.tags = newQueryTags()
+	if fo.allTags == nil {
+		fo.allTags = newQueryTags()
 	}
-	fo.tags.strTags[name] = v
+	fo.allTags.strTags[name] = v
 	return fo
 }
 
 func (fo *queryOptions) matchTags(e *entry) bool {
-	if fo.tags == nil {
+	if fo.allTags == nil {
 		return true
 	}
 
@@ -85,21 +85,17 @@ func (fo *queryOptions) matchTags(e *entry) bool {
 
 	matchesExpected := 0
 	actualMatches := 0
-	for n, v := range fo.tags.boolTags {
+	for n, v := range fo.allTags.boolTags {
 		matchesExpected++
-		for _, bt := range e.tags.booleans {
-			if bt.name == n && bt.value == v {
-				actualMatches++
-			}
+		if e.tags.booleans[n] == v {
+			actualMatches++
 		}
 	}
 
-	for n, v := range fo.tags.strTags {
+	for n, v := range fo.allTags.strTags {
 		matchesExpected++
-		for _, bt := range e.tags.strings {
-			if bt.name == n && bt.value == v {
-				actualMatches++
-			}
+		if e.tags.strings[n] == v {
+			actualMatches++
 		}
 	}
 

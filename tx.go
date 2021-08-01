@@ -84,9 +84,9 @@ func (x *Tx) Insert(key string, data interface{}, taggers ...Tagger) error {
 		return ErrTxIsReadOnly
 	}
 
-	ts := Tags{}
+	ts := newTags()
 	for _, t := range taggers {
-		t(&ts)
+		t(ts)
 	}
 
 	v, err := serializeToValue(data)
@@ -94,7 +94,7 @@ func (x *Tx) Insert(key string, data interface{}, taggers ...Tagger) error {
 		return err
 	}
 
-	ent := newEntry(key, v, &ts)
+	ent := newEntry(key, v, ts)
 
 	if err := x.e.insert(ent); err != nil {
 		return err
@@ -111,9 +111,9 @@ func (x *Tx) InsertOrReplace(key string, data interface{}, taggers ...Tagger) er
 		return ErrTxIsReadOnly
 	}
 
-	ts := Tags{}
+	ts := newTags()
 	for _, t := range taggers {
-		t(&ts)
+		t(ts)
 	}
 
 	v, err := serializeToValue(data)
@@ -121,7 +121,7 @@ func (x *Tx) InsertOrReplace(key string, data interface{}, taggers ...Tagger) er
 		return err
 	}
 
-	ent := newEntry(key, v, &ts)
+	ent := newEntry(key, v, ts)
 
 	existing, err := x.e.findByKey(key)
 	if err != nil && !errors.Is(err, ErrKeyDoesNotExist) {

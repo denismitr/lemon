@@ -200,7 +200,7 @@ func (p *parser) parse(r *bufio.Reader, cb func(d deserializer) error) (int, err
 			// subtracting command, key and value
 			segments -= 3
 			if segments > 0 {
-				ent.tags = &Tags{} // fixme
+				ent.tags = newTags() // fixme
 			}
 
 			for j := 0; j < segments; j++ {
@@ -447,12 +447,12 @@ func writeRespArray(segments int, buf *bytes.Buffer) {
 	buf.WriteRune('\n')
 }
 
-func writeRespBoolTag(bt *bTag, buf *bytes.Buffer) {
-	writeRespFunc(fmt.Sprintf("btg(%s,%v)", bt.name, bt.value), buf)
+func writeRespBoolTag(name string, v bool, buf *bytes.Buffer) {
+	writeRespFunc(fmt.Sprintf("btg(%s,%v)", name, v), buf)
 }
 
-func writeRespStrTag(st *strTag, buf *bytes.Buffer) {
-	writeRespFunc(fmt.Sprintf("stg(%s,%s)", st.name, st.value), buf)
+func writeRespStrTag(name, v string, buf *bytes.Buffer) {
+	writeRespFunc(fmt.Sprintf("stg(%s,%s)", name, v), buf)
 }
 
 func writeRespSimpleString(s string, buf *bytes.Buffer) {
