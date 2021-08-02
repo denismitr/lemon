@@ -113,47 +113,55 @@ func (mts *matchTestSuite) TestMatchMultipleUsersByPatternAndTagWithDescSorting(
 
 func seedGranularUsers(t *testing.T, db *lemon.DB) {
 	err := db.Update(context.Background(), func(tx *lemon.Tx) error {
-		err := tx.Insert("user:12", lemon.M{
-			"id": 12,
-			"bar": lemon.M{
-				"a": 1234567,
-				"b": "baz22",
-			},
-			"1900-10-20": 10.345,
-		}, lemon.StrTag("content", "doc"), lemon.BoolTag("valid", true))
-		if err != nil {
+		if err := tx.Insert("user:12", lemon.M{
+				"id": 12,
+				"bar": lemon.M{
+					"a": 1234567,
+					"b": "baz22",
+				},
+				"1900-10-20": 10.345,
+			}, lemon.WithTags(lemon.M{
+				"content": "doc",
+				"valid":   true,
+			}),
+		); err != nil {
 			return err
 		}
 
-		err = tx.Insert("user:9", lemon.M{
-			"id": 9,
-			"bar": lemon.M{
-				"a": 555,
-				"b": "foo1234",
-			},
-			"1900-11-20": 0.04,
-		},
-			lemon.StrTag("content", "doc"),
-			lemon.StrTag("foo", "bar"),
-			lemon.BoolTag("valid", true),
-		)
-		if err != nil {
+		if err := tx.Insert("user:9", lemon.M{
+				"id": 9,
+				"bar": lemon.M{
+					"a": 555,
+					"b": "foo1234",
+				},
+				"1900-11-20": 0.04,
+			}, lemon.WithTags(lemon.M{
+				"content": "doc",
+				"foo":     "bar",
+				"valid":   true,
+			}),
+		); err != nil {
 			return err
 		}
 
-		err = tx.Insert("user:123", lemon.M{
-			"id": 123,
-			"bar": lemon.M{
-				"a": 987,
-				"b": "baz",
-			},
-			"1900-10-20": 678.345,
-		}, lemon.StrTag("content", "doc"), lemon.BoolTag("valid", true),)
-		if err != nil {
+		if err := tx.Insert("user:123", lemon.M{
+				"id": 123,
+				"bar": lemon.M{
+					"a": 987,
+					"b": "baz",
+				},
+				"1900-10-20": 678.345,
+			}, lemon.WithTags(lemon.M{
+				"content": "doc",
+				"valid": true,
+			}),
+		); err != nil {
 			return err
 		}
 
-		err = tx.Insert("user:124", lemon.M{
+		if err := tx.Insert(
+			"user:124",
+			lemon.M{
 				"foo": 124,
 				"bar": lemon.M{
 					"a": 666,
@@ -161,52 +169,48 @@ func seedGranularUsers(t *testing.T, db *lemon.DB) {
 				},
 				"1900-10-20": nil,
 			},
-			lemon.StrTag("content", "doc"),
-			lemon.StrTag("auth", "basic"),
-			lemon.BoolTag("valid", false),
-		)
-		if err != nil {
+			lemon.WithTags(lemon.M{
+				"content": "doc",
+				"auth": "basic",
+				"valid": false,
+			}),
+		); err != nil {
 			return err
 		}
 
-		err = tx.Insert("user:125", lemon.M{
-			"foo": 125,
-			"bar": lemon.M{
-				"a": 667,
-				"b": "baz123223",
-			},
-			"1900-10-20": 0.0,
-		},
-			lemon.StrTag("content", "doc"),
-			lemon.StrTag("auth", "basic"),
-			lemon.BoolTag("valid", true),
-		)
-		if err != nil {
+		if err := tx.Insert("user:125", lemon.M{
+				"foo": 125,
+				"bar": lemon.M{
+					"a": 667,
+					"b": "baz123223",
+				},
+				"1900-10-20": 0.0,
+			}, lemon.WithTags(lemon.M{
+				"content": "doc",
+				"auth": "basic",
+				"valid": true,
+			}),
+		); err != nil {
 			return err
 		}
 
-		err = tx.Insert("user:12:animals", `[123, 987, 6789]`, lemon.StrTag("content", "list"))
-		if err != nil {
+		if err := tx.Insert("user:12:animals", `[123, 987, 6789]`, lemon.WithTags(lemon.M{"content": "list"})); err != nil {
 			return err
 		}
 
-		err = tx.Insert("user:2:animals", `{"turtle":1,"kangaroo":34}`, lemon.StrTag("content", "json"))
-		if err != nil {
+		if err := tx.Insert("user:2:animals", `{"turtle":1,"kangaroo":34}`, lemon.WithTags(lemon.M{"content": "json"})); err != nil {
 			return err
 		}
 
-		err = tx.Insert("animal:12", `{"species": "turtle"}`, lemon.StrTag("content", "json"))
-		if err != nil {
+		if err := tx.Insert("animal:12", `{"species": "turtle"}`, lemon.WithTags(lemon.M{"content": "json"})); err != nil {
 			return err
 		}
 
-		err = tx.Insert("animal:1", `{"species": "kangaroo"}`, lemon.StrTag("content", "json"))
-		if err != nil {
+		if err := tx.Insert("animal:1", `{"species": "kangaroo"}`, lemon.WithTags(lemon.M{"content": "json"})); err != nil {
 			return err
 		}
 
-		err = tx.Insert("animal:3", `{"species": "penguin"}`, lemon.StrTag("content", "json"))
-		if err != nil {
+		if err := tx.Insert("animal:3", `{"species": "penguin"}`, lemon.WithTags(lemon.M{"content": "json"})); err != nil {
 			return err
 		}
 

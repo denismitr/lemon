@@ -195,7 +195,7 @@ func (p *parser) parse(r *bufio.Reader, cb func(d deserializer) error) (int, err
 				return p.totalSize, err
 			}
 
-			ent := newEntry(key, value, nil)
+			ent := newEntryWithTags(key, value, nil)
 
 			// subtracting command, key and value
 			segments -= 3

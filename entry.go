@@ -5,6 +5,31 @@ import (
 	"github.com/pkg/errors"
 )
 
+var ErrInvalidTagType = errors.New("invalid tag type")
+
+type MetaSetter func(e *entry) error
+
+func WithTags(m M) MetaSetter {
+	return func(e *entry) error {
+		if e.tags == nil {
+			e.tags = newTags()
+		}
+
+		for n, v := range m {
+			switch typedValue := v.(type) {
+			case string:
+				e.tags.strings[n] = typedValue
+			case bool:
+				e.tags.booleans[n] = typedValue
+			default:
+				return errors.Wrapf(ErrInvalidTagType, "%T", v)
+			}
+		}
+
+		return nil
+	}
+}
+
 type entry struct {
 	key PK
 	value []byte
@@ -15,8 +40,12 @@ func (ent *entry) deserialize(e *engine) error {
 	return e.insert(ent)
 }
 
-func newEntry(key string, value []byte, tags *Tags) *entry {
+func newEntryWithTags(key string, value []byte, tags *Tags) *entry {
 	return &entry{key: newPK(key), value: value, tags: tags}
+}
+
+func newEntry(key string, value []byte) *entry {
+	return &entry{key: newPK(key), value: value}
 }
 
 func (ent *entry) serialize(buf *bytes.Buffer) {

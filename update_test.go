@@ -179,7 +179,7 @@ func (wts *writeTestSuite) Test_ReplaceInsertedDocs() {
 			"foo1":   "0",
 			"baz": 123.879,
 			"999":   "bar",
-		}, lemon.BoolTag("valid", true)); err != nil {
+		}, lemon.WithTags(lemon.M{"valid": true})); err != nil {
 			return err
 		}
 
@@ -344,15 +344,18 @@ func seedUserData(t *testing.T, db *lemon.DB, n int, tags seedTags) {
 			}
 
 			if tags.hashes {
-				var taggers []lemon.Tagger
+				var metaSetter []lemon.MetaSetter
 				if i % 4 == 0 {
-					taggers = append(taggers, lemon.BoolTag("foo", i % 2 == 0))
-					taggers = append(taggers, lemon.BoolTag("bar", i % 2 != 0))
-					taggers = append(taggers, lemon.StrTag("baz", "abc123"))
-					taggers = append(taggers, lemon.StrTag("foobar", fmt.Sprintf("country_%d", i % 2)))
+
+					metaSetter = append(metaSetter, lemon.WithTags(lemon.M{
+						"foo": i % 2 == 0,
+						"bar": i % 2 != 0,
+						"baz": "abc123",
+						"foobar": fmt.Sprintf("country_%d", i % 2),
+					}))
 				}
 
-				if err := tx.Insert(fmt.Sprintf("user:%d", i), user, taggers...); err != nil {
+				if err := tx.Insert(fmt.Sprintf("user:%d", i), user, metaSetter...); err != nil {
 					return err
 				}
 			} else {
