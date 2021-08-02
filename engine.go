@@ -264,7 +264,7 @@ func (e *engine) filterEntities(q *queryOptions) *filterEntries {
 
 	if q.allTags.booleans != nil && e.boolTags != nil {
 		for n, v := range q.allTags.booleans {
-			entries := e.boolTags[n][v]
+			entries := e.boolTags[n.name][v]
 			if entries == nil {
 				continue
 			}
@@ -277,7 +277,7 @@ func (e *engine) filterEntities(q *queryOptions) *filterEntries {
 
 	if q.allTags.strings != nil && e.strTags != nil {
 		for n, v := range q.allTags.strings {
-			entries := e.strTags[n][v]
+			entries := e.strTags[n.name][v]
 			if entries == nil {
 				continue
 			}

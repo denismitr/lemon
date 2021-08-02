@@ -11,6 +11,39 @@ type KeyRange struct {
 	From, To string
 }
 
+type comparator int8
+
+const (
+	equal comparator = iota
+)
+
+type tagKey struct {
+	name string
+	comp comparator
+}
+
+type QueryTags struct {
+	booleans map[tagKey]bool
+	strings  map[tagKey]string
+}
+
+func QT() *QueryTags {
+	return &QueryTags{
+		booleans: make(map[tagKey]bool),
+		strings: make(map[tagKey]string),
+	}
+}
+
+func (qt *QueryTags) BoolTagEq(name string, value bool) *QueryTags {
+	qt.booleans[tagKey{name: name, comp: equal}] = value
+	return qt
+}
+
+func (qt *QueryTags) StrTagEq(name string, value string) *QueryTags {
+	qt.strings[tagKey{name: name, comp: equal}] = value
+	return qt
+}
+
 type Order string
 
 const (
@@ -23,7 +56,7 @@ type queryOptions struct {
 	keyRange *KeyRange
 	prefix   string
 	patterns []string
-	allTags  *Tags
+	allTags  *QueryTags
 }
 
 func (fo *queryOptions) Match(patten string) *queryOptions {
@@ -46,15 +79,8 @@ func (fo *queryOptions) Prefix(p string) *queryOptions {
 	return fo
 }
 
-func (fo *queryOptions) AllTags(taggers ...Tagger) *queryOptions {
-	if fo.allTags == nil {
-		fo.allTags = newTags()
-	}
-
-	for _, t := range taggers {
-		t(fo.allTags)
-	}
-
+func (fo *queryOptions) WhereAllTags(qt *QueryTags) *queryOptions {
+	fo.allTags = qt
 	return fo
 }
 
@@ -69,17 +95,23 @@ func (fo *queryOptions) matchTags(e *entry) bool {
 
 	matchesExpected := 0
 	actualMatches := 0
-	for n, v := range fo.allTags.booleans {
+	for k, v := range fo.allTags.booleans {
 		matchesExpected++
-		if e.tags.booleans[n] == v {
-			actualMatches++
+		switch k.comp {
+		case equal:
+			if e.tags.booleans[k.name] == v {
+				actualMatches++
+			}
 		}
 	}
 
-	for n, v := range fo.allTags.strings {
+	for k, v := range fo.allTags.strings {
 		matchesExpected++
-		if e.tags.strings[n] == v {
-			actualMatches++
+		switch k.comp {
+		case equal:
+			if e.tags.strings[k.name] == v {
+				actualMatches++
+			}
 		}
 	}
 
