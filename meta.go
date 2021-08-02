@@ -28,6 +28,12 @@ func (ta *TagApplier) Str(name, value string) *TagApplier {
 	return ta
 }
 
+func (ta *TagApplier) Int(name string, value int) *TagApplier {
+	ta.keys[name] = true
+	ta.integers[name] = value
+	return ta
+}
+
 func (ta *TagApplier) Map(m M) *TagApplier {
 	for n, v := range m {
 		switch typedValue := v.(type) {
@@ -35,6 +41,8 @@ func (ta *TagApplier) Map(m M) *TagApplier {
 			ta.strings[n] = typedValue
 		case bool:
 			ta.booleans[n] = typedValue
+		case int:
+			ta.integers[n] = typedValue
 		default:
 			ta.err = errors.Wrapf(ErrInvalidTagType, "%T", v)
 		}
@@ -54,6 +62,12 @@ func BoolTag(name string, value bool) Tagger {
 func StrTag(name string, value string) Tagger {
 	return func(t *Tags) {
 		t.strings[name] = value
+	}
+}
+
+func IntTag(name string, value int) Tagger {
+	return func(t *Tags) {
+		t.integers[name] = value
 	}
 }
 
@@ -77,6 +91,10 @@ func (ta *TagApplier) applyTo(e *entry) {
 
 	for n, v := range ta.strings {
 		e.tags.strings[n] = v
+	}
+
+	for n, v := range ta.integers {
+		e.tags.integers[n] = v
 	}
 }
 
@@ -116,6 +134,10 @@ func (t *Tags) GetBool(name string) bool {
 	return t.booleans[name]
 }
 
+func (t *Tags) GetInt(name string) int {
+	return t.integers[name]
+}
+
 type bTag struct {
 	name  string
 	value bool
@@ -124,6 +146,11 @@ type bTag struct {
 type strTag struct {
 	name  string
 	value string
+}
+
+type intTag struct {
+	value   int
+	entries []*entry
 }
 
 func byStrings(a, b interface{}) bool {

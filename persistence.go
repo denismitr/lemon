@@ -342,6 +342,7 @@ func (p *parser) resolveRespSimpleString(r *bufio.Reader) (string, error) {
 const (
 	boolTagFn = "btg"
 	strTagFn = "stg"
+	intTagFn = "itg"
 )
 
 func (p *parser) resolveTagger(r *bufio.Reader) (Tagger, error) {
@@ -371,13 +372,19 @@ func (p *parser) resolveTagger(r *bufio.Reader) (Tagger, error) {
 		return BoolTag(args[0], args[1] == "true"), nil
 	case strTagFn:
 		return StrTag(args[0], args[1]), nil
+	case intTagFn:
+		v, err := strconv.Atoi(args[1])
+		if err != nil {
+			panic(fmt.Sprintf("tag function itg contains invalid integer %s in line %s", args[1], line))
+		}
+		return IntTag(args[0], v), nil
 	default:
 		panic(fmt.Sprintf("tag function %s not supported", prefix))
 	}
 }
 
 func resolveTagFnTypeAndArguments(expression string) (prefix string, args []string, err error) {
-	for _, p := range []string{boolTagFn, strTagFn} {
+	for _, p := range []string{boolTagFn, strTagFn, intTagFn} {
 		if strings.HasPrefix(expression, p) {
 			prefix = p
 			break
@@ -453,6 +460,10 @@ func writeRespBoolTag(name string, v bool, buf *bytes.Buffer) {
 
 func writeRespStrTag(name, v string, buf *bytes.Buffer) {
 	writeRespFunc(fmt.Sprintf("stg(%s,%s)", name, v), buf)
+}
+
+func writeRespIntTag(name string, v int, buf *bytes.Buffer) {
+	writeRespFunc(fmt.Sprintf("itg(%s,%d)", name, v), buf)
 }
 
 func writeRespSimpleString(s string, buf *bytes.Buffer) {

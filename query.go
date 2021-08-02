@@ -25,12 +25,14 @@ type tagKey struct {
 type QueryTags struct {
 	booleans map[tagKey]bool
 	strings  map[tagKey]string
+	integers map[tagKey]int
 }
 
 func QT() *QueryTags {
 	return &QueryTags{
 		booleans: make(map[tagKey]bool),
 		strings: make(map[tagKey]string),
+		integers: make(map[tagKey]int),
 	}
 }
 
@@ -41,6 +43,11 @@ func (qt *QueryTags) BoolTagEq(name string, value bool) *QueryTags {
 
 func (qt *QueryTags) StrTagEq(name string, value string) *QueryTags {
 	qt.strings[tagKey{name: name, comp: equal}] = value
+	return qt
+}
+
+func (qt *QueryTags) IntTagEq(name string, value int) *QueryTags {
+	qt.integers[tagKey{name: name, comp: equal}] = value
 	return qt
 }
 
@@ -79,7 +86,7 @@ func (fo *queryOptions) Prefix(p string) *queryOptions {
 	return fo
 }
 
-func (fo *queryOptions) WhereAllTags(qt *QueryTags) *queryOptions {
+func (fo *queryOptions) HasAllTags(qt *QueryTags) *queryOptions {
 	fo.allTags = qt
 	return fo
 }
@@ -110,6 +117,16 @@ func (fo *queryOptions) matchTags(e *entry) bool {
 		switch k.comp {
 		case equal:
 			if e.tags.strings[k.name] == v {
+				actualMatches++
+			}
+		}
+	}
+
+	for k, v := range fo.allTags.integers {
+		matchesExpected++
+		switch k.comp {
+		case equal:
+			if e.tags.integers[k.name] == v {
 				actualMatches++
 			}
 		}

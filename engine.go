@@ -3,6 +3,7 @@ package lemon
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/pkg/errors"
 	btr "github.com/tidwall/btree"
 )
@@ -29,6 +30,7 @@ type engine struct {
 	pks         *btr.BTree
 	boolTags    boolIndex
 	strTags     stringIndex
+	intTags     intIndex
 }
 
 func newEngine(fullPath string) (*engine, error) {
@@ -36,6 +38,7 @@ func newEngine(fullPath string) (*engine, error) {
 		pks:      btr.New(byPrimaryKeys),
 		boolTags: newBoolIndex(),
 		strTags:  newStringIndex(),
+		intTags: newIntIndex(),
 	}
 
 	if fullPath != ":memory:" {
@@ -165,6 +168,10 @@ func (e *engine) setEntityTags(ent *entry) {
 	for n, v := range ent.tags.strings {
 		e.strTags.add(n, v, ent)
 	}
+
+	for n, v := range ent.tags.integers {
+		e.intTags.add(n, v, ent)
+	}
 }
 
 func (e *engine) clearEntityTags(ent *entry) {
@@ -174,6 +181,10 @@ func (e *engine) clearEntityTags(ent *entry) {
 
 	for n, v := range ent.tags.strings {
 		e.strTags.removeEntryByTag(n, v, ent)
+	}
+
+	for n, v := range ent.tags.integers {
+		e.intTags.removeEntryByTag(n, v, ent)
 	}
 }
 
@@ -283,6 +294,32 @@ func (e *engine) filterEntities(q *queryOptions) *filterEntries {
 			}
 
 			for _, ent := range entries {
+				ft.add(ent)
+			}
+		}
+	}
+
+	if q.allTags.integers != nil && e.intTags != nil {
+		for n, v := range q.allTags.integers {
+			if e.intTags[n.name] == nil {
+				continue
+			}
+
+			item := e.intTags[n.name].Get(&intTag{value:v})
+			if item == nil {
+				continue
+			}
+
+			tag, ok := item.(*intTag)
+			if !ok {
+				panic(fmt.Sprintf("how can intIndex item not be of type *intTag?"))
+			}
+
+			if tag.entries == nil {
+				continue
+			}
+
+			for _, ent := range tag.entries {
 				ft.add(ent)
 			}
 		}
