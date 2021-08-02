@@ -9,27 +9,6 @@ var ErrInvalidTagType = errors.New("invalid tag type")
 
 type MetaSetter func(e *entry) error
 
-func WithTags(m M) MetaSetter {
-	return func(e *entry) error {
-		if e.tags == nil {
-			e.tags = newTags()
-		}
-
-		for n, v := range m {
-			switch typedValue := v.(type) {
-			case string:
-				e.tags.strings[n] = typedValue
-			case bool:
-				e.tags.booleans[n] = typedValue
-			default:
-				return errors.Wrapf(ErrInvalidTagType, "%T", v)
-			}
-		}
-
-		return nil
-	}
-}
-
 type entry struct {
 	key PK
 	value []byte

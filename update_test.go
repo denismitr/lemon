@@ -179,7 +179,7 @@ func (wts *writeTestSuite) Test_ReplaceInsertedDocs() {
 			"foo1":   "0",
 			"baz": 123.879,
 			"999":   "bar",
-		}, lemon.WithTags(lemon.M{"valid": true})); err != nil {
+		}, lemon.WithTags().Bool("valid", true)); err != nil {
 			return err
 		}
 
@@ -344,10 +344,10 @@ func seedUserData(t *testing.T, db *lemon.DB, n int, tags seedTags) {
 			}
 
 			if tags.hashes {
-				var metaSetter []lemon.MetaSetter
+				var metaSetter []lemon.MetaApplier
 				if i % 4 == 0 {
 
-					metaSetter = append(metaSetter, lemon.WithTags(lemon.M{
+					metaSetter = append(metaSetter, lemon.WithTags().Map(lemon.M{
 						"foo": i % 2 == 0,
 						"bar": i % 2 != 0,
 						"baz": "abc123",

@@ -79,7 +79,7 @@ func (x *Tx) MGet(key ...string) ([]*Document, error) { // fixme: decide on ref 
 	return docs, nil
 }
 
-func (x *Tx) Insert(key string, data interface{}, metaSetters ...MetaSetter) error {
+func (x *Tx) Insert(key string, data interface{}, metaAppliers ...MetaApplier) error {
 	if x.readOnly {
 		return ErrTxIsReadOnly
 	}
@@ -90,10 +90,8 @@ func (x *Tx) Insert(key string, data interface{}, metaSetters ...MetaSetter) err
 	}
 
 	ent := newEntry(key, v)
-	for _, ms := range metaSetters {
-		if err := ms(ent); err != nil {
-			return err
-		}
+	for _, applier := range metaAppliers {
+		applier.applyTo(ent)
 	}
 
 	if err := x.e.insert(ent); err != nil {
@@ -106,7 +104,7 @@ func (x *Tx) Insert(key string, data interface{}, metaSetters ...MetaSetter) err
 	return nil
 }
 
-func (x *Tx) InsertOrReplace(key string, data interface{}, metaSetters ...MetaSetter) error {
+func (x *Tx) InsertOrReplace(key string, data interface{}, metaAppliers ...MetaApplier) error {
 	if x.readOnly {
 		return ErrTxIsReadOnly
 	}
@@ -117,10 +115,8 @@ func (x *Tx) InsertOrReplace(key string, data interface{}, metaSetters ...MetaSe
 	}
 
 	ent := newEntry(key, v)
-	for _, ms := range metaSetters {
-		if err := ms(ent); err != nil {
-			return err
-		}
+	for _, applier := range metaAppliers {
+		applier.applyTo(ent)
 	}
 
 	existing, err := x.e.findByKey(key)

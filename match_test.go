@@ -121,7 +121,7 @@ func seedGranularUsers(t *testing.T, db *lemon.DB) {
 					"b": "baz22",
 				},
 				"1900-10-20": 10.345,
-			}, lemon.WithTags(lemon.M{
+			}, lemon.WithTags().Map(lemon.M{
 				"content": "doc",
 				"valid":   true,
 			}),
@@ -136,7 +136,7 @@ func seedGranularUsers(t *testing.T, db *lemon.DB) {
 					"b": "foo1234",
 				},
 				"1900-11-20": 0.04,
-			}, lemon.WithTags(lemon.M{
+			}, lemon.WithTags().Map(lemon.M{
 				"content": "doc",
 				"foo":     "bar",
 				"valid":   true,
@@ -146,17 +146,13 @@ func seedGranularUsers(t *testing.T, db *lemon.DB) {
 		}
 
 		if err := tx.Insert("user:123", lemon.M{
-				"id": 123,
-				"bar": lemon.M{
-					"a": 987,
-					"b": "baz",
-				},
-				"1900-10-20": 678.345,
-			}, lemon.WithTags(lemon.M{
-				"content": "doc",
-				"valid": true,
-			}),
-		); err != nil {
+			"id": 123,
+			"bar": lemon.M{
+				"a": 987,
+				"b": "baz",
+			},
+			"1900-10-20": 678.345,
+		}, lemon.WithTags().Str("content", "doc").Bool("valid", true)); err != nil {
 			return err
 		}
 
@@ -170,7 +166,7 @@ func seedGranularUsers(t *testing.T, db *lemon.DB) {
 				},
 				"1900-10-20": nil,
 			},
-			lemon.WithTags(lemon.M{
+			lemon.WithTags().Map(lemon.M{
 				"content": "doc",
 				"auth": "basic",
 				"valid": false,
@@ -186,7 +182,7 @@ func seedGranularUsers(t *testing.T, db *lemon.DB) {
 					"b": "baz123223",
 				},
 				"1900-10-20": 0.0,
-			}, lemon.WithTags(lemon.M{
+			}, lemon.WithTags().Map(lemon.M{
 				"content": "doc",
 				"auth": "basic",
 				"valid": true,
@@ -195,23 +191,23 @@ func seedGranularUsers(t *testing.T, db *lemon.DB) {
 			return err
 		}
 
-		if err := tx.Insert("user:12:animals", `[123, 987, 6789]`, lemon.WithTags(lemon.M{"content": "list"})); err != nil {
+		if err := tx.Insert("user:12:animals", `[123, 987, 6789]`, lemon.WithTags().Str("content", "list")); err != nil {
 			return err
 		}
 
-		if err := tx.Insert("user:2:animals", `{"turtle":1,"kangaroo":34}`, lemon.WithTags(lemon.M{"content": "json"})); err != nil {
+		if err := tx.Insert("user:2:animals", `{"turtle":1,"kangaroo":34}`, lemon.WithTags().Str("content", "json")); err != nil {
 			return err
 		}
 
-		if err := tx.Insert("animal:12", `{"species": "turtle"}`, lemon.WithTags(lemon.M{"content": "json"})); err != nil {
+		if err := tx.Insert("animal:12", `{"species": "turtle"}`, lemon.WithTags().Str("content", "json")); err != nil {
 			return err
 		}
 
-		if err := tx.Insert("animal:1", `{"species": "kangaroo"}`, lemon.WithTags(lemon.M{"content": "json"})); err != nil {
+		if err := tx.Insert("animal:1", `{"species": "kangaroo"}`, lemon.WithTags().Str("content", "json")); err != nil {
 			return err
 		}
 
-		if err := tx.Insert("animal:3", `{"species": "penguin"}`, lemon.WithTags(lemon.M{"content": "json"})); err != nil {
+		if err := tx.Insert("animal:3", `{"species": "penguin"}`, lemon.WithTags().Str("content", "json")); err != nil {
 			return err
 		}
 
