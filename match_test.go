@@ -61,6 +61,41 @@ func (mts *matchTestSuite) TestMatchSingleUserByPatternAndTag() {
 	mts.Require().Equal("list", docs[0].Tags().GetString("content"))
 }
 
+func (mts *matchTestSuite) TestMatchMultipleUsersByPatternAndGtIntTag() {
+	mts.fixture = "./__fixtures__/match_db1.ldb"
+	db, closer, err := lemon.New(mts.fixture)
+	mts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			mts.T().Errorf("ERROR: %v", err)
+		}
+	}()
+
+	docs := make([]lemon.Document, 0)
+	ctx := context.Background()
+	err = db.View(context.Background(), func(tx *lemon.Tx) error {
+		q := lemon.Q().Match("user:*").
+			HasAllTags(lemon.QT().IntTagGt("age", 55))
+
+		return tx.Find(ctx, q, &docs)
+	})
+
+	mts.Require().NoError(err)
+	mts.Require().Len(docs, 2)
+	mts.Require().Equal("user:124", docs[0].Key())
+	mts.Require().Equal(`{"1900-10-20":null,"bar":{"a":666,"b":"baz223"},"foo":124}`, docs[0].RawString())
+	mts.Require().Equal(map[string]string{"auth":"basic", "content":"doc"}, docs[0].Tags().Strings())
+	mts.Require().Equal("doc", docs[0].Tags().GetString("content"))
+
+	mts.Require().Equal("user:125", docs[1].Key())
+	mts.Require().Equal(`{"1900-10-20":0,"bar":{"a":667,"b":"baz123223"},"foo":125}`, docs[1].RawString())
+	mts.Require().Equal(map[string]string{"auth":"basic", "content":"doc"}, docs[1].Tags().Strings())
+	mts.Require().Equal("doc", docs[1].Tags().GetString("content"))
+	mts.Require().Equal(59, docs[1].Tags().GetInt("age"))
+	mts.Require().Equal(true, docs[1].Tags().GetBool("valid"))
+}
+
 func (mts *matchTestSuite) TestMatchMultipleUsersByPatternAndTagWithDescSorting() {
 	mts.fixture = "./__fixtures__/match_db1.ldb"
 	db, closer, err := lemon.New(mts.fixture)
@@ -205,6 +240,7 @@ func seedGranularUsers(t *testing.T, db *lemon.DB) {
 				"content": "doc",
 				"auth": "basic",
 				"valid": false,
+				"age": 58,
 			}),
 		); err != nil {
 			return err
@@ -221,6 +257,7 @@ func seedGranularUsers(t *testing.T, db *lemon.DB) {
 				"content": "doc",
 				"auth": "basic",
 				"valid": true,
+				"age": 59,
 			}),
 		); err != nil {
 			return err
@@ -233,20 +270,23 @@ func seedGranularUsers(t *testing.T, db *lemon.DB) {
 		if err := tx.Insert(
 			"user:2:animals",
 			`{"turtle":1,"kangaroo":34}`,
-			lemon.WithTags().Str("content", "json").Int("number", 2),
+			lemon.WithTags().Str("content", "json").Int("count", 2),
 		); err != nil {
 			return err
 		}
 
-		if err := tx.Insert("animal:12", `{"species": "turtle"}`, lemon.WithTags().Str("content", "json")); err != nil {
+		if err := tx.Insert("animal:12", `{"species": "turtle"}`,
+			lemon.WithTags().Str("content", "json")); err != nil {
 			return err
 		}
 
-		if err := tx.Insert("animal:1", `{"species": "kangaroo"}`, lemon.WithTags().Str("content", "json")); err != nil {
+		if err := tx.Insert("animal:1", `{"species": "kangaroo"}`,
+			lemon.WithTags().Str("content", "json").Int("age", 20)); err != nil {
 			return err
 		}
 
-		if err := tx.Insert("animal:3", `{"species": "penguin"}`, lemon.WithTags().Str("content", "json")); err != nil {
+		if err := tx.Insert("animal:3", `{"species": "penguin"}`,
+			lemon.WithTags().Str("content", "json").Int("age", 22)); err != nil {
 			return err
 		}
 

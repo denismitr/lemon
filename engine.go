@@ -300,32 +300,64 @@ func (e *engine) filterEntities(q *queryOptions) *filterEntries {
 	}
 
 	if q.allTags.integers != nil && e.intTags != nil {
-		for n, v := range q.allTags.integers {
-			if e.intTags[n.name] == nil {
+		for tagKey, v := range q.allTags.integers {
+			if e.intTags[tagKey.name] == nil {
 				continue
 			}
 
-			item := e.intTags[n.name].Get(&intTag{value:v})
-			if item == nil {
-				continue
-			}
-
-			tag, ok := item.(*intTag)
-			if !ok {
-				panic(fmt.Sprintf("how can intIndex item not be of type *intTag?"))
-			}
-
-			if tag.entries == nil {
-				continue
-			}
-
-			for _, ent := range tag.entries {
-				ft.add(ent)
+			switch tagKey.comp {
+			case equal:
+				e.filterEntitiesByIntTagEq(tagKey.name, v, ft)
+			case greaterThan:
+				e.filterEntitiesByIntTagGraterThan(tagKey.name, v, ft)
 			}
 		}
 	}
 
 	return ft
+}
+
+func (e *engine) filterEntitiesByIntTagEq(name string, v int, ft *filterEntries) {
+	item := e.intTags[name].Get(&intTag{value: v})
+	if item == nil {
+		return
+	}
+
+	tag, ok := item.(*intTag)
+	if !ok {
+		panic(fmt.Sprintf("how can intIndex item not be of type *intTag?"))
+	}
+
+	if tag.entries == nil {
+		return
+	}
+
+	for _, ent := range tag.entries {
+		ft.add(ent)
+	}
+}
+
+func (e *engine) filterEntitiesByIntTagGraterThan(name string, v int, ft *filterEntries) {
+	e.intTags[name].Ascend(&intTag{value: v}, func(item interface{}) bool {
+		if item == nil {
+			return true
+		}
+
+		tag, ok := item.(*intTag)
+		if !ok {
+			panic(fmt.Sprintf("how can intIndex item not be of type *intTag?"))
+		}
+
+		if tag.entries == nil {
+			return true
+		}
+
+		for _, ent := range tag.entries {
+			ft.add(ent)
+		}
+
+		return true
+	})
 }
 
 func (e *engine) put(ent *entry, replace bool) error {

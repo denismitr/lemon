@@ -15,6 +15,7 @@ type comparator int8
 
 const (
 	equal comparator = iota
+	greaterThan
 )
 
 type tagKey struct {
@@ -48,6 +49,11 @@ func (qt *QueryTags) StrTagEq(name string, value string) *QueryTags {
 
 func (qt *QueryTags) IntTagEq(name string, value int) *QueryTags {
 	qt.integers[tagKey{name: name, comp: equal}] = value
+	return qt
+}
+
+func (qt *QueryTags) IntTagGt(name string, value int) *QueryTags {
+	qt.integers[tagKey{name: name, comp: greaterThan}] = value
 	return qt
 }
 
@@ -127,6 +133,10 @@ func (fo *queryOptions) matchTags(e *entry) bool {
 		switch k.comp {
 		case equal:
 			if e.tags.integers[k.name] == v {
+				actualMatches++
+			}
+		case greaterThan:
+			if e.tags.integers[k.name] > v {
 				actualMatches++
 			}
 		}
