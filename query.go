@@ -77,7 +77,7 @@ func (fo *queryOptions) Match(patten string) *queryOptions {
 	return fo
 }
 
-func (fo *queryOptions) Order(o Order) *queryOptions {
+func (fo *queryOptions) KeyOrder(o Order) *queryOptions {
 	fo.order = o
 	return fo
 }
