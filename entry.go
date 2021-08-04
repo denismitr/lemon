@@ -81,18 +81,6 @@ func (cmd *deleteCmd) deserialize(e *engine) error {
 		return errors.Wrapf(err, "could not deserialize delete key %s command", cmd.key.String())
 	}
 
-	if e.boolTags != nil {
-		e.boolTags.removeEntry(ent)
-	}
-
-	if e.strTags != nil {
-		e.strTags.removeEntry(ent)
-	}
-
-	if e.intTags != nil {
-		e.intTags.removeEntry(ent)
-	}
-
 	e.tags.removeEntry(ent)
 
 	e.pks.Delete(&entry{key: cmd.key})

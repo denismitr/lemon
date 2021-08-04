@@ -49,6 +49,8 @@ func (ta *TagApplier) Map(m M) *TagApplier {
 			ta.booleans[n] = typedValue
 		case int:
 			ta.integers[n] = typedValue
+		case float64:
+			ta.floats[n] = typedValue
 		default:
 			ta.err = errors.Wrapf(ErrInvalidTagType, "%T", v)
 		}
@@ -158,36 +160,70 @@ func (t *Tags) GetInt(name string) int {
 	return t.integers[name]
 }
 
-type bTag struct {
-	name  string
+type entries map[string]*entry
+
+func (e entries) setEntry(ent *entry) {
+	e[ent.key.String()] = ent
+}
+
+func (e entries) getEntry(key string) *entry {
+	return e[key]
+}
+
+func (e entries) getEntries() map[string]*entry {
+	return e
+}
+
+type boolTag struct {
 	value bool
+	entries
+}
+
+func newBoolTag(value bool) *boolTag {
+	return &boolTag{
+		value: value,
+		entries: make(entries),
+	}
 }
 
 type strTag struct {
-	name  string
 	value string
+	entries
+}
+
+func newStrTag(value string) *strTag {
+	return &strTag{
+		value: value,
+		entries: make(entries),
+	}
 }
 
 type intTag struct {
 	value   int
-	entries []*entry
+	entries
 }
 
-type entityContainer interface {
+func newIntTag(value int) *intTag {
+	return &intTag{
+		value: value,
+		entries: make(entries),
+	}
+}
+
+type entryContainer interface {
+	setEntry(ent *entry)
 	getEntry(key string) *entry
 	getEntries() map[string]*entry
 }
 
 type floatTag struct {
 	value   float64
-	entries map[string]*entry
+	entries
 }
 
-func (ft *floatTag) getEntry(key string) *entry {
-	return ft.entries[key]
-}
-
-func byStrings(a, b interface{}) bool {
-	i1, i2 := a.(*strTag), b.(*strTag)
-	return i1.value < i2.value
+func newFloatTag(value float64) *floatTag {
+	return &floatTag{
+		value: value,
+		entries: make(entries),
+	}
 }

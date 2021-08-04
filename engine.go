@@ -3,7 +3,6 @@ package lemon
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"github.com/pkg/errors"
 	btr "github.com/tidwall/btree"
 )
@@ -28,18 +27,12 @@ type (
 type engine struct {
 	persistence *persistence
 	pks         *btr.BTree
-	boolTags    boolIndex
-	strTags     stringIndex
-	intTags     intIndex
 	tags        *tagIndex
 }
 
 func newEngine(fullPath string) (*engine, error) {
 	e := &engine{
-		pks:      btr.New(byPrimaryKeys),
-		boolTags: newBoolIndex(),
-		strTags:  newStringIndex(),
-		intTags:  newIntIndex(),
+		pks:  btr.New(byPrimaryKeys),
 		tags: newTagIndex(),
 	}
 
@@ -61,8 +54,7 @@ func newEngine(fullPath string) (*engine, error) {
 func (e *engine) close() error {
 	defer func() {
 		e.pks = nil
-		e.boolTags = nil
-		e.strTags = nil
+		e.tags = nil
 		e.persistence = nil
 	}()
 
@@ -162,37 +154,45 @@ func (e *engine) update(ent *entry) error {
 	return nil
 }
 
-func (e *engine) setEntityTags(ent *entry) {
+func (e *engine) setEntityTags(ent *entry) error {
 	for n, v := range ent.tags.booleans {
-		e.boolTags.add(n, v, ent)
+		if err := e.tags.add(n, v, ent); err != nil {
+			return err
+		}
 	}
 
 	for n, v := range ent.tags.strings {
-		e.strTags.add(n, v, ent)
+		if err := e.tags.add(n, v, ent); err != nil {
+			return err
+		}
 	}
 
 	for n, v := range ent.tags.integers {
-		e.intTags.add(n, v, ent)
+		if err := e.tags.add(n, v, ent); err != nil {
+			return err
+		}
 	}
 
 	for n, v := range ent.tags.floats {
-		if err := e.tags.addFloat(n, v, ent); err != nil {
-			panic(err)
+		if err := e.tags.add(n, v, ent); err != nil {
+			return err
 		}
 	}
+
+	return nil
 }
 
 func (e *engine) clearEntityTags(ent *entry) {
 	for n, v := range ent.tags.booleans {
-		e.boolTags.removeEntryByTag(n, v, ent)
+		e.tags.removeEntryByTag(n, v, ent)
 	}
 
 	for n, v := range ent.tags.strings {
-		e.strTags.removeEntryByTag(n, v, ent)
+		e.tags.removeEntryByTag(n, v, ent)
 	}
 
 	for n, v := range ent.tags.integers {
-		e.intTags.removeEntryByTag(n, v, ent)
+		e.tags.removeEntryByTag(n, v, ent)
 	}
 
 	for n, v := range ent.tags.floats {
@@ -285,99 +285,39 @@ func (e *engine) filterEntities(q *queryOptions) *filterEntries {
 
 	ft := newFilterEntries(q.patterns)
 
-	if q.allTags.booleans != nil && e.boolTags != nil {
-		for n, v := range q.allTags.booleans {
-			entries := e.boolTags[n.name][v]
-			if entries == nil {
-				continue
-			}
-
-			for _, ent := range entries {
-				ft.add(ent)
-			}
-		}
-	}
-
-	if q.allTags.strings != nil && e.strTags != nil {
-		for n, v := range q.allTags.strings {
-			entries := e.strTags[n.name][v]
-			if entries == nil {
-				continue
-			}
-
-			for _, ent := range entries {
-				ft.add(ent)
-			}
-		}
-	}
-
-	if q.allTags.integers != nil && e.intTags != nil {
-		for tagKey, v := range q.allTags.integers {
-			if e.intTags[tagKey.name] == nil {
-				continue
-			}
-
-			switch tagKey.comp {
-			case equal:
-				e.filterEntitiesByIntTagEq(tagKey.name, v, ft)
-			case greaterThan:
-				e.filterEntitiesByIntTagGraterThan(tagKey.name, v, ft)
-			}
-		}
-	}
-
-	for tagKey, v := range q.allTags.floats {
-		if e.tags.data[tagKey.name] == nil {
+	for tk, v := range q.allTags.booleans {
+		if e.tags.data[tk.name] == nil {
 			continue
 		}
 
-		e.tags.filterEntities(tagKey, v, ft)
+		e.tags.filterEntities(tk, v, ft)
+	}
+
+	for tk, v := range q.allTags.strings {
+		if e.tags.data[tk.name] == nil {
+			continue
+		}
+
+		e.tags.filterEntities(tk, v, ft)
+	}
+
+	for tk, v := range q.allTags.integers {
+		if e.tags.data[tk.name] == nil {
+			continue
+		}
+
+		e.tags.filterEntities(tk, v, ft)
+	}
+
+	for tk, v := range q.allTags.floats {
+		if e.tags.data[tk.name] == nil {
+			continue
+		}
+
+		e.tags.filterEntities(tk, v, ft)
 	}
 
 	return ft
-}
-
-func (e *engine) filterEntitiesByIntTagEq(name string, v int, ft *filterEntries) {
-	item := e.intTags[name].Get(&intTag{value: v})
-	if item == nil {
-		return
-	}
-
-	tag, ok := item.(*intTag)
-	if !ok {
-		panic(fmt.Sprintf("how can intIndex item not be of type *intTag?"))
-	}
-
-	if tag.entries == nil {
-		return
-	}
-
-	for _, ent := range tag.entries {
-		ft.add(ent)
-	}
-}
-
-func (e *engine) filterEntitiesByIntTagGraterThan(name string, v int, ft *filterEntries) {
-	e.intTags[name].Ascend(&intTag{value: v}, func(item interface{}) bool {
-		if item == nil {
-			return true
-		}
-
-		tag, ok := item.(*intTag)
-		if !ok {
-			panic(fmt.Sprintf("how can intIndex item not be of type *intTag?"))
-		}
-
-		if tag.entries == nil {
-			return true
-		}
-
-		for _, ent := range tag.entries {
-			ft.add(ent)
-		}
-
-		return true
-	})
 }
 
 func (e *engine) put(ent *entry, replace bool) error {
@@ -399,7 +339,9 @@ func (e *engine) put(ent *entry, replace bool) error {
 	}
 
 	if ent.tags != nil {
-		e.setEntityTags(ent)
+		if err := e.setEntityTags(ent); err != nil {
+			return err
+		}
 	}
 
 	return nil
