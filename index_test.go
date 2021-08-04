@@ -3,10 +3,11 @@ package lemon
 //func Test_stringIndex(t *testing.T) {
 //	t.Run("single item can be added to empty index and than removed", func(t *testing.T) {
 //		si := make(stringIndex)
+//		ent := &entry{key: newPK("foo"), value: []byte("HELLO")}
 //
-//		si.add("foo", "bar", 4)
-//		offsets := si.findOffsets("foo", "bar")
-//		assert.Equal(t, []int{4}, offsets)
+//		si.add("foo", "bar", ent)
+//		si.removeEntry(ent)
+//		assert.Equal(t, []int{4}, si.)
 //
 //		si.removeOffsetAndShift("foo", "bar", 4)
 //		offsets = si.findOffsets("foo", "bar")

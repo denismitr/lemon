@@ -218,8 +218,7 @@ func Test_parser(t *testing.T) {
 		assert.Equal(t, cmd1.value, []byte(`{"foo":"bar"}`))
 		require.NotNil(t, cmd1.tags)
 		require.Len(t, cmd1.tags.strings, 1)
-		require.Equal(t, "bar", cmd1.tags.strings[0].name)
-		require.Equal(t, "one_two_three", cmd1.tags.strings[0].value)
+		require.Equal(t, map[string]string{"bar":"one_two_three"}, cmd1.tags.strings)
 
 		cmd2, ok := mock.commands[1].(*entry)
 		require.True(t, ok)
@@ -227,8 +226,7 @@ func Test_parser(t *testing.T) {
 		assert.Equal(t, cmd2.value, []byte(`{"baz":123}`))
 		require.NotNil(t, cmd2.tags)
 		require.Len(t, cmd2.tags.booleans, 1)
-		require.Equal(t, "foo", cmd2.tags.booleans[0].name)
-		require.Equal(t, true, cmd2.tags.booleans[0].value)
+		require.Equal(t, map[string]bool{"foo":true}, cmd2.tags.booleans)
 
 		cmd3, ok := mock.commands[2].(*deleteCmd)
 		require.True(t, ok)

@@ -1,109 +1,209 @@
 package lemon
 
 import (
+	"fmt"
+	"github.com/pkg/errors"
 	btr "github.com/tidwall/btree"
 )
 
+var ErrInvalidIndexType = errors.New("invalid index type")
 
-type stringIndex map[string]map[string][]*entry
+type indexType uint8
 
-func newStringIndex() stringIndex {
-	return make(map[string]map[string][]*entry)
+const invalidTagTypeConversion = "invalid tag type conversion"
+
+const (
+	floatDataType = iota
+	intDataType
+	strDataType
+	boolDataType
+)
+
+type index struct {
+	dt  indexType
+	btr *btr.BTree
 }
 
-func (si stringIndex) add(tagName, v string, ent *entry) {
-	if si[tagName] == nil {
-		si[tagName] = make(map[string][]*entry)
+type tagIndex struct {
+	data map[string]*index
+}
+
+func newTagIndex() *tagIndex {
+	return &tagIndex{
+		data: make(map[string]*index),
 	}
-
-	si[tagName][v] = append(si[tagName][v], ent)
 }
 
-func (si stringIndex) findEntries(k, v string) []*entry {
-	return si[k][v]
-}
-
-func (si stringIndex) removeEntryByTag(tagName, v string, ent *entry) bool {
-	if si[tagName] == nil {
-		return false
-	}
-
-	for i, e := range si[tagName][v] {
-		if e.key.Equal(&ent.key) {
-			si[tagName][v] = append(si[tagName][v][:i], si[tagName][v][i+1:]...)
-			return true
-		}
-	}
-
-	return false
-}
-
-func (si stringIndex) removeEntry(ent *entry) {
-	if ent.tags == nil || ent.tags.booleans == nil {
+func (ti *tagIndex) removeEntry(ent *entry) {
+	if ent.tags == nil {
 		return
 	}
 
-	for _, sTag := range ent.tags.strings {
-		if si[sTag.name] == nil {
+	for name, value := range ent.tags.floats {
+		if ti.data[name] == nil {
 			continue
 		}
 
-		for i, e := range si[sTag.name][sTag.value] {
-			if e.key.Equal(&ent.key) {
-				si[sTag.name][sTag.value] = append(si[sTag.name][sTag.value][:i], si[sTag.name][sTag.value][i+1:]...)
-			}
+		idx := ti.data[name]
+		item := idx.btr.Get(&floatTag{value: value})
+		if item == nil {
+			continue
 		}
-	}
-}
 
-type boolIndex map[string]map[bool][]*entry
-
-func newBoolIndex() boolIndex {
-	return make(map[string]map[bool][]*entry)
-}
-
-func (bi boolIndex) add(tagName string, v bool, ent *entry) {
-	if bi[tagName] == nil {
-		bi[tagName] = make(map[bool][]*entry)
-	}
-
-	bi[tagName][v] = append(bi[tagName][v], ent)
-}
-
-func (bi boolIndex) findEntries(name string, v bool) []*entry {
-	return bi[name][v]
-}
-
-func (bi boolIndex) removeEntryByTag(tagName string, v bool, ent *entry) bool {
-	if bi[tagName] == nil {
-		return false
-	}
-
-	for i, e := range bi[tagName][v] {
-		if e.key.Equal(&ent.key) {
-			bi[tagName][v] = append(bi[tagName][v][:i], bi[tagName][v][i+1:]...)
-			return true
+		tag := item.(*floatTag)
+		if tag.entries[ent.key.String()] == nil {
+			continue
 		}
+		delete(tag.entries, ent.key.String())
 	}
-
-	return false
 }
 
-func (bi boolIndex) removeEntry(ent *entry) {
-	if ent.tags == nil || ent.tags.booleans == nil {
+func (ti *tagIndex) removeEntryByTag(name string, v interface{}, ent *entry) {
+	idx := ti.data[name]
+	if idx == nil {
 		return
 	}
 
-	for _, bTag := range ent.tags.booleans {
-		if bi[bTag.name] == nil {
-			continue
+	var item interface{}
+	switch typedValue := v.(type) {
+	case float64:
+		item = idx.btr.Get(&floatTag{value: typedValue})
+		if item == nil {
+			return
+		}
+		tag, ok := item.(*floatTag)
+		if !ok {
+			panic(invalidTagTypeConversion)
+		}
+		if tag.entries[ent.key.String()] != nil {
+			delete(tag.entries, ent.key.String())
+		}
+	}
+}
+
+func resolveIndexIfNotExists(idx *index, dataType indexType, less func(a, b interface{}) bool) (*index, error) {
+	if idx == nil {
+		idx = &index{
+			dt: dataType,
+			btr: btr.New(less),
+		}
+	}
+
+	if idx.dt != dataType {
+		return nil, ErrInvalidIndexType
+	}
+
+	return idx, nil
+}
+
+func (ti *tagIndex) add(name string, value interface{}, ent *entry) error {
+	idx := ti.data[name]
+
+	var tag entryContainer
+	var dataType indexType
+	var err error
+
+	switch typedValue := value.(type) {
+	case float64:
+		dataType = floatDataType
+		idx, err = resolveIndexIfNotExists(idx, dataType, byFloats)
+		tag = newFloatTag(typedValue)
+	case int:
+		dataType = intDataType
+		idx, err = resolveIndexIfNotExists(idx, dataType, byIntegers)
+		tag = newIntTag(typedValue)
+	case string:
+		dataType = strDataType
+		idx, err = resolveIndexIfNotExists(idx, dataType, byStrings)
+		tag = newStrTag(typedValue)
+	case bool:
+		dataType = boolDataType
+		idx, err = resolveIndexIfNotExists(idx, dataType, byBooleans)
+		tag = newBoolTag(typedValue)
+	default:
+		return errors.Errorf("Type %T is invalid", value)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	existing := idx.btr.Get(tag)
+	if existing != nil {
+		c, ok := existing.(entryContainer)
+		if !ok {
+			panic("invalid type casting") // fixme
 		}
 
-		for i, e := range bi[bTag.name][bTag.value] {
-			if e.key.Equal(&ent.key) {
-				bi[bTag.name][bTag.value] = append(bi[bTag.name][bTag.value][:i], bi[bTag.name][bTag.value][i+1:]...)
-			}
+		c.setEntry(ent)
+	} else {
+		tag.setEntry(ent)
+		idx.btr.Set(tag)
+	}
+
+	return nil
+}
+
+func (ti *tagIndex) getEqualTagEntities(idx *index, item interface{}) map[string]*entry {
+	found := idx.btr.Get(item)
+	if found == nil {
+		return nil
+	}
+
+	tag, ok := found.(entryContainer)
+	if !ok {
+		panic("not an entity container") // fixme
+	}
+
+	return tag.getEntries()
+}
+
+func (ti *tagIndex) filterEntities(tagKey tagKey, v interface{}, ft *filterEntries) {
+	idx := ti.data[tagKey.name]
+	if idx == nil {
+		return
+	}
+
+	var item interface{}
+	switch typedValue := v.(type) {
+	case float64:
+		item = newFloatTag(typedValue)
+	case int:
+		item = newIntTag(typedValue)
+	case string:
+		item = newStrTag(typedValue)
+	case bool:
+		item = newBoolTag(typedValue)
+	default:
+		panic(fmt.Sprintf("Type %T is not supported", v))
+	}
+
+	switch tagKey.comp {
+	case equal:
+		for _, ent := range ti.getEqualTagEntities(idx, item) {
+			ft.add(ent)
 		}
+	case greaterThan:
+		idx.btr.Ascend(item, func(found interface{}) bool {
+			if found == nil {
+				return true
+			}
+
+			tag, ok := found.(entryContainer)
+			if !ok {
+				panic(fmt.Sprintf("how can intIndex item not be of type *intTag?"))
+			}
+
+			if tag.getEntries() == nil {
+				return true
+			}
+
+			for _, ent := range tag.getEntries() {
+				ft.add(ent)
+			}
+
+			return true
+		})
 	}
 }
 
@@ -138,7 +238,30 @@ func descendGreaterThan(
 	iter func(item interface{}) bool,
 ) {
 	btr.Descend(nil, func(item interface{}) bool {
-		// todo: check item type
 		return gt(btr, item, greaterOrEqual) && iter(item)
 	})
+}
+
+func byIntegers(a, b interface{}) bool {
+	i1, i2 := a.(*intTag), b.(*intTag)
+	return i1.value < i2.value
+}
+
+func byFloats(a, b interface{}) bool {
+	i1, i2 := a.(*floatTag), b.(*floatTag)
+	return i1.value < i2.value
+}
+
+func byStrings(a, b interface{}) bool {
+	i1, i2 := a.(*strTag), b.(*strTag)
+	return i1.value < i2.value
+}
+
+func byBooleans(a, b interface{}) bool {
+	i1, i2 := a.(*boolTag), b.(*boolTag)
+	if i1.value == false && i2.value == true {
+		return true
+	}
+
+	return false
 }

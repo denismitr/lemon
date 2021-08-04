@@ -128,7 +128,7 @@ func (fts *findByTagsTestSuite) TestLemonDB_FindByBoolTag() {
 
 	var docs []lemon.Document
 	if err := db.View(context.Background(), func(tx *lemon.Tx) error {
-		opts := lemon.Q().Order(lemon.DescOrder).AndBoolTag("foo", true)
+		opts := lemon.Q().KeyOrder(lemon.DescOrder).HasAllTags(lemon.QT().BoolTagEq("foo", true))
 		if err := tx.Find(ctx, opts, &docs); err != nil {
 			return err
 		}
@@ -189,7 +189,7 @@ func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Descend() {
 
 	var docs []lemon.Document
 	if err := db.View(context.Background(), func(tx *lemon.Tx) error {
-		opts := lemon.Q().Order(lemon.DescOrder).KeyRange("user:100", "user:109")
+		opts := lemon.Q().KeyOrder(lemon.DescOrder).KeyRange("user:100", "user:109")
 		if err := tx.Find(ctx, opts, &docs); err != nil {
 			return err
 		}
@@ -223,7 +223,7 @@ func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Ascend() {
 
 	var docs []lemon.Document
 	if err := db.View(context.Background(), func(tx *lemon.Tx) error {
-		opts := lemon.Q().Order(lemon.AscOrder).KeyRange("product:500", "product:750")
+		opts := lemon.Q().KeyOrder(lemon.AscOrder).KeyRange("product:500", "product:750")
 		if err := tx.Find(ctx, opts, &docs); err != nil {
 			return err
 		}
@@ -257,7 +257,7 @@ func (fts *findTestSuite) TestLemonDB_FindAllUsers_Ascend() {
 
 	var docs []lemon.Document
 	if err := db.View(context.Background(), func(tx *lemon.Tx) error {
-		opts := lemon.Q().Order(lemon.AscOrder).Prefix("user")
+		opts := lemon.Q().KeyOrder(lemon.AscOrder).Prefix("user")
 		if err := tx.Find(ctx, opts, &docs); err != nil {
 			return err
 		}
@@ -292,7 +292,7 @@ func (fts *findTestSuite) TestLemonDB_FindAllUsers_Descend() {
 
 	var docs []lemon.Document
 	if err := db.View(context.Background(), func(tx *lemon.Tx) error {
-		q := lemon.Q().Order(lemon.DescOrder).Prefix("user")
+		q := lemon.Q().KeyOrder(lemon.DescOrder).Prefix("user")
 		if err := tx.Find(ctx, q, &docs); err != nil {
 			return err
 		}
@@ -329,7 +329,7 @@ func (fts *findTestSuite) TestLemonDB_FindAllDocs_Descend() {
 
 	var docs []lemon.Document
 	if err := db.View(context.Background(), func(tx *lemon.Tx) error {
-		opts := lemon.Q().Order(lemon.DescOrder)
+		opts := lemon.Q().KeyOrder(lemon.DescOrder)
 		if err := tx.Find(ctx, opts, &docs); err != nil {
 			return err
 		}
@@ -371,7 +371,7 @@ func (fts *findTestSuite) TestLemonDB_FindAllDocs_Ascend() {
 
 	var docs []lemon.Document
 	if err := db.View(context.Background(), func(tx *lemon.Tx) error {
-		opts := lemon.Q().Order(lemon.AscOrder)
+		opts := lemon.Q().KeyOrder(lemon.AscOrder)
 		if err := tx.Find(ctx, opts, &docs); err != nil {
 			return err
 		}
@@ -443,7 +443,7 @@ func (sts *scanTestSuite) Test_ScanUserPets() {
 
 	var docs []lemon.Document
 	if err := db.View(ctx, func(tx *lemon.Tx) error {
-		opts := lemon.Q().Order(lemon.AscOrder).Prefix("user")
+		opts := lemon.Q().KeyOrder(lemon.AscOrder).Prefix("user")
 		if scanErr := tx.Scan(ctx, opts, func (d lemon.Document) bool {
 			if strings.Contains(d.Key(), ":pet:") {
 				docs = append(docs, d)
@@ -479,7 +479,7 @@ func (sts *scanTestSuite) Test_ScanUserPetsWithManualLimit() {
 
 	var docs []lemon.Document
 	if err := db.View(ctx, func(tx *lemon.Tx) error {
-		opts := lemon.Q().Order(lemon.AscOrder).Prefix("user")
+		opts := lemon.Q().KeyOrder(lemon.AscOrder).Prefix("user")
 		if scanErr := tx.Scan(ctx, opts, func (d lemon.Document) bool {
 			if strings.Contains(d.Key(), ":pet:") {
 				docs = append(docs, d)

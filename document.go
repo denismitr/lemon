@@ -32,7 +32,7 @@ func newDocumentFromEntry(ent *entry) *Document {
 	if ent.tags != nil {
 		d.tags = ent.tags
 	} else {
-		d.tags = &Tags{}
+		d.tags = newTags()
 	}
 
 	return d

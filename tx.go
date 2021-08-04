@@ -79,14 +79,9 @@ func (x *Tx) MGet(key ...string) ([]*Document, error) { // fixme: decide on ref 
 	return docs, nil
 }
 
-func (x *Tx) Insert(key string, data interface{}, taggers ...Tagger) error {
+func (x *Tx) Insert(key string, data interface{}, metaAppliers ...MetaApplier) error {
 	if x.readOnly {
 		return ErrTxIsReadOnly
-	}
-
-	ts := Tags{}
-	for _, t := range taggers {
-		t(&ts)
 	}
 
 	v, err := serializeToValue(data)
@@ -94,7 +89,10 @@ func (x *Tx) Insert(key string, data interface{}, taggers ...Tagger) error {
 		return err
 	}
 
-	ent := newEntry(key, v, &ts)
+	ent := newEntry(key, v)
+	for _, applier := range metaAppliers {
+		applier.applyTo(ent)
+	}
 
 	if err := x.e.insert(ent); err != nil {
 		return err
@@ -106,14 +104,9 @@ func (x *Tx) Insert(key string, data interface{}, taggers ...Tagger) error {
 	return nil
 }
 
-func (x *Tx) InsertOrReplace(key string, data interface{}, taggers ...Tagger) error {
+func (x *Tx) InsertOrReplace(key string, data interface{}, metaAppliers ...MetaApplier) error {
 	if x.readOnly {
 		return ErrTxIsReadOnly
-	}
-
-	ts := Tags{}
-	for _, t := range taggers {
-		t(&ts)
 	}
 
 	v, err := serializeToValue(data)
@@ -121,7 +114,10 @@ func (x *Tx) InsertOrReplace(key string, data interface{}, taggers ...Tagger) er
 		return err
 	}
 
-	ent := newEntry(key, v, &ts)
+	ent := newEntry(key, v)
+	for _, applier := range metaAppliers {
+		applier.applyTo(ent)
+	}
 
 	existing, err := x.e.findByKey(key)
 	if err != nil && !errors.Is(err, ErrKeyDoesNotExist) {

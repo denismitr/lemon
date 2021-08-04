@@ -5,6 +5,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+var ErrInvalidTagType = errors.New("invalid tag type")
+
+type MetaSetter func(e *entry) error
+
 type entry struct {
 	key PK
 	value []byte
@@ -15,8 +19,12 @@ func (ent *entry) deserialize(e *engine) error {
 	return e.insert(ent)
 }
 
-func newEntry(key string, value []byte, tags *Tags) *entry {
+func newEntryWithTags(key string, value []byte, tags *Tags) *entry {
 	return &entry{key: newPK(key), value: value, tags: tags}
+}
+
+func newEntry(key string, value []byte) *entry {
+	return &entry{key: newPK(key), value: value}
 }
 
 func (ent *entry) serialize(buf *bytes.Buffer) {
@@ -26,12 +34,20 @@ func (ent *entry) serialize(buf *bytes.Buffer) {
 	writeRespBlob(ent.value, buf)
 
 	if ent.tagCount() > 0 {
-		for _, bt := range ent.tags.booleans {
-			writeRespBoolTag(&bt, buf)
+		for n, v := range ent.tags.booleans {
+			writeRespBoolTag(n, v, buf)
 		}
 
-		for _, st := range ent.tags.strings {
-			writeRespStrTag(&st, buf)
+		for n, v := range ent.tags.strings {
+			writeRespStrTag(n, v, buf)
+		}
+
+		for n, v := range ent.tags.integers {
+			writeRespIntTag(n, v, buf)
+		}
+
+		for n, v := range ent.tags.floats {
+			writeRespFloatTag(n, v, buf)
 		}
 	}
 }
@@ -65,13 +81,7 @@ func (cmd *deleteCmd) deserialize(e *engine) error {
 		return errors.Wrapf(err, "could not deserialize delete key %s command", cmd.key.String())
 	}
 
-	if e.boolTags != nil {
-		e.boolTags.removeEntry(ent)
-	}
-
-	if e.strTags != nil {
-		e.strTags.removeEntry(ent)
-	}
+	e.tags.removeEntry(ent)
 
 	e.pks.Delete(&entry{key: cmd.key})
 

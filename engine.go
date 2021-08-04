@@ -27,15 +27,13 @@ type (
 type engine struct {
 	persistence *persistence
 	pks         *btr.BTree
-	boolTags    boolIndex
-	strTags     stringIndex
+	tags        *tagIndex
 }
 
 func newEngine(fullPath string) (*engine, error) {
 	e := &engine{
-		pks:      btr.New(byPrimaryKeys),
-		boolTags: newBoolIndex(),
-		strTags:  newStringIndex(),
+		pks:  btr.New(byPrimaryKeys),
+		tags: newTagIndex(),
 	}
 
 	if fullPath != ":memory:" {
@@ -56,8 +54,7 @@ func newEngine(fullPath string) (*engine, error) {
 func (e *engine) close() error {
 	defer func() {
 		e.pks = nil
-		e.boolTags = nil
-		e.strTags = nil
+		e.tags = nil
 		e.persistence = nil
 	}()
 
@@ -157,23 +154,49 @@ func (e *engine) update(ent *entry) error {
 	return nil
 }
 
-func (e *engine) setEntityTags(ent *entry) {
-	for _, bt := range ent.tags.booleans {
-		e.boolTags.add(bt.name, bt.value, ent)
+func (e *engine) setEntityTags(ent *entry) error {
+	for n, v := range ent.tags.booleans {
+		if err := e.tags.add(n, v, ent); err != nil {
+			return err
+		}
 	}
 
-	for _, st := range ent.tags.strings {
-		e.strTags.add(st.name, st.value, ent)
+	for n, v := range ent.tags.strings {
+		if err := e.tags.add(n, v, ent); err != nil {
+			return err
+		}
 	}
+
+	for n, v := range ent.tags.integers {
+		if err := e.tags.add(n, v, ent); err != nil {
+			return err
+		}
+	}
+
+	for n, v := range ent.tags.floats {
+		if err := e.tags.add(n, v, ent); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (e *engine) clearEntityTags(ent *entry) {
-	for _, bt := range ent.tags.booleans {
-		e.boolTags.removeEntryByTag(bt.name, bt.value, ent)
+	for n, v := range ent.tags.booleans {
+		e.tags.removeEntryByTag(n, v, ent)
 	}
 
-	for _, st := range ent.tags.strings {
-		e.strTags.removeEntryByTag(st.name, st.value, ent)
+	for n, v := range ent.tags.strings {
+		e.tags.removeEntryByTag(n, v, ent)
+	}
+
+	for n, v := range ent.tags.integers {
+		e.tags.removeEntryByTag(n, v, ent)
+	}
+
+	for n, v := range ent.tags.floats {
+		e.tags.removeEntryByTag(n, v, ent)
 	}
 }
 
@@ -256,36 +279,42 @@ func (e *engine) scanDescend(
 }
 
 func (e *engine) filterEntities(q *queryOptions) *filterEntries {
-	if q == nil || q.tags == nil {
+	if q == nil || q.allTags == nil {
 		return nil
 	}
 
 	ft := newFilterEntries(q.patterns)
 
-	if q.tags.boolTags != nil && e.boolTags != nil {
-		for n, v := range q.tags.boolTags {
-			entries := e.boolTags[n][v]
-			if entries == nil {
-				continue
-			}
-
-			for _, ent := range entries {
-				ft.add(ent)
-			}
+	for tk, v := range q.allTags.booleans {
+		if e.tags.data[tk.name] == nil {
+			continue
 		}
+
+		e.tags.filterEntities(tk, v, ft)
 	}
 
-	if q.tags.strTags != nil && e.strTags != nil {
-		for n, v := range q.tags.strTags {
-			entries := e.strTags[n][v]
-			if entries == nil {
-				continue
-			}
-
-			for _, ent := range entries {
-				ft.add(ent)
-			}
+	for tk, v := range q.allTags.strings {
+		if e.tags.data[tk.name] == nil {
+			continue
 		}
+
+		e.tags.filterEntities(tk, v, ft)
+	}
+
+	for tk, v := range q.allTags.integers {
+		if e.tags.data[tk.name] == nil {
+			continue
+		}
+
+		e.tags.filterEntities(tk, v, ft)
+	}
+
+	for tk, v := range q.allTags.floats {
+		if e.tags.data[tk.name] == nil {
+			continue
+		}
+
+		e.tags.filterEntities(tk, v, ft)
 	}
 
 	return ft
@@ -310,7 +339,9 @@ func (e *engine) put(ent *entry, replace bool) error {
 	}
 
 	if ent.tags != nil {
-		e.setEntityTags(ent)
+		if err := e.setEntityTags(ent); err != nil {
+			return err
+		}
 	}
 
 	return nil

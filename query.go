@@ -11,6 +11,65 @@ type KeyRange struct {
 	From, To string
 }
 
+type comparator int8
+
+const (
+	equal comparator = iota
+	greaterThan
+)
+
+type tagKey struct {
+	name string
+	comp comparator
+}
+
+type QueryTags struct {
+	booleans map[tagKey]bool
+	strings  map[tagKey]string
+	integers map[tagKey]int
+	floats   map[tagKey]float64
+}
+
+func QT() *QueryTags {
+	return &QueryTags{
+		booleans: make(map[tagKey]bool),
+		strings:  make(map[tagKey]string),
+		integers: make(map[tagKey]int),
+		floats:   make(map[tagKey]float64),
+	}
+}
+
+func (qt *QueryTags) BoolTagEq(name string, value bool) *QueryTags {
+	qt.booleans[tagKey{name: name, comp: equal}] = value
+	return qt
+}
+
+func (qt *QueryTags) StrTagEq(name string, value string) *QueryTags {
+	qt.strings[tagKey{name: name, comp: equal}] = value
+	return qt
+}
+
+func (qt *QueryTags) IntTagEq(name string, value int) *QueryTags {
+	qt.integers[tagKey{name: name, comp: equal}] = value
+	return qt
+}
+
+func (qt *QueryTags) IntTagGt(name string, value int) *QueryTags {
+	qt.integers[tagKey{name: name, comp: greaterThan}] = value
+	return qt
+}
+
+
+func (qt *QueryTags) FloatTagEq(name string, value float64) *QueryTags {
+	qt.floats[tagKey{name: name, comp: equal}] = value
+	return qt
+}
+
+func (qt *QueryTags) FloatTagGt(name string, value float64) *QueryTags {
+	qt.floats[tagKey{name: name, comp: greaterThan}] = value
+	return qt
+}
+
 type Order string
 
 const (
@@ -18,24 +77,12 @@ const (
 	DescOrder Order = "DESC"
 )
 
-type queryTags struct {
-	boolTags map[string]bool
-	strTags  map[string]string
-}
-
-func newQueryTags() *queryTags {
-	return &queryTags{
-		boolTags: make(map[string]bool),
-		strTags: make(map[string]string),
-	}
-}
-
 type queryOptions struct {
 	order    Order
 	keyRange *KeyRange
 	prefix   string
 	patterns []string
-	tags     *queryTags
+	allTags  *QueryTags
 }
 
 func (fo *queryOptions) Match(patten string) *queryOptions {
@@ -43,7 +90,7 @@ func (fo *queryOptions) Match(patten string) *queryOptions {
 	return fo
 }
 
-func (fo *queryOptions) Order(o Order) *queryOptions {
+func (fo *queryOptions) KeyOrder(o Order) *queryOptions {
 	fo.order = o
 	return fo
 }
@@ -58,24 +105,13 @@ func (fo *queryOptions) Prefix(p string) *queryOptions {
 	return fo
 }
 
-func (fo *queryOptions) AndBoolTag(name string, v bool) *queryOptions {
-	if fo.tags == nil {
-		fo.tags = newQueryTags()
-	}
-	fo.tags.boolTags[name] = v
-	return fo
-}
-
-func (fo *queryOptions) AndStrTag(name string, v string) *queryOptions {
-	if fo.tags == nil {
-		fo.tags = newQueryTags()
-	}
-	fo.tags.strTags[name] = v
+func (fo *queryOptions) HasAllTags(qt *QueryTags) *queryOptions {
+	fo.allTags = qt
 	return fo
 }
 
 func (fo *queryOptions) matchTags(e *entry) bool {
-	if fo.tags == nil {
+	if fo.allTags == nil {
 		return true
 	}
 
@@ -85,19 +121,49 @@ func (fo *queryOptions) matchTags(e *entry) bool {
 
 	matchesExpected := 0
 	actualMatches := 0
-	for n, v := range fo.tags.boolTags {
+	for k, v := range fo.allTags.booleans {
 		matchesExpected++
-		for _, bt := range e.tags.booleans {
-			if bt.name == n && bt.value == v {
+		switch k.comp {
+		case equal:
+			if e.tags.booleans[k.name] == v {
 				actualMatches++
 			}
 		}
 	}
 
-	for n, v := range fo.tags.strTags {
+	for k, v := range fo.allTags.strings {
 		matchesExpected++
-		for _, bt := range e.tags.strings {
-			if bt.name == n && bt.value == v {
+		switch k.comp {
+		case equal:
+			if e.tags.strings[k.name] == v {
+				actualMatches++
+			}
+		}
+	}
+
+	for k, v := range fo.allTags.integers {
+		matchesExpected++
+		switch k.comp {
+		case equal:
+			if e.tags.integers[k.name] == v {
+				actualMatches++
+			}
+		case greaterThan:
+			if e.tags.integers[k.name] > v {
+				actualMatches++
+			}
+		}
+	}
+
+	for k, v := range fo.allTags.floats {
+		matchesExpected++
+		switch k.comp {
+		case equal:
+			if e.tags.floats[k.name] == v {
+				actualMatches++
+			}
+		case greaterThan:
+			if e.tags.floats[k.name] > v {
 				actualMatches++
 			}
 		}
@@ -113,13 +179,13 @@ func Q() *queryOptions {
 type filterEntries struct {
 	sync.RWMutex
 	patterns []string
-	entries map[string]*entry
+	entries  map[string]*entry
 }
 
 func newFilterEntries(patterns []string) *filterEntries {
 	return &filterEntries{
 		patterns: patterns,
-		entries: make(map[string]*entry),
+		entries:  make(map[string]*entry),
 	}
 }
 
