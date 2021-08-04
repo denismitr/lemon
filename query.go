@@ -27,13 +27,15 @@ type QueryTags struct {
 	booleans map[tagKey]bool
 	strings  map[tagKey]string
 	integers map[tagKey]int
+	floats   map[tagKey]float64
 }
 
 func QT() *QueryTags {
 	return &QueryTags{
 		booleans: make(map[tagKey]bool),
-		strings: make(map[tagKey]string),
+		strings:  make(map[tagKey]string),
 		integers: make(map[tagKey]int),
+		floats:   make(map[tagKey]float64),
 	}
 }
 
@@ -54,6 +56,17 @@ func (qt *QueryTags) IntTagEq(name string, value int) *QueryTags {
 
 func (qt *QueryTags) IntTagGt(name string, value int) *QueryTags {
 	qt.integers[tagKey{name: name, comp: greaterThan}] = value
+	return qt
+}
+
+
+func (qt *QueryTags) FloatTagEq(name string, value float64) *QueryTags {
+	qt.floats[tagKey{name: name, comp: equal}] = value
+	return qt
+}
+
+func (qt *QueryTags) FloatTagGt(name string, value float64) *QueryTags {
+	qt.floats[tagKey{name: name, comp: greaterThan}] = value
 	return qt
 }
 
@@ -137,6 +150,20 @@ func (fo *queryOptions) matchTags(e *entry) bool {
 			}
 		case greaterThan:
 			if e.tags.integers[k.name] > v {
+				actualMatches++
+			}
+		}
+	}
+
+	for k, v := range fo.allTags.floats {
+		matchesExpected++
+		switch k.comp {
+		case equal:
+			if e.tags.floats[k.name] == v {
+				actualMatches++
+			}
+		case greaterThan:
+			if e.tags.floats[k.name] > v {
 				actualMatches++
 			}
 		}

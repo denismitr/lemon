@@ -8,7 +8,7 @@ type MetaApplier interface {
 
 func WithTags() *TagApplier {
 	return &TagApplier{
-		keys:     make(map[string]bool),
+		keys:     make(map[string]indexType),
 		booleans: make(map[string]bool),
 		floats:   make(map[string]float64),
 		integers: make(map[string]int),
@@ -17,20 +17,26 @@ func WithTags() *TagApplier {
 }
 
 func (ta *TagApplier) Bool(name string, value bool) *TagApplier {
-	ta.keys[name] = true
+	ta.keys[name] = boolDataType
 	ta.booleans[name] = value
 	return ta
 }
 
 func (ta *TagApplier) Str(name, value string) *TagApplier {
-	ta.keys[name] = true
+	ta.keys[name] = strDataType
 	ta.strings[name] = value
 	return ta
 }
 
 func (ta *TagApplier) Int(name string, value int) *TagApplier {
-	ta.keys[name] = true
+	ta.keys[name] = intDataType
 	ta.integers[name] = value
+	return ta
+}
+
+func (ta *TagApplier) Float(name string, value float64) *TagApplier {
+	ta.keys[name] = floatDataType
+	ta.floats[name] = value
 	return ta
 }
 
@@ -71,9 +77,15 @@ func IntTag(name string, value int) Tagger {
 	}
 }
 
+func FloatTag(name string, value float64) Tagger {
+	return func(t *Tags) {
+		t.floats[name] = value
+	}
+}
+
 type TagApplier struct {
 	err      error
-	keys     map[string]bool
+	keys     map[string]indexType
 	booleans map[string]bool
 	floats   map[string]float64
 	integers map[string]int
@@ -95,6 +107,10 @@ func (ta *TagApplier) applyTo(e *entry) {
 
 	for n, v := range ta.integers {
 		e.tags.integers[n] = v
+	}
+
+	for n, v := range ta.floats {
+		e.tags.floats[n] = v
 	}
 }
 
@@ -126,6 +142,10 @@ func (t *Tags) Strings() map[string]string {
 	return t.strings
 }
 
+func (t *Tags) Floats() map[string]float64 {
+	return t.floats
+}
+
 func (t *Tags) GetString(name string) string {
 	return t.strings[name]
 }
@@ -151,6 +171,20 @@ type strTag struct {
 type intTag struct {
 	value   int
 	entries []*entry
+}
+
+type entityContainer interface {
+	getEntry(key string) *entry
+	getEntries() map[string]*entry
+}
+
+type floatTag struct {
+	value   float64
+	entries map[string]*entry
+}
+
+func (ft *floatTag) getEntry(key string) *entry {
+	return ft.entries[key]
 }
 
 func byStrings(a, b interface{}) bool {

@@ -45,6 +45,10 @@ func (ent *entry) serialize(buf *bytes.Buffer) {
 		for n, v := range ent.tags.integers {
 			writeRespIntTag(n, v, buf)
 		}
+
+		for n, v := range ent.tags.floats {
+			writeRespFloatTag(n, v, buf)
+		}
 	}
 }
 
@@ -88,6 +92,8 @@ func (cmd *deleteCmd) deserialize(e *engine) error {
 	if e.intTags != nil {
 		e.intTags.removeEntry(ent)
 	}
+
+	e.tags.removeEntry(ent)
 
 	e.pks.Delete(&entry{key: cmd.key})
 

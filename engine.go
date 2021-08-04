@@ -31,6 +31,7 @@ type engine struct {
 	boolTags    boolIndex
 	strTags     stringIndex
 	intTags     intIndex
+	tags        *tagIndex
 }
 
 func newEngine(fullPath string) (*engine, error) {
@@ -38,7 +39,8 @@ func newEngine(fullPath string) (*engine, error) {
 		pks:      btr.New(byPrimaryKeys),
 		boolTags: newBoolIndex(),
 		strTags:  newStringIndex(),
-		intTags: newIntIndex(),
+		intTags:  newIntIndex(),
+		tags: newTagIndex(),
 	}
 
 	if fullPath != ":memory:" {
@@ -172,6 +174,12 @@ func (e *engine) setEntityTags(ent *entry) {
 	for n, v := range ent.tags.integers {
 		e.intTags.add(n, v, ent)
 	}
+
+	for n, v := range ent.tags.floats {
+		if err := e.tags.addFloat(n, v, ent); err != nil {
+			panic(err)
+		}
+	}
 }
 
 func (e *engine) clearEntityTags(ent *entry) {
@@ -185,6 +193,10 @@ func (e *engine) clearEntityTags(ent *entry) {
 
 	for n, v := range ent.tags.integers {
 		e.intTags.removeEntryByTag(n, v, ent)
+	}
+
+	for n, v := range ent.tags.floats {
+		e.tags.removeEntryByTag(n, v, ent)
 	}
 }
 
@@ -312,6 +324,14 @@ func (e *engine) filterEntities(q *queryOptions) *filterEntries {
 				e.filterEntitiesByIntTagGraterThan(tagKey.name, v, ft)
 			}
 		}
+	}
+
+	for tagKey, v := range q.allTags.floats {
+		if e.tags.data[tagKey.name] == nil {
+			continue
+		}
+
+		e.tags.filterEntities(tagKey, v, ft)
 	}
 
 	return ft

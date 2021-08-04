@@ -26,6 +26,7 @@ func (mts *matchTestSuite) SetupSuite() {
 
 	seedGranularUsers(mts.T(), db)
 	seedGranularAnimals(mts.T(), db)
+	seedGranularTvProducts(mts.T(), db)
 }
 
 func (mts *matchTestSuite) TearDownSuite() {
@@ -228,6 +229,45 @@ func (mts *matchTestSuite) TestMatchSingleUsersByPreciseAge() {
 	mts.Require().Equal(true, docs[0].Tags().GetBool("valid"))
 }
 
+func (mts *matchTestSuite) TestMatchMultipleTvsByGtFloatTag() {
+	mts.fixture = "./__fixtures__/match_db1.ldb"
+	db, closer, err := lemon.New(mts.fixture)
+	mts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			mts.T().Errorf("ERROR: %v", err)
+		}
+	}()
+
+	docs := make([]lemon.Document, 0)
+	ctx := context.Background()
+	err = db.View(context.Background(), func(tx *lemon.Tx) error {
+		q := lemon.Q().
+			HasAllTags(lemon.QT().FloatTagGt("price", 4.1)).
+			KeyOrder(lemon.AscOrder)
+
+		return tx.Find(ctx, q, &docs)
+	})
+
+	mts.Require().NoError(err)
+	mts.Require().Len(docs, 5)
+	mts.Assert().Equal("product:1", docs[0].Key())
+	mts.Assert().Equal(`{"model":"XDF897","vendor":"Samsung","version":1.2}`, docs[0].RawString())
+
+	mts.Assert().Equal("product:7", docs[1].Key())
+	mts.Assert().Equal(`{"model":"AFK2","vendor":"LG","version":4.3}`, docs[1].RawString())
+
+	mts.Assert().Equal("product:10", docs[2].Key())
+	mts.Assert().Equal(`{"model":"AFK1","vendor":"LG","version":4.2}`, docs[2].RawString())
+
+	mts.Assert().Equal("product:11", docs[3].Key())
+	mts.Assert().Equal(`{"model":"Bravia-22","vendor":"Sony","version":4.3}`, docs[3].RawString())
+
+	mts.Assert().Equal("product:34", docs[4].Key())
+	mts.Assert().Equal(`{"model":"XDF897","vendor":"Samsung","version":1.2}`, docs[4].RawString())
+}
+
 func seedGranularUsers(t *testing.T, db *lemon.DB) {
 	err := db.Update(context.Background(), func(tx *lemon.Tx) error {
 		if err := tx.Insert("user:12", lemon.M{
@@ -350,6 +390,94 @@ func seedGranularAnimals(t *testing.T, db *lemon.DB) {
 
 		if err := tx.Insert("animal:3", `{"species": "penguin"}`,
 			lemon.WithTags().Str("content", "json").Int("age", 22)); err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func seedGranularTvProducts(t *testing.T, db *lemon.DB) {
+	err := db.Update(context.Background(), func(tx *lemon.Tx) error {
+		if err := tx.Insert(
+			"product:4",
+			lemon.M{"vendor": "Samsung", "model": "XDF555", "version": 1.0},
+			lemon.WithTags().
+				Float("price", 3.45).
+				Int("inStock", 2).
+				Str("type", "tv"),
+		); err != nil {
+			return err
+		}
+
+		if err := tx.Insert(
+			"product:1",
+			lemon.M{"vendor": "Samsung", "model": "XDF897", "version": 1.2},
+			lemon.WithTags().
+				Float("price", 23.45).
+				Int("inStock", 20).
+				Str("type", "tv"),
+		); err != nil {
+			return err
+		}
+
+		if err := tx.Insert(
+			"product:34",
+			lemon.M{"vendor": "Samsung", "model": "XDF897", "version": 1.2},
+			lemon.WithTags().
+				Float("price", 23.45).
+				Int("inStock", 20).
+				Str("type", "tv"),
+		); err != nil {
+			return err
+		}
+
+		if err := tx.Insert(
+			"product:10",
+			lemon.M{
+				"vendor": "LG",
+				"model": "AFK1",
+				"version": 4.2,
+			},
+			lemon.WithTags().
+				Float("price", 10.45).
+				Int("inStock", 2).
+				Str("type", "tv"),
+		); err != nil {
+			return err
+		}
+
+		if err := tx.Insert(
+			"product:7",
+			lemon.M{
+				"vendor": "LG",
+				"model": "AFK2",
+				"version": 4.3,
+			},
+			lemon.WithTags().
+				Float("price", 43.45).
+				Int("inStock", 11).
+				Str("type", "tv"),
+		); err != nil {
+			return err
+		}
+
+		if err := tx.Insert(
+			"product:11",
+			lemon.M{
+				"vendor": "Sony",
+				"model": "Bravia-22",
+				"version": 4.3,
+			},
+			lemon.WithTags().
+				Float("price", 9.45).
+				Int("inStock", 8).
+				Str("type", "tv"),
+		); err != nil {
 			return err
 		}
 

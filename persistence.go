@@ -26,6 +26,13 @@ type persistenceStrategy string
 type commandCode int8
 
 const (
+	boolTagFn = "btg"
+	strTagFn = "stg"
+	intTagFn = "itg"
+	floatTagFn = "ftg"
+)
+
+const (
 	invalidCode commandCode = iota
 	setCode
 	delCode
@@ -339,12 +346,6 @@ func (p *parser) resolveRespSimpleString(r *bufio.Reader) (string, error) {
 	return token, nil
 }
 
-const (
-	boolTagFn = "btg"
-	strTagFn = "stg"
-	intTagFn = "itg"
-)
-
 func (p *parser) resolveTagger(r *bufio.Reader) (Tagger, error) {
 	line, err := r.ReadBytes('\n')
 	if err != nil {
@@ -378,13 +379,19 @@ func (p *parser) resolveTagger(r *bufio.Reader) (Tagger, error) {
 			panic(fmt.Sprintf("tag function itg contains invalid integer %s in line %s", args[1], line))
 		}
 		return IntTag(args[0], v), nil
+	case floatTagFn:
+		v, err := strconv.ParseFloat(args[1], 64)
+		if err != nil {
+			panic(fmt.Sprintf("tag function ftg contains invalid float %s in line %s", args[1], line))
+		}
+		return FloatTag(args[0], v), nil
 	default:
 		panic(fmt.Sprintf("tag function %s not supported", prefix))
 	}
 }
 
 func resolveTagFnTypeAndArguments(expression string) (prefix string, args []string, err error) {
-	for _, p := range []string{boolTagFn, strTagFn, intTagFn} {
+	for _, p := range []string{boolTagFn, strTagFn, intTagFn, floatTagFn} {
 		if strings.HasPrefix(expression, p) {
 			prefix = p
 			break
@@ -464,6 +471,10 @@ func writeRespStrTag(name, v string, buf *bytes.Buffer) {
 
 func writeRespIntTag(name string, v int, buf *bytes.Buffer) {
 	writeRespFunc(fmt.Sprintf("itg(%s,%d)", name, v), buf)
+}
+
+func writeRespFloatTag(name string, v float64, buf *bytes.Buffer) {
+	writeRespFunc(fmt.Sprintf("%s(%s,%v)", floatTagFn, name, v), buf)
 }
 
 func writeRespSimpleString(s string, buf *bytes.Buffer) {

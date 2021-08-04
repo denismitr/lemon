@@ -1,8 +1,174 @@
 package lemon
 
 import (
+	"errors"
+	"fmt"
 	btr "github.com/tidwall/btree"
 )
+
+var ErrInvalidIndexType = errors.New("invalid index type")
+
+type indexType uint8
+
+const invalidTagTypeConversion = "invalid tag type conversion"
+
+const (
+	floatDataType = iota
+	intDataType
+	strDataType
+	boolDataType
+)
+
+type index struct {
+	dt  indexType
+	btr *btr.BTree
+}
+
+type tagIndex struct {
+	data map[string]*index
+}
+
+func newTagIndex() *tagIndex {
+	return &tagIndex{
+		data: make(map[string]*index),
+	}
+}
+
+func (ti *tagIndex) removeEntry(ent *entry) {
+	if ent.tags == nil {
+		return
+	}
+
+	for name, value := range ent.tags.floats {
+		if ti.data[name] == nil {
+			continue
+		}
+
+		idx := ti.data[name]
+		item := idx.btr.Get(&floatTag{value: value})
+		if item == nil {
+			continue
+		}
+
+		tag := item.(*floatTag)
+		if tag.entries[ent.key.String()] == nil {
+			continue
+		}
+		delete(tag.entries, ent.key.String())
+	}
+}
+
+func (ti *tagIndex) removeEntryByTag(name string, v interface{}, ent *entry) {
+	idx := ti.data[name]
+	if idx == nil {
+		return
+	}
+
+	var item interface{}
+	switch typedValue := v.(type) {
+	case float64:
+		item = idx.btr.Get(&floatTag{value: typedValue})
+		if item == nil {
+			return
+		}
+		tag, ok := item.(*floatTag)
+		if !ok {
+			panic(invalidTagTypeConversion)
+		}
+		if tag.entries[ent.key.String()] != nil {
+			delete(tag.entries, ent.key.String())
+		}
+	}
+}
+
+func (ti *tagIndex) addFloat(name string, value float64, ent *entry) error {
+	idx := ti.data[name]
+	if idx == nil {
+		idx = &index{
+			dt: boolDataType,
+			btr: btr.New(byFloats),
+		}
+	}
+
+	if idx.dt != boolDataType {
+		return ErrInvalidIndexType
+	}
+
+	ft := &floatTag{value: value}
+	existing := idx.btr.Get(ft)
+	if existing != nil {
+		tag, ok := existing.(*floatTag)
+		if !ok {
+			panic("invalid type casting") // fixme
+		}
+
+		tag.entries[ent.key.String()] = ent
+	} else {
+		ft.entries = make(map[string]*entry)
+		ft.entries[ent.key.String()] = ent
+		idx.btr.Set(ft)
+	}
+
+	return nil
+}
+
+func (ti *tagIndex) filterEntities(tagKey tagKey, v interface{}, ft *filterEntries) {
+	idx := ti.data[tagKey.name]
+	if idx == nil {
+		return
+	}
+
+	var item interface{}
+	switch typedValue := v.(type) {
+	case float64:
+		item = &floatTag{value: typedValue}
+	default:
+		panic("not implemented yet")
+	}
+
+	switch tagKey.comp {
+	case equal:
+		found := idx.btr.Get(item)
+		if found == nil {
+			return
+		}
+
+		tag, ok := found.(entityContainer)
+		if !ok {
+			panic("not an entity container") // fixme
+		}
+
+		if tag.getEntries() == nil {
+			return
+		}
+
+		for _, ent := range tag.getEntries() {
+			ft.add(ent)
+		}
+	case greaterThan:
+		idx.btr.Ascend(item, func(found interface{}) bool {
+			if found == nil {
+				return true
+			}
+
+			tag, ok := found.(entityContainer)
+			if !ok {
+				panic(fmt.Sprintf("how can intIndex item not be of type *intTag?"))
+			}
+
+			if tag.getEntries() == nil {
+				return true
+			}
+
+			for _, ent := range tag.getEntries() {
+				ft.add(ent)
+			}
+
+			return true
+		})
+	}
+}
+
 
 type intIndex map[string]*btr.BTree
 
@@ -68,15 +234,15 @@ func (ii intIndex) removeEntryByTag(name string, v int, ent *entry) bool {
 		}
 
 		copy(tag.entries[pos:], tag.entries[pos+1:])
-		tag.entries[len(tag.entries) - 1] = nil
-		tag.entries = tag.entries[:len(tag.entries) - 1]
+		tag.entries[len(tag.entries)-1] = nil
+		tag.entries = tag.entries[:len(tag.entries)-1]
 	}
 
 	return false
 }
 
 func (ii intIndex) removeEntry(ent *entry) {
-	if ent.tags == nil  {
+	if ent.tags == nil {
 		return
 	}
 
@@ -104,8 +270,8 @@ func (ii intIndex) removeEntry(ent *entry) {
 		}
 
 		copy(tag.entries[pos:], tag.entries[pos+1:])
-		tag.entries[len(tag.entries) - 1] = nil
-		tag.entries = tag.entries[:len(tag.entries) - 1]
+		tag.entries[len(tag.entries)-1] = nil
+		tag.entries = tag.entries[:len(tag.entries)-1]
 	}
 }
 
@@ -139,7 +305,7 @@ func (si stringIndex) removeEntryByTag(tagName, v string, ent *entry) bool {
 }
 
 func (si stringIndex) removeEntry(ent *entry) {
-	if ent.tags == nil  {
+	if ent.tags == nil {
 		return
 	}
 
@@ -240,5 +406,10 @@ func descendGreaterThan(
 
 func byIntegers(a, b interface{}) bool {
 	i1, i2 := a.(*intTag), b.(*intTag)
+	return i1.value < i2.value
+}
+
+func byFloats(a, b interface{}) bool {
+	i1, i2 := a.(*floatTag), b.(*floatTag)
 	return i1.value < i2.value
 }
