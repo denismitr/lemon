@@ -38,14 +38,6 @@ func newDocumentFromEntry(ent *entry) *Document {
 	return d
 }
 
-func createDocument(k string, v []byte, tags *Tags) Document {
-	return Document{key: k, value: v, tags: tags}
-}
-
-func (d *Document) Err() error {
-	return d.Err()
-}
-
 func (d *Document) RawString() string {
 	return string(d.value)
 }

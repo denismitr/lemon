@@ -6,12 +6,11 @@ GO ?= go
 GOTEST ?= $(GO) test
 GOCOVER ?= $(GO) tool cover
 COVEROUT ?= ./cover/c.out
-LINT ?= golangci-lint run ./...
 
 vars:
 	@echo DB_VERSION=${DB_VERSION}
 
-.PHONY: test test_cover lint
+.PHONY: test test_cover lint deps
 
 test:
 	@echo Starting to run tests locally with no coverage
@@ -25,7 +24,7 @@ test/cover:
 
 lint:
 	@echo Starting to run linter
-	$(LINT)
+	golangci-lint run ./...
 	@echo Donego
 
 deps:

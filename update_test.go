@@ -22,7 +22,7 @@ func (wts *writeTestSuite) SetupSuite() {
 	wts.fixture = "./__fixtures__/write_db1.ldb"
 
 	// only init new database
-	_, closer, err := lemon.New(wts.fixture)
+	_, closer, err := lemon.Open(wts.fixture)
 	if err != nil {
 		wts.Require().NoError(err)
 	}
@@ -43,7 +43,7 @@ func (wts *writeTestSuite) TearDownSuite() {
 }
 
 func (wts *writeTestSuite) Test_WriteAndRead_InTwoTransactions() {
-	db, closer, err := lemon.New(wts.fixture)
+	db, closer, err := lemon.Open(wts.fixture)
 	if err != nil {
 		wts.Require().NoError(err)
 	}
@@ -131,7 +131,7 @@ func (wts *writeTestSuite) Test_WriteAndRead_InTwoTransactions() {
 }
 
 func (wts *writeTestSuite) Test_ReplaceInsertedDocs() {
-	db, closer, err := lemon.New(wts.fixture)
+	db, closer, err := lemon.Open(wts.fixture)
 	if err != nil {
 		wts.Require().NoError(err)
 	}
@@ -183,6 +183,7 @@ func (wts *writeTestSuite) Test_ReplaceInsertedDocs() {
 			return err
 		}
 
+
 		return nil
 	}); txErr != nil {
 		wts.Require().NoError(txErr)
@@ -227,10 +228,6 @@ func (wts *writeTestSuite) Test_ReplaceInsertedDocs() {
 	//AssertFileContents(wts.T(), wts.fixture, expectedContent)
 }
 
-func Test_Write(t *testing.T) {
-	suite.Run(t, &writeTestSuite{})
-}
-
 type removeTestSuite struct {
 	suite.Suite
 	db       *lemon.DB
@@ -239,7 +236,7 @@ type removeTestSuite struct {
 }
 
 func (rts *removeTestSuite) SetupTest() {
-	db, closer, err := lemon.New("./__fixtures__/db3.ldb")
+	db, closer, err := lemon.Open("./__fixtures__/db3.ldb")
 	rts.Require().NoError(err)
 
 	rts.db = db
@@ -463,4 +460,8 @@ func AssertFileContents(t *testing.T, path string, expectedContents string) {
 	}
 
 	t.Log("contents match")
+}
+
+func Test_Write(t *testing.T) {
+	suite.Run(t, &writeTestSuite{})
 }

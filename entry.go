@@ -16,7 +16,7 @@ type entry struct {
 }
 
 func (ent *entry) deserialize(e *engine) error {
-	return e.insert(ent)
+	return e.putUnderLock(ent, true) // todo: append under lock?
 }
 
 func newEntryWithTags(key string, value []byte, tags *Tags) *entry {
@@ -76,7 +76,7 @@ func (cmd *deleteCmd) serialize(buf *bytes.Buffer) {
 }
 
 func (cmd *deleteCmd) deserialize(e *engine) error {
-	ent, err := e.findByKey(cmd.key.String())
+	ent, err := e.findByKeyUnderLock(cmd.key.String())
 	if err != nil {
 		return errors.Wrapf(err, "could not deserialize delete key %s command", cmd.key.String())
 	}

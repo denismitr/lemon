@@ -15,7 +15,7 @@ type matchTestSuite struct {
 
 func (mts *matchTestSuite) SetupSuite() {
 	mts.fixture = "./__fixtures__/match_db1.ldb"
-	db, closer, err := lemon.New(mts.fixture)
+	db, closer, err := lemon.Open(mts.fixture)
 	mts.Require().NoError(err)
 
 	defer func() {
@@ -37,7 +37,7 @@ func (mts *matchTestSuite) TearDownSuite() {
 
 func (mts *matchTestSuite) TestMatchSingleUserByPatternAndTag() {
 	mts.fixture = "./__fixtures__/match_db1.ldb"
-	db, closer, err := lemon.New(mts.fixture)
+	db, closer, err := lemon.Open(mts.fixture)
 	mts.Require().NoError(err)
 
 	defer func() {
@@ -65,7 +65,7 @@ func (mts *matchTestSuite) TestMatchSingleUserByPatternAndTag() {
 
 func (mts *matchTestSuite) TestMatchMultipleUsersByPatternAndGtIntTag() {
 	mts.fixture = "./__fixtures__/match_db1.ldb"
-	db, closer, err := lemon.New(mts.fixture)
+	db, closer, err := lemon.Open(mts.fixture)
 	mts.Require().NoError(err)
 
 	defer func() {
@@ -100,7 +100,7 @@ func (mts *matchTestSuite) TestMatchMultipleUsersByPatternAndGtIntTag() {
 
 func (mts *matchTestSuite) TestMatchMultipleUsersByPatternAndTagWithDescSorting() {
 	mts.fixture = "./__fixtures__/match_db1.ldb"
-	db, closer, err := lemon.New(mts.fixture)
+	db, closer, err := lemon.Open(mts.fixture)
 	mts.Require().NoError(err)
 
 	defer func() {
@@ -152,7 +152,7 @@ func (mts *matchTestSuite) TestMatchMultipleUsersByPatternAndTagWithDescSorting(
 
 func (mts *matchTestSuite) TestMatchMultipleUsersByPatternAndTagWithAscSorting() {
 	mts.fixture = "./__fixtures__/match_db1.ldb"
-	db, closer, err := lemon.New(mts.fixture)
+	db, closer, err := lemon.Open(mts.fixture)
 	mts.Require().NoError(err)
 
 	defer func() {
@@ -198,7 +198,7 @@ func (mts *matchTestSuite) TestMatchMultipleUsersByPatternAndTagWithAscSorting()
 
 func (mts *matchTestSuite) TestMatchSingleUsersByPreciseAge() {
 	mts.fixture = "./__fixtures__/match_db1.ldb"
-	db, closer, err := lemon.New(mts.fixture)
+	db, closer, err := lemon.Open(mts.fixture)
 	mts.Require().NoError(err)
 
 	defer func() {
@@ -231,7 +231,7 @@ func (mts *matchTestSuite) TestMatchSingleUsersByPreciseAge() {
 
 func (mts *matchTestSuite) TestMatchMultipleTvsByGtFloatTag() {
 	mts.fixture = "./__fixtures__/match_db1.ldb"
-	db, closer, err := lemon.New(mts.fixture)
+	db, closer, err := lemon.Open(mts.fixture)
 	mts.Require().NoError(err)
 
 	defer func() {

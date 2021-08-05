@@ -4,13 +4,10 @@ import (
 	"bytes"
 	"context"
 	"github.com/pkg/errors"
-	"sync"
 )
 
 type DB struct {
 	e *engine
-	mu sync.RWMutex
-	closed bool
 }
 
 type UserCallback func(tx *Tx) error
@@ -18,26 +15,38 @@ type UserCallback func(tx *Tx) error
 type Closer func() error
 func NullCloser() error { return nil }
 
-func New(path string) (*DB, Closer, error) {
-	e, err := newEngine(path)
+func Open(path string, engineOptions ...EngineOptions) (*DB, Closer, error) {
+	defaultCfg := Config{
+		PersistenceStrategy: Sync,
+		AutoVacuumIntervals: defaultAutovacuumIntervals,
+		AutoVacuumMinSize: defaultAutoVacuumMinSize,
+		AutoVacuumOnlyOnClose: false,
+	}
+
+	e, err := newEngine(path, defaultCfg)
 	if err != nil {
 		return nil, NullCloser, err
 	}
 
+	for _, optFn := range engineOptions {
+		optFn(e)
+	}
+
 	db := DB{e: e}
+
+	if err := e.init(); err != nil {
+		return nil, NullCloser, err
+	}
 
 	return &db, db.close, nil
 }
 
 func (db *DB) close() error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 	if err := db.e.close(); err != nil {
 		return err
 	}
 
 	db.e = nil
-	db.closed = true
 	return nil
 }
 
@@ -53,16 +62,10 @@ func (db *DB) Begin(ctx context.Context, readOnly bool) (*Tx, error) {
 }
 
 func (db *DB) Count() int {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-
 	return db.e.Count()
 }
 
 func (db *DB) View(ctx context.Context, cb UserCallback) error {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-
 	tx, err := db.Begin(ctx, true)
 	if err != nil {
 		return err
@@ -85,9 +88,6 @@ func (db *DB) View(ctx context.Context, cb UserCallback) error {
 }
 
 func (db *DB) Update(ctx context.Context, cb UserCallback) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
 	tx, err := db.Begin(ctx, false)
 	if err != nil {
 		return err
