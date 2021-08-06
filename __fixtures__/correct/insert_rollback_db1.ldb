@@ -1,0 +1,16 @@
+*6
++set
++book:4
+$42
+{"author":"Brian","edition":1,"year":2008}
+@stg(type,paper)
+@itg(inStock,2)
+@ftg(price,30.45)
+*6
++set
++book:41
+$50
+{"author":"Valeria Pucci","edition":2,"year":2011}
+@stg(type,digital)
+@itg(inStock,29)
+@ftg(price,33.45)

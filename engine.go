@@ -10,7 +10,6 @@ import (
 	"time"
 )
 
-var ErrDocumentNotFound = errors.New("document not found")
 var ErrKeyAlreadyExists = errors.New("key already exists")
 var ErrConflictingTagType = errors.New("conflicting tag type")
 
@@ -192,7 +191,7 @@ func (e *engine) findByKey(key string) (*entry, error) {
 func (e *engine) findByKeyUnderLock(key string) (*entry, error) {
 	found := e.pks.Get(&entry{key: newPK(key)})
 	if found == nil {
-		return nil, errors.Wrapf(ErrDocumentNotFound, "key %s does not exist in database", key)
+		return nil, errors.Wrapf(ErrKeyDoesNotExist, "key %s does not exist in database", key)
 	}
 
 	ent, ok := found.(*entry)
@@ -210,7 +209,7 @@ func (e *engine) findByKeys(pks []string, ir entryReceiver) error {
 	for _, k := range pks {
 		found := e.pks.Get(newPK(k))
 		if found == nil {
-			return errors.Wrapf(ErrDocumentNotFound, "key %s does not exist in database", k)
+			return errors.Wrapf(ErrKeyDoesNotExist, "key %s does not exist in database", k)
 		}
 
 		ent := found.(*entry)
@@ -229,7 +228,7 @@ func (e *engine) remove(key PK) error {
 
 	ent := e.pks.Get(&entry{key: key})
 	if ent == nil {
-		return errors.Wrapf(ErrDocumentNotFound, "key %s does not exist in DB", key.String())
+		return errors.Wrapf(ErrKeyDoesNotExist, "key %s does not exist in DB", key.String())
 	}
 
 	e.pks.Delete(&entry{key: key})
@@ -240,7 +239,7 @@ func (e *engine) remove(key PK) error {
 func (e *engine) removeUnderLock(key PK) error {
 	ent := e.pks.Get(&entry{key: key})
 	if ent == nil {
-		return errors.Wrapf(ErrDocumentNotFound, "key %s does not exist in DB", key.String())
+		return errors.Wrapf(ErrKeyDoesNotExist, "key %s does not exist in DB", key.String())
 	}
 
 	e.pks.Delete(&entry{key: key})
@@ -254,7 +253,7 @@ func (e *engine) update(ent *entry) error {
 
 	existing := e.pks.Set(ent)
 	if existing == nil {
-		return errors.Wrapf(ErrDocumentNotFound, "could not update non existing document with key %s", ent.key.String())
+		return errors.Wrapf(ErrKeyDoesNotExist, "could not update non existing document with key %s", ent.key.String())
 	}
 
 	existingEnt, ok := existing.(*entry)

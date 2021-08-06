@@ -301,7 +301,7 @@ func (rts *removeTestSuite) TestLemonDB_RemoveItemInTheMiddle() {
 		doc, err := tx.Get("item:1145")
 		rts.Require().Error(err)
 		rts.Assert().Nil(doc)
-		rts.Assert().True(errors.Is(err, lemon.ErrDocumentNotFound))
+		rts.Assert().True(errors.Is(err, lemon.ErrKeyDoesNotExist))
 
 		return nil
 	}); err != nil {
@@ -442,6 +442,28 @@ func seedProductData(t *testing.T, db *lemon.DB, n int) {
 
 func TestTx_Remove(t *testing.T) {
 	suite.Run(t, &removeTestSuite{})
+}
+
+func AssertTwoFilesHaveEqualContents(t *testing.T, pathA, pathB string) {
+	t.Helper()
+
+	b1, err := ioutil.ReadFile(pathA)
+	if err != nil {
+		t.Errorf("file %s could not be opened\nbecause:  %v", pathA, err)
+	}
+
+	b2, err := ioutil.ReadFile(pathB)
+	if err != nil {
+		t.Errorf("file %s could not be opened\nbecause:  %v", pathB, err)
+	}
+
+	strA := strings.Trim(string(b1), " \n")
+	strB := strings.Trim(string(b2), " \n")
+	if strA != strB {
+		t.Errorf("file %s contents\n%s\ndoes not match expected file %s contents \n%s", pathA, strA, pathB, strB)
+	}
+
+	t.Log("contents match")
 }
 
 func AssertFileContents(t *testing.T, path string, expectedContents string) {
