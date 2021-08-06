@@ -16,7 +16,7 @@ type Closer func() error
 func NullCloser() error { return nil }
 
 func Open(path string, engineOptions ...EngineOptions) (*DB, Closer, error) {
-	defaultCfg := Config{
+	defaultCfg := &Config{
 		PersistenceStrategy: Sync,
 		AutoVacuumIntervals: defaultAutovacuumIntervals,
 		AutoVacuumMinSize: defaultAutoVacuumMinSize,
@@ -28,8 +28,10 @@ func Open(path string, engineOptions ...EngineOptions) (*DB, Closer, error) {
 		return nil, NullCloser, err
 	}
 
-	for _, optFn := range engineOptions {
-		optFn(e)
+	for _, opt := range engineOptions {
+		if err := opt.applyTo(e); err != nil {
+			return nil, NullCloser, err
+		}
 	}
 
 	db := DB{e: e}

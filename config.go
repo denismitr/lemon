@@ -14,10 +14,24 @@ type Config struct {
 	AutoVacuumIntervals time.Duration
 }
 
-type EngineOptions func(e *engine)
+type EngineOptions interface {
+	applyTo(e *engine) error
+}
 
-func WithConfig(cfg Config) EngineOptions {
-	return func(e *engine) {
-		e.cfg = cfg
+func (cfg *Config) applyTo(e *engine) error {
+	if cfg.PersistenceStrategy == "" {
+		cfg.PersistenceStrategy = Sync
 	}
+
+	if cfg.AutoVacuumIntervals == 0 {
+		cfg.AutoVacuumIntervals = defaultAutovacuumIntervals
+	}
+
+	if cfg.AutoVacuumMinSize == 0 {
+		cfg.AutoVacuumMinSize = defaultAutoVacuumMinSize
+	}
+
+	e.cfg = cfg
+
+	return nil
 }

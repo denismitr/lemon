@@ -28,7 +28,7 @@ type (
 
 type engine struct {
 	dbFile        string
-	cfg           Config
+	cfg           *Config
 	persistence   *persistence
 	pks           *btr.BTree
 	tags          *tagIndex
@@ -39,7 +39,7 @@ type engine struct {
 	closed        bool
 }
 
-func newEngine(dbFile string, cfg Config) (*engine, error) {
+func newEngine(dbFile string, cfg *Config) (*engine, error) {
 	e := &engine{
 		dbFile: dbFile,
 		pks:    btr.New(byPrimaryKeys),

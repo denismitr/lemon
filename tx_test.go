@@ -20,9 +20,9 @@ type rollbackTestSuite struct {
 
 func (rts *rollbackTestSuite) SetupSuite() {
 	rts.fixture = "./__fixtures__/insert_rollback_db1.ldb"
-	db, closer, err := lemon.Open(rts.fixture, lemon.WithConfig(lemon.Config{
+	db, closer, err := lemon.Open(rts.fixture, &lemon.Config{
 		DisableAutoVacuum: true,
-	}))
+	})
 
 	rts.Require().NoError(err)
 
@@ -43,9 +43,9 @@ func (rts *rollbackTestSuite) TearDownSuite() {
 
 func (rts *rollbackTestSuite) TestInsertRollbackWithoutTags() {
 	rts.fixture = "./__fixtures__/insert_rollback_db1.ldb"
-	db, closer, err := lemon.Open(rts.fixture, lemon.WithConfig(lemon.Config{
+	db, closer, err := lemon.Open(rts.fixture, &lemon.Config{
 		DisableAutoVacuum: true,
-	}))
+	})
 
 	rts.Require().NoError(err)
 
