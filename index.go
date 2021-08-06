@@ -3,7 +3,7 @@ package lemon
 import (
 	"fmt"
 	"github.com/pkg/errors"
-	btr "github.com/tidwall/btree"
+	"github.com/tidwall/btree"
 )
 
 var ErrInvalidIndexType = errors.New("invalid index type")
@@ -21,7 +21,7 @@ const (
 
 type index struct {
 	dt  indexType
-	btr *btr.BTree
+	btr *btree.BTree
 }
 
 type tagIndex struct {
@@ -84,8 +84,8 @@ func (ti *tagIndex) removeEntryByTag(name string, v interface{}, ent *entry) {
 func resolveIndexIfNotExists(idx *index, dataType indexType, less func(a, b interface{}) bool) (*index, error) {
 	if idx == nil {
 		idx = &index{
-			dt: dataType,
-			btr: btr.New(less),
+			dt:  dataType,
+			btr: btree.New(less),
 		}
 	}
 
@@ -207,11 +207,11 @@ func (ti *tagIndex) filterEntities(tagKey tagKey, v interface{}, ft *filterEntri
 	}
 }
 
-func lt(tr *btr.BTree, a, b interface{}) bool { return tr.Less(a, b) }
-func gt(tr *btr.BTree, a, b interface{}) bool { return tr.Less(b, a) }
+func lt(tr *btree.BTree, a, b interface{}) bool { return tr.Less(a, b) }
+func gt(tr *btree.BTree, a, b interface{}) bool { return tr.Less(b, a) }
 
 func ascendRange(
-	btr *btr.BTree,
+	btr *btree.BTree,
 	greaterOrEqual interface{},
 	lessThan interface{},
 	iter func(item interface{}) bool,
@@ -222,7 +222,7 @@ func ascendRange(
 }
 
 func descendRange(
-	btr *btr.BTree,
+	btr *btree.BTree,
 	greaterOrEqual interface{},
 	lessThan interface{},
 	iter func(item interface{}) bool,
@@ -233,7 +233,7 @@ func descendRange(
 }
 
 func descendGreaterThan(
-	btr *btr.BTree,
+	btr *btree.BTree,
 	greaterOrEqual interface{},
 	iter func(item interface{}) bool,
 ) {
@@ -259,7 +259,7 @@ func byStrings(a, b interface{}) bool {
 
 func byBooleans(a, b interface{}) bool {
 	i1, i2 := a.(*boolTag), b.(*boolTag)
-	if i1.value == false && i2.value == true {
+	if !i1.value && i2.value {
 		return true
 	}
 

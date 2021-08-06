@@ -22,7 +22,7 @@ func (wts *writeTestSuite) SetupSuite() {
 	wts.fixture = "./__fixtures__/write_db1.ldb"
 
 	// only init new database
-	_, closer, err := lemon.New(wts.fixture)
+	_, closer, err := lemon.Open(wts.fixture)
 	if err != nil {
 		wts.Require().NoError(err)
 	}
@@ -43,7 +43,7 @@ func (wts *writeTestSuite) TearDownSuite() {
 }
 
 func (wts *writeTestSuite) Test_WriteAndRead_InTwoTransactions() {
-	db, closer, err := lemon.New(wts.fixture)
+	db, closer, err := lemon.Open(wts.fixture)
 	if err != nil {
 		wts.Require().NoError(err)
 	}
@@ -131,7 +131,7 @@ func (wts *writeTestSuite) Test_WriteAndRead_InTwoTransactions() {
 }
 
 func (wts *writeTestSuite) Test_ReplaceInsertedDocs() {
-	db, closer, err := lemon.New(wts.fixture)
+	db, closer, err := lemon.Open(wts.fixture)
 	if err != nil {
 		wts.Require().NoError(err)
 	}
@@ -183,6 +183,7 @@ func (wts *writeTestSuite) Test_ReplaceInsertedDocs() {
 			return err
 		}
 
+
 		return nil
 	}); txErr != nil {
 		wts.Require().NoError(txErr)
@@ -227,10 +228,6 @@ func (wts *writeTestSuite) Test_ReplaceInsertedDocs() {
 	//AssertFileContents(wts.T(), wts.fixture, expectedContent)
 }
 
-func Test_Write(t *testing.T) {
-	suite.Run(t, &writeTestSuite{})
-}
-
 type removeTestSuite struct {
 	suite.Suite
 	db       *lemon.DB
@@ -239,7 +236,7 @@ type removeTestSuite struct {
 }
 
 func (rts *removeTestSuite) SetupTest() {
-	db, closer, err := lemon.New("./__fixtures__/db3.ldb")
+	db, closer, err := lemon.Open("./__fixtures__/db3.ldb")
 	rts.Require().NoError(err)
 
 	rts.db = db
@@ -278,11 +275,13 @@ func (rts *removeTestSuite) SetupTest() {
 }
 
 func (rts *removeTestSuite) TearDownTest() {
-	defer func() {
-		if err := rts.closer(); err != nil {
-			rts.T().Errorf("ERROR: %v", err)
-		}
-	}()
+	assertTwoFilesHaveEqualContents(rts.T(), "./__fixtures__/db3.ldb", "./__fixtures__/correct/before_vacuum_db3.ldb")
+
+	if err := rts.closer(); err != nil {
+		rts.T().Errorf("ERROR: %v", err)
+	}
+
+	assertTwoFilesHaveEqualContents(rts.T(), "./__fixtures__/db3.ldb", "./__fixtures__/correct/after_vacuum_db3.ldb")
 
 	if err := os.Remove("./__fixtures__/db3.ldb"); err != nil {
 		rts.Require().NoError(err)
@@ -304,7 +303,7 @@ func (rts *removeTestSuite) TestLemonDB_RemoveItemInTheMiddle() {
 		doc, err := tx.Get("item:1145")
 		rts.Require().Error(err)
 		rts.Assert().Nil(doc)
-		rts.Assert().True(errors.Is(err, lemon.ErrDocumentNotFound))
+		rts.Assert().True(errors.Is(err, lemon.ErrKeyDoesNotExist))
 
 		return nil
 	}); err != nil {
@@ -447,6 +446,30 @@ func TestTx_Remove(t *testing.T) {
 	suite.Run(t, &removeTestSuite{})
 }
 
+func assertTwoFilesHaveEqualContents(t *testing.T, pathA, pathB string) {
+	t.Helper()
+
+	b1, err := ioutil.ReadFile(pathA)
+	if err != nil {
+		t.Errorf("file %s could not be opened\nbecause:  %v", pathA, err)
+	}
+
+	b2, err := ioutil.ReadFile(pathB)
+	if err != nil {
+		t.Errorf("file %s could not be opened\nbecause:  %v", pathB, err)
+	}
+
+	strA := strings.Trim(string(b1), " \n")
+	strB := strings.Trim(string(b2), " \n")
+	if strA != strB {
+		t.Log("\n================================================================================")
+		t.Errorf("file %s contents\n%s\n\ndoes not match expected file %s contents \n\n%s", pathA, strA, pathB, strB)
+		t.Log("\n================================================================================")
+	} else {
+		t.Log("contents match")
+	}
+}
+
 func AssertFileContents(t *testing.T, path string, expectedContents string) {
 	t.Helper()
 
@@ -463,4 +486,8 @@ func AssertFileContents(t *testing.T, path string, expectedContents string) {
 	}
 
 	t.Log("contents match")
+}
+
+func Test_Write(t *testing.T) {
+	suite.Run(t, &writeTestSuite{})
 }

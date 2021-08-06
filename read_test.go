@@ -14,7 +14,7 @@ import (
 )
 
 func TestLemonDB_Read(t *testing.T) {
-	db, closer, err := lemon.New("./__fixtures__/read_db1.ldb")
+	db, closer, err := lemon.Open("./__fixtures__/read_db1.ldb")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ type findByTagsTestSuite struct {
 
 func (fts *findByTagsTestSuite) SetupSuite() {
 	fts.fixture = "./__fixtures__/find_by_tags_db1.ldb"
-	db, closer, err := lemon.New(fts.fixture)
+	db, closer, err := lemon.Open(fts.fixture)
 	fts.Require().NoError(err)
 
 	defer func() {
@@ -114,7 +114,7 @@ func (fts *findByTagsTestSuite) TearDownSuite() {
 }
 
 func (fts *findByTagsTestSuite) TestLemonDB_FindByBoolTag() {
-	db, closer, err := lemon.New(fts.fixture)
+	db, closer, err := lemon.Open(fts.fixture)
 	fts.Require().NoError(err)
 
 	defer func() {
@@ -155,7 +155,7 @@ type findTestSuite struct {
 
 func (fts *findTestSuite) SetupSuite() {
 	fts.fixture = "./__fixtures__/find_db1.ldb"
-	db, closer, err := lemon.New(fts.fixture)
+	db, closer, err := lemon.Open(fts.fixture)
 	fts.Require().NoError(err)
 
 	defer func() {
@@ -175,7 +175,7 @@ func (fts *findTestSuite) TearDownSuite() {
 }
 
 func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Descend() {
-	db, closer, err := lemon.New(fts.fixture)
+	db, closer, err := lemon.Open(fts.fixture)
 	fts.Require().NoError(err)
 
 	defer func() {
@@ -209,7 +209,7 @@ func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Descend() {
 }
 
 func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Ascend() {
-	db, closer, err := lemon.New(fts.fixture)
+	db, closer, err := lemon.Open(fts.fixture)
 	fts.Require().NoError(err)
 
 	defer func() {
@@ -243,7 +243,7 @@ func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Ascend() {
 }
 
 func (fts *findTestSuite) TestLemonDB_FindAllUsers_Ascend() {
-	db, closer, err := lemon.New(fts.fixture)
+	db, closer, err := lemon.Open(fts.fixture)
 	fts.Require().NoError(err)
 
 	defer func() {
@@ -278,7 +278,7 @@ func (fts *findTestSuite) TestLemonDB_FindAllUsers_Ascend() {
 }
 
 func (fts *findTestSuite) TestLemonDB_FindAllUsers_Descend() {
-	db, closer, err := lemon.New(fts.fixture)
+	db, closer, err := lemon.Open(fts.fixture)
 	fts.Require().NoError(err)
 
 	defer func() {
@@ -315,7 +315,7 @@ func (fts *findTestSuite) TestLemonDB_FindAllUsers_Descend() {
 }
 
 func (fts *findTestSuite) TestLemonDB_FindAllDocs_Descend() {
-	db, closer, err := lemon.New(fts.fixture)
+	db, closer, err := lemon.Open(fts.fixture)
 	fts.Require().NoError(err)
 
 	defer func() {
@@ -357,7 +357,7 @@ func (fts *findTestSuite) TestLemonDB_FindAllDocs_Descend() {
 }
 
 func (fts *findTestSuite) TestLemonDB_FindAllDocs_Ascend() {
-	db, closer, err := lemon.New(fts.fixture)
+	db, closer, err := lemon.Open(fts.fixture)
 	fts.Require().NoError(err)
 
 	defer func() {
@@ -405,7 +405,7 @@ type scanTestSuite struct {
 
 func (sts *scanTestSuite) SetupSuite() {
 	sts.fixture = "./__fixtures__/scan_db1.ldb"
-	db, closer, err := lemon.New(sts.fixture)
+	db, closer, err := lemon.Open(sts.fixture)
 	sts.Require().NoError(err)
 
 	defer func() {
@@ -427,7 +427,7 @@ func (sts *scanTestSuite) TearDownSuite() {
 }
 
 func (sts *scanTestSuite) Test_ScanUserPets() {
-	db, closer, err := lemon.New(sts.fixture)
+	db, closer, err := lemon.Open(sts.fixture)
 	sts.Require().NoError(err)
 
 	defer func() {
@@ -463,7 +463,7 @@ func (sts *scanTestSuite) Test_ScanUserPets() {
 }
 
 func (sts *scanTestSuite) Test_ScanUserPetsWithManualLimit() {
-	db, closer, err := lemon.New(sts.fixture)
+	db, closer, err := lemon.Open(sts.fixture)
 	sts.Require().NoError(err)
 
 	defer func() {

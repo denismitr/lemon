@@ -1,10 +1,10 @@
 *3
 +set
-+product:8976
-$42
-{"100":"foobar","baz":8989764,"foo":"bar"}
-*3
-+set
 +product:1145
 $44
 {"999":null,"baz12":123.879,"foo":"bar5674"}
+*3
++set
++product:8976
+$42
+{"100":"foobar","baz":8989764,"foo":"bar"}

@@ -41,14 +41,17 @@ func (x *Tx) Commit() error {
 }
 
 func (x *Tx) Rollback() error {
+	x.e.mu.Lock()
+	defer x.e.mu.Unlock()
+
 	for _, ent := range x.modified {
-		if err := x.e.put(ent, true); err != nil {
+		if err := x.e.putUnderLock(ent, true); err != nil {
 			return err
 		}
 	}
 
 	for _, ent := range x.added {
-		if err := x.e.remove(ent.key); err != nil {
+		if err := x.e.removeUnderLock(ent.key); err != nil {
 			return err
 		}
 	}
@@ -119,20 +122,23 @@ func (x *Tx) InsertOrReplace(key string, data interface{}, metaAppliers ...MetaA
 		applier.applyTo(ent)
 	}
 
-	existing, err := x.e.findByKey(key)
+	x.e.mu.Lock()
+	defer x.e.mu.Unlock()
+
+	existing, err := x.e.findByKeyUnderLock(key)
 	if err != nil && !errors.Is(err, ErrKeyDoesNotExist) {
 		return err
 	}
 
 	if existing != nil {
-		if updateErr := x.e.update(ent); updateErr != nil {
+		if updateErr := x.e.putUnderLock(ent, true); updateErr != nil {
 			return updateErr
 		}
 
 		x.commands = append(x.commands, &deleteCmd{key: existing.key})
 		x.modified = append(x.modified, existing)
 	} else {
-		if insertErr := x.e.insert(ent); insertErr != nil {
+		if insertErr := x.e.putUnderLock(ent, false); insertErr != nil {
 			return insertErr
 		}
 
