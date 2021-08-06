@@ -275,11 +275,13 @@ func (rts *removeTestSuite) SetupTest() {
 }
 
 func (rts *removeTestSuite) TearDownTest() {
-	defer func() {
-		if err := rts.closer(); err != nil {
-			rts.T().Errorf("ERROR: %v", err)
-		}
-	}()
+	assertTwoFilesHaveEqualContents(rts.T(), "./__fixtures__/db3.ldb", "./__fixtures__/correct/before_vacuum_db3.ldb")
+
+	if err := rts.closer(); err != nil {
+		rts.T().Errorf("ERROR: %v", err)
+	}
+
+	assertTwoFilesHaveEqualContents(rts.T(), "./__fixtures__/db3.ldb", "./__fixtures__/correct/after_vacuum_db3.ldb")
 
 	if err := os.Remove("./__fixtures__/db3.ldb"); err != nil {
 		rts.Require().NoError(err)
@@ -444,7 +446,7 @@ func TestTx_Remove(t *testing.T) {
 	suite.Run(t, &removeTestSuite{})
 }
 
-func AssertTwoFilesHaveEqualContents(t *testing.T, pathA, pathB string) {
+func assertTwoFilesHaveEqualContents(t *testing.T, pathA, pathB string) {
 	t.Helper()
 
 	b1, err := ioutil.ReadFile(pathA)

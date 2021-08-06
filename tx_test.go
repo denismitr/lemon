@@ -91,13 +91,13 @@ func (rts *rollbackTestSuite) TestInsertRollbackWithoutTags() {
 		return nil
 	})
 
-	AssertTwoFilesHaveEqualContents(rts.T(), rts.fixture, "./__fixtures__/correct/insert_rollback_db1.ldb")
+	assertTwoFilesHaveEqualContents(rts.T(), rts.fixture, "./__fixtures__/correct/insert_rollback_db1.ldb")
 
 	if err := closer(); err != nil {
 		rts.T().Errorf("ERROR: %v", err)
 	}
 
-	AssertTwoFilesHaveEqualContents(rts.T(), rts.fixture, "./__fixtures__/correct/insert_rollback_db1.ldb")
+	assertTwoFilesHaveEqualContents(rts.T(), rts.fixture, "./__fixtures__/correct/insert_rollback_db1.ldb")
 }
 
 func (rts *rollbackTestSuite) TestInsertRollbackWithTags() {
@@ -165,13 +165,13 @@ func (rts *rollbackTestSuite) TestInsertRollbackWithTags() {
 		return nil
 	})
 
-	AssertTwoFilesHaveEqualContents(rts.T(), rts.fixture, "./__fixtures__/correct/insert_rollback_db1.ldb")
+	assertTwoFilesHaveEqualContents(rts.T(), rts.fixture, "./__fixtures__/correct/insert_rollback_db1.ldb")
 
 	if err := closer(); err != nil {
 		rts.T().Errorf("ERROR: %v", err)
 	}
 
-	AssertTwoFilesHaveEqualContents(rts.T(), rts.fixture, "./__fixtures__/correct/insert_rollback_db1.ldb")
+	assertTwoFilesHaveEqualContents(rts.T(), rts.fixture, "./__fixtures__/correct/insert_rollback_db1.ldb")
 }
 
 type vacuumTestSuite struct {
@@ -194,7 +194,7 @@ func (vts *vacuumTestSuite) SetupSuite() {
 	}()
 
 	forceSeedDataForVacuum(vts.T(), db)
-	AssertTwoFilesHaveEqualContents(vts.T(), vts.fixture, "./__fixtures__/correct/vacuum_db1.ldb")
+	assertTwoFilesHaveEqualContents(vts.T(), vts.fixture, "./__fixtures__/correct/vacuum_db1.ldb")
 }
 
 func (vts *vacuumTestSuite) TearDownSuite() {
@@ -222,7 +222,7 @@ func (vts *vacuumTestSuite) Test_AutoVacuumWithIntervals() {
 
 	time.Sleep(2 * time.Second)
 
-	AssertTwoFilesHaveEqualContents(vts.T(), vts.fixture, "./__fixtures__/correct/after_vacuum_db1.ldb")
+	assertTwoFilesHaveEqualContents(vts.T(), vts.fixture, "./__fixtures__/correct/after_vacuum_db1.ldb")
 }
 
 func forceSeedDataForVacuum(t *testing.T, db *lemon.DB) {

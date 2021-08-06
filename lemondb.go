@@ -13,14 +13,16 @@ type DB struct {
 type UserCallback func(tx *Tx) error
 
 type Closer func() error
+
 func NullCloser() error { return nil }
 
 func Open(path string, engineOptions ...EngineOptions) (*DB, Closer, error) {
 	defaultCfg := &Config{
-		PersistenceStrategy: Sync,
-		AutoVacuumIntervals: defaultAutovacuumIntervals,
-		AutoVacuumMinSize: defaultAutoVacuumMinSize,
-		AutoVacuumOnlyOnClose: false,
+		DisableAutoVacuum:     false,
+		PersistenceStrategy:   Sync,
+		AutoVacuumIntervals:   defaultAutovacuumIntervals,
+		AutoVacuumMinSize:     defaultAutoVacuumMinSize,
+		AutoVacuumOnlyOnClose: true,
 	}
 
 	e, err := newEngine(path, defaultCfg)
@@ -54,10 +56,10 @@ func (db *DB) close() error {
 
 func (db *DB) Begin(ctx context.Context, readOnly bool) (*Tx, error) {
 	tx := Tx{
-		e: db.e,
-		ctx: ctx,
+		e:        db.e,
+		ctx:      ctx,
 		readOnly: readOnly,
-		buf: &bytes.Buffer{},
+		buf:      &bytes.Buffer{},
 	}
 
 	return &tx, nil
@@ -65,6 +67,17 @@ func (db *DB) Begin(ctx context.Context, readOnly bool) (*Tx, error) {
 
 func (db *DB) Count() int {
 	return db.e.Count()
+}
+
+func (db *DB) Vacuum() error {
+	db.e.mu.Lock()
+	defer db.e.mu.Unlock()
+
+	if err := db.e.runVacuumUnderLock(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (db *DB) View(ctx context.Context, cb UserCallback) error {

@@ -1,0 +1,10 @@
+*3
++set
++item:8976
+$44
+{"100":"username","baz":8989764,"foo":"bar"}
+*3
++set
++users
+$74
+{"user1":"abc123","user2":"John Smith","user3":"anyone","user4":"someone"}

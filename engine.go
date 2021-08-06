@@ -118,6 +118,12 @@ func (e *engine) close() error {
 		return ErrDatabaseAlreadyClosed
 	}
 
+	if !e.cfg.DisableAutoVacuum {
+		if err := e.runVacuumUnderLock(); err != nil {
+			return err
+		}
+	}
+
 	defer func() {
 		e.pks = nil
 		e.tags = nil
