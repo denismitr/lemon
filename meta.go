@@ -59,28 +59,28 @@ func (ta *TagApplier) Map(m M) *TagApplier {
 	return ta
 }
 
-type Tagger func(t *Tags)
+type Tagger func(t *tags)
 
 func BoolTag(name string, value bool) Tagger {
-	return func(t *Tags) {
+	return func(t *tags) {
 		t.booleans[name] = value
 	}
 }
 
 func StrTag(name string, value string) Tagger {
-	return func(t *Tags) {
+	return func(t *tags) {
 		t.strings[name] = value
 	}
 }
 
 func IntTag(name string, value int) Tagger {
-	return func(t *Tags) {
+	return func(t *tags) {
 		t.integers[name] = value
 	}
 }
 
 func FloatTag(name string, value float64) Tagger {
-	return func(t *Tags) {
+	return func(t *tags) {
 		t.floats[name] = value
 	}
 }
@@ -116,48 +116,24 @@ func (ta *TagApplier) applyTo(e *entry) {
 	}
 }
 
-type Tags struct {
+type tags struct {
 	booleans map[string]bool
 	floats   map[string]float64
 	integers map[string]int
 	strings  map[string]string
 }
 
-func (t *Tags) applyTo(e *entry) {
+func (t *tags) applyTo(e *entry) {
 	e.tags = t
 }
 
-func newTags() *Tags {
-	return &Tags{
+func newTags() *tags {
+	return &tags{
 		booleans: make(map[string]bool),
 		floats:   make(map[string]float64),
 		integers: make(map[string]int),
 		strings:  make(map[string]string),
 	}
-}
-
-func (t *Tags) Booleans() map[string]bool {
-	return t.booleans
-}
-
-func (t *Tags) Strings() map[string]string {
-	return t.strings
-}
-
-func (t *Tags) Floats() map[string]float64 {
-	return t.floats
-}
-
-func (t *Tags) GetString(name string) string {
-	return t.strings[name]
-}
-
-func (t *Tags) GetBool(name string) bool {
-	return t.booleans[name]
-}
-
-func (t *Tags) GetInt(name string) int {
-	return t.integers[name]
 }
 
 type entries map[string]*entry

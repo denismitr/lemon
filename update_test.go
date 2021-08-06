@@ -460,10 +460,12 @@ func AssertTwoFilesHaveEqualContents(t *testing.T, pathA, pathB string) {
 	strA := strings.Trim(string(b1), " \n")
 	strB := strings.Trim(string(b2), " \n")
 	if strA != strB {
-		t.Errorf("file %s contents\n%s\ndoes not match expected file %s contents \n%s", pathA, strA, pathB, strB)
+		t.Log("\n================================================================================")
+		t.Errorf("file %s contents\n%s\n\ndoes not match expected file %s contents \n\n%s", pathA, strA, pathB, strB)
+		t.Log("\n================================================================================")
+	} else {
+		t.Log("contents match")
 	}
-
-	t.Log("contents match")
 }
 
 func AssertFileContents(t *testing.T, path string, expectedContents string) {

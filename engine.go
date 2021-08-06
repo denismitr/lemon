@@ -231,6 +231,7 @@ func (e *engine) remove(key PK) error {
 		return errors.Wrapf(ErrKeyDoesNotExist, "key %s does not exist in DB", key.String())
 	}
 
+	e.totalDeletes++
 	e.pks.Delete(&entry{key: key})
 
 	return nil
@@ -242,6 +243,7 @@ func (e *engine) removeUnderLock(key PK) error {
 		return errors.Wrapf(ErrKeyDoesNotExist, "key %s does not exist in DB", key.String())
 	}
 
+	e.totalDeletes++
 	e.pks.Delete(&entry{key: key})
 
 	return nil

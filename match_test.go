@@ -59,8 +59,8 @@ func (mts *matchTestSuite) TestMatchSingleUserByPatternAndTag() {
 	mts.Require().Len(docs, 1)
 	mts.Require().Equal("user:12:animals", docs[0].Key())
 	mts.Require().Equal(`[123, 987, 6789]`, docs[0].RawString())
-	mts.Require().Equal(map[string]string{"content": "list"}, docs[0].Tags().Strings())
-	mts.Require().Equal("list", docs[0].Tags().GetString("content"))
+	mts.Require().Equal(lemon.M{"content":"list"}, docs[0].Tags())
+	mts.Require().Equal("list", docs[0].TagString("content"))
 }
 
 func (mts *matchTestSuite) TestMatchMultipleUsersByPatternAndGtIntTag() {
@@ -87,15 +87,15 @@ func (mts *matchTestSuite) TestMatchMultipleUsersByPatternAndGtIntTag() {
 	mts.Require().Len(docs, 2)
 	mts.Require().Equal("user:124", docs[0].Key())
 	mts.Require().Equal(`{"1900-10-20":null,"bar":{"a":666,"b":"baz223"},"foo":124}`, docs[0].RawString())
-	mts.Require().Equal(map[string]string{"auth":"basic", "content":"doc"}, docs[0].Tags().Strings())
-	mts.Require().Equal("doc", docs[0].Tags().GetString("content"))
+	mts.Require().Equal(lemon.M{"age":58, "auth":"basic", "content":"doc", "valid":false}, docs[0].Tags())
+	mts.Require().Equal("doc", docs[0].Tags().String("content"))
 
 	mts.Require().Equal("user:125", docs[1].Key())
 	mts.Require().Equal(`{"1900-10-20":0,"bar":{"a":667,"b":"baz123223"},"foo":125}`, docs[1].RawString())
-	mts.Require().Equal(map[string]string{"auth":"basic", "content":"doc"}, docs[1].Tags().Strings())
-	mts.Require().Equal("doc", docs[1].Tags().GetString("content"))
-	mts.Require().Equal(59, docs[1].Tags().GetInt("age"))
-	mts.Require().Equal(true, docs[1].Tags().GetBool("valid"))
+	mts.Require().Equal(lemon.M{"age":59, "auth":"basic", "content":"doc", "valid":true}, docs[1].Tags())
+	mts.Require().Equal("doc", docs[1].Tags().String("content"))
+	mts.Require().Equal(59, docs[1].Tags().Int("age"))
+	mts.Require().Equal(true, docs[1].Tags().Bool("valid"))
 }
 
 func (mts *matchTestSuite) TestMatchMultipleUsersByPatternAndTagWithDescSorting() {
@@ -125,29 +125,29 @@ func (mts *matchTestSuite) TestMatchMultipleUsersByPatternAndTagWithDescSorting(
 
 	mts.Require().Equal("user:125", docs[0].Key())
 	mts.Require().Equal(`{"1900-10-20":0,"bar":{"a":667,"b":"baz123223"},"foo":125}`, docs[0].RawString())
-	mts.Require().Equal(map[string]string{"auth":"basic", "content":"doc"}, docs[0].Tags().Strings())
-	mts.Require().Equal("doc", docs[0].Tags().GetString("content"))
-	mts.Require().Equal(true, docs[0].Tags().GetBool("valid"))
+	mts.Require().Equal(lemon.M{"age":59, "auth":"basic", "content":"doc", "valid":true}, docs[0].Tags())
+	mts.Require().Equal("doc", docs[0].Tags().String("content"))
+	mts.Require().Equal(true, docs[0].Tags().Bool("valid"))
 
 	mts.Require().Equal("user:123", docs[1].Key())
 	mts.Require().Equal(`{"1900-10-20":678.345,"bar":{"a":987,"b":"baz"},"id":123}`, docs[1].RawString())
-	mts.Require().Equal(map[string]string{"auth":"token", "content":"doc"}, docs[1].Tags().Strings())
-	mts.Require().Equal("doc", docs[1].Tags().GetString("content"))
-	mts.Require().Equal(true, docs[1].Tags().GetBool("valid"))
+	mts.Require().Equal(lemon.M{"auth":"token", "content":"doc", "valid":true}, docs[1].Tags())
+	mts.Require().Equal("doc", docs[1].Tags().String("content"))
+	mts.Require().Equal(true, docs[1].Tags().Bool("valid"))
 
 	mts.Require().Equal("user:12", docs[2].Key())
 	mts.Require().Equal(`{"1900-10-20":10.345,"bar":{"a":1234567,"b":"baz22"},"id":12}`, docs[2].RawString())
-	mts.Require().Equal(map[string]string{"auth":"token", "content":"doc"}, docs[2].Tags().Strings())
-	mts.Require().Equal("doc", docs[2].Tags().GetString("content"))
-	mts.Require().Equal(true, docs[2].Tags().GetBool("valid"))
+	mts.Assert().Equal(lemon.M{"auth":"token", "content":"doc", "valid":true}, docs[2].Tags())
+	mts.Require().Equal("doc", docs[2].Tags().String("content"))
+	mts.Require().Equal(true, docs[2].Tags().Bool("valid"))
 
 	mts.Require().Equal("user:9", docs[3].Key())
 	mts.Require().Equal(`{"1900-11-20":0.04,"bar":{"a":555,"b":"foo1234"},"id":9}`, docs[3].RawString())
-	mts.Require().Equal(map[string]string{"auth":"basic", "content":"doc", "foo":"bar"}, docs[3].Tags().Strings())
-	mts.Require().Equal("doc", docs[3].Tags().GetString("content"))
-	mts.Require().Equal("bar", docs[3].Tags().GetString("foo"))
-	mts.Require().Equal(55, docs[3].Tags().GetInt("age"))
-	mts.Require().Equal(true, docs[3].Tags().GetBool("valid"))
+	mts.Require().Equal(lemon.M{"age":55, "auth":"basic", "content":"doc", "foo":"bar", "valid":true}, docs[3].Tags())
+	mts.Require().Equal("doc", docs[3].Tags().String("content"))
+	mts.Require().Equal("bar", docs[3].Tags().String("foo"))
+	mts.Require().Equal(55, docs[3].Tags().Int("age"))
+	mts.Require().Equal(true, docs[3].Tags().Bool("valid"))
 }
 
 func (mts *matchTestSuite) TestMatchMultipleUsersByPatternAndTagWithAscSorting() {
@@ -177,23 +177,23 @@ func (mts *matchTestSuite) TestMatchMultipleUsersByPatternAndTagWithAscSorting()
 
 	mts.Require().Equal("user:125", docs[2].Key())
 	mts.Require().Equal(`{"1900-10-20":0,"bar":{"a":667,"b":"baz123223"},"foo":125}`, docs[2].RawString())
-	mts.Require().Equal(map[string]string{"auth":"basic", "content":"doc"}, docs[2].Tags().Strings())
-	mts.Require().Equal("doc", docs[2].Tags().GetString("content"))
-	mts.Require().Equal(true, docs[2].Tags().GetBool("valid"))
+	mts.Require().Equal(lemon.M{"age":59, "auth":"basic", "content":"doc", "valid":true}, docs[2].Tags())
+	mts.Require().Equal("doc", docs[2].Tags().String("content"))
+	mts.Require().Equal(true, docs[2].Tags().Bool("valid"))
 
 	mts.Require().Equal("user:124", docs[1].Key())
 	mts.Require().Equal(`{"1900-10-20":null,"bar":{"a":666,"b":"baz223"},"foo":124}`, docs[1].RawString())
-	mts.Require().Equal(map[string]string{"auth":"basic", "content":"doc"}, docs[1].Tags().Strings())
-	mts.Require().Equal("doc", docs[1].Tags().GetString("content"))
-	mts.Require().Equal(false, docs[1].Tags().GetBool("valid"))
+	mts.Assert().Equal(lemon.M{"age":58, "auth":"basic", "content":"doc", "valid":false}, docs[1].Tags())
+	mts.Require().Equal("doc", docs[1].Tags().String("content"))
+	mts.Require().Equal(false, docs[1].Tags().Bool("valid"))
 
 	mts.Require().Equal("user:9", docs[0].Key())
 	mts.Require().Equal(`{"1900-11-20":0.04,"bar":{"a":555,"b":"foo1234"},"id":9}`, docs[0].RawString())
-	mts.Require().Equal(map[string]string{"auth":"basic", "content":"doc", "foo":"bar"}, docs[0].Tags().Strings())
-	mts.Require().Equal("doc", docs[0].Tags().GetString("content"))
-	mts.Require().Equal("bar", docs[0].Tags().GetString("foo"))
-	mts.Require().Equal(55, docs[0].Tags().GetInt("age"))
-	mts.Require().Equal(true, docs[0].Tags().GetBool("valid"))
+	mts.Assert().Equal(lemon.M{"age":55, "auth":"basic", "content":"doc", "foo":"bar", "valid":true}, docs[0].Tags())
+	mts.Require().Equal("doc", docs[0].Tags().String("content"))
+	mts.Require().Equal("bar", docs[0].Tags().String("foo"))
+	mts.Require().Equal(55, docs[0].Tags().Int("age"))
+	mts.Require().Equal(true, docs[0].Tags().Bool("valid"))
 }
 
 func (mts *matchTestSuite) TestMatchSingleUsersByPreciseAge() {
@@ -222,11 +222,11 @@ func (mts *matchTestSuite) TestMatchSingleUsersByPreciseAge() {
 
 	mts.Require().Equal("user:9", docs[0].Key())
 	mts.Require().Equal(`{"1900-11-20":0.04,"bar":{"a":555,"b":"foo1234"},"id":9}`, docs[0].RawString())
-	mts.Require().Equal(map[string]string{"auth":"basic", "content":"doc", "foo":"bar"}, docs[0].Tags().Strings())
-	mts.Require().Equal("doc", docs[0].Tags().GetString("content"))
-	mts.Require().Equal("bar", docs[0].Tags().GetString("foo"))
-	mts.Require().Equal(55, docs[0].Tags().GetInt("age"))
-	mts.Require().Equal(true, docs[0].Tags().GetBool("valid"))
+	mts.Require().Equal(lemon.M{"age":55, "auth":"basic", "content":"doc", "foo":"bar", "valid":true}, docs[0].Tags())
+	mts.Require().Equal("doc", docs[0].Tags().String("content"))
+	mts.Require().Equal("bar", docs[0].Tags().String("foo"))
+	mts.Require().Equal(55, docs[0].Tags().Int("age"))
+	mts.Require().Equal(true, docs[0].Tags().Bool("valid"))
 }
 
 func (mts *matchTestSuite) TestMatchMultipleTvsByGtFloatTag() {

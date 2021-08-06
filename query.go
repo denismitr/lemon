@@ -7,6 +7,18 @@ import (
 
 type M map[string]interface{}
 
+func (m M) String(k string) string {
+	return m[k].(string)
+}
+
+func (m M) Int(k string) int {
+	return m[k].(int)
+}
+
+func (m M) Bool(k string) bool {
+	return m[k].(bool)
+}
+
 type KeyRange struct {
 	From, To string
 }
