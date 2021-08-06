@@ -14,8 +14,12 @@ func TestTx_Rollback(t *testing.T) {
 	suite.Run(t, &rollbackTestSuite{})
 }
 
-func TestTx_Vacuum(t *testing.T) {
-	suite.Run(t, &vacuumTestSuite{})
+func TestTx_AutoVacuum(t *testing.T) {
+	suite.Run(t, &autoVacuumTestSuite{})
+}
+
+func TestTx_ManualVacuum(t *testing.T) {
+	suite.Run(t, &manualVacuumTestSuite{})
 }
 
 type rollbackTestSuite struct {
@@ -150,17 +154,18 @@ func (rts *rollbackTestSuite) TestInsertRollbackWithTags() {
 		rts.Require().NoError(err)
 		rts.Require().Equal("book:4", book4.Key())
 		rts.Require().Equal(`{"author":"Brian","edition":1,"year":2008}`, book4.RawString())
-		rts.Require().Equal(`paper`, book4.TagString("type"))
-		rts.Require().Equal(2, book4.TagInt("inStock"))
-		rts.Require().Equal(30.45, book4.TagFloat("price"))
+		rts.Require().Equal(`paper`, book4.Tags().String("type"))
+		rts.Require().Equal(2, book4.Tags().Int("inStock"))
+		rts.Require().Equal(30.45, book4.Tags().Float("price"))
 
 		book41, err := tx.Get("book:41")
 		rts.Require().NoError(err)
 		rts.Require().Equal("book:41", book41.Key())
 		rts.Require().Equal(`{"author":"Valeria Pucci","edition":2,"year":2011}`, book41.RawString())
-		rts.Require().Equal(`digital`, book41.TagString("type"))
-		rts.Require().Equal(29, book41.TagInt("inStock"))
-		rts.Require().Equal(30.33, book41.TagFloat("price"))
+		rts.Require().Equal(2, book41.IntOrDefault("edition", 0))
+		rts.Require().Equal(`digital`, book41.Tags().String("type"))
+		rts.Require().Equal(29, book41.Tags().Int("inStock"))
+		rts.Require().Equal(30.33, book41.Tags().Float("price"))
 
 		return nil
 	})
@@ -174,12 +179,12 @@ func (rts *rollbackTestSuite) TestInsertRollbackWithTags() {
 	assertTwoFilesHaveEqualContents(rts.T(), rts.fixture, "./__fixtures__/correct/insert_rollback_db1.ldb")
 }
 
-type vacuumTestSuite struct {
+type autoVacuumTestSuite struct {
 	suite.Suite
 	fixture string
 }
 
-func (vts *vacuumTestSuite) SetupSuite() {
+func (vts *autoVacuumTestSuite) SetupSuite() {
 	vts.fixture = "./__fixtures__/vacuum_db1.ldb"
 	db, closer, err := lemon.Open(vts.fixture, &lemon.Config{
 		DisableAutoVacuum: true,
@@ -197,13 +202,13 @@ func (vts *vacuumTestSuite) SetupSuite() {
 	assertTwoFilesHaveEqualContents(vts.T(), vts.fixture, "./__fixtures__/correct/vacuum_db1.ldb")
 }
 
-func (vts *vacuumTestSuite) TearDownSuite() {
+func (vts *autoVacuumTestSuite) TearDownSuite() {
 	if err := os.Remove(vts.fixture); err != nil {
 		vts.Require().NoError(err)
 	}
 }
 
-func (vts *vacuumTestSuite) Test_AutoVacuumWithIntervals() {
+func (vts *autoVacuumTestSuite) Test_AutoVacuumWithIntervals() {
 	db, closer, err := lemon.Open(vts.fixture, &lemon.Config{
 		DisableAutoVacuum: false,
 		AutoVacuumMinSize: 2,
@@ -223,6 +228,53 @@ func (vts *vacuumTestSuite) Test_AutoVacuumWithIntervals() {
 	time.Sleep(2 * time.Second)
 
 	assertTwoFilesHaveEqualContents(vts.T(), vts.fixture, "./__fixtures__/correct/after_vacuum_db1.ldb")
+}
+
+type manualVacuumTestSuite struct {
+	suite.Suite
+	fixture string
+}
+
+func (vts *manualVacuumTestSuite) SetupSuite() {
+	vts.fixture = "./__fixtures__/manual_vacuum_db2.ldb"
+	db, closer, err := lemon.Open(vts.fixture, &lemon.Config{
+		DisableAutoVacuum: true,
+	})
+
+	vts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			vts.T().Errorf("ERROR: %v", err)
+		}
+	}()
+
+	forceSeedDataForVacuum(vts.T(), db)
+	assertTwoFilesHaveEqualContents(vts.T(), vts.fixture, "./__fixtures__/correct/before_manual_vacuum_db2.ldb")
+}
+
+func (vts *manualVacuumTestSuite) TearDownSuite() {
+	if err := os.Remove(vts.fixture); err != nil {
+		vts.Require().NoError(err)
+	}
+}
+
+func (vts *manualVacuumTestSuite) Test_ManualVacuum() {
+	db, closer, err := lemon.Open(vts.fixture, &lemon.Config{
+		DisableAutoVacuum: true,
+	})
+
+	vts.Require().NoError(err)
+	vts.Assert().Equal(2, db.Count())
+
+	defer func() {
+		if err := closer(); err != nil {
+			vts.T().Errorf("ERROR: %v", err)
+		}
+	}()
+
+	vts.Require().NoError(db.Vacuum())
+	assertTwoFilesHaveEqualContents(vts.T(), vts.fixture, "./__fixtures__/correct/after_manual_vacuum_db2.ldb")
 }
 
 func forceSeedDataForVacuum(t *testing.T, db *lemon.DB) {

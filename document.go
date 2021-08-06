@@ -63,38 +63,6 @@ func (d *Document) Tags() M {
 	return result
 }
 
-func (d *Document) TagString(name string) string {
-	if d.tags == nil {
-		return ""
-	}
-
-	return d.tags.strings[name]
-}
-
-func (d *Document) TagInt(name string) int {
-	if d.tags == nil {
-		return 0
-	}
-
-	return d.tags.integers[name]
-}
-
-func (d *Document) TagBool(name string) bool {
-	if d.tags == nil {
-		return false
-	}
-
-	return d.tags.booleans[name]
-}
-
-func (d *Document) TagFloat(name string) float64 {
-	if d.tags == nil {
-		return 0
-	}
-
-	return d.tags.floats[name]
-}
-
 func (d *Document) Unmarshal(dest interface{}) error {
 	err := json.Unmarshal(d.value, &dest)
 	if err != nil {

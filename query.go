@@ -19,6 +19,10 @@ func (m M) Bool(k string) bool {
 	return m[k].(bool)
 }
 
+func (m M) Float(k string) float64 {
+	return m[k].(float64)
+}
+
 type KeyRange struct {
 	From, To string
 }

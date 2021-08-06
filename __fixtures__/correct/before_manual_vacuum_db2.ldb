@@ -1,0 +1,50 @@
+*6
++set
++book:4
+$42
+{"author":"Brian","edition":1,"year":2008}
+@stg(type,paper)
+@itg(inStock,2)
+@ftg(price,30.45)
+*6
++set
++book:41
+$50
+{"author":"Valeria Pucci","edition":2,"year":2011}
+@stg(type,digital)
+@itg(inStock,29)
+@ftg(price,30.33)
+*6
++set
++book:400
+$52
+{"author":"Valerio Strozzi","edition":1,"year":2021}
+@stg(type,digital)
+@itg(inStock,290)
+@ftg(price,24.444)
+*6
++set
++book:1000
+$52
+{"author":"Marco Grigoli","edition":2.8,"year":1989}
+@stg(type,paper)
+@itg(inStock,1)
+@ftg(price,19.99)
+*2
++del
++book:4
+*2
++del
++book:41
+*2
++del
++book:1000
+*7
++set
++book:1001
+$50
+{"author":"Alessia Valle","edition":3,"year":1978}
+@btg(delivery,true)
+@stg(type,paper)
+@itg(inStock,2)
+@ftg(price,21.99)
