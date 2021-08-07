@@ -16,7 +16,7 @@ func Test_resolveRespArrayFromLine(t *testing.T) {
 		bytesExpected int
 		segments int
 	}{
-		{in: "*5\r\n$3\r\nset\r\n$6\r\nfoo123\r\n$10\r\nbtg(bar,1)\r\n", bytesExpected: 4, segments: 5},
+		{in: "*5\r\n$3\r\nset\r\n$6\r\nfoo123\r\n$10\r\n+btg(bar,1)\r\n", bytesExpected: 4, segments: 5},
 		{in: "*3\r\n$3\r\ndel\r\n$6foo123", bytesExpected: 4, segments: 3},
 		{in: "*34\r\n", bytesExpected: 5, segments: 34},
 	}
@@ -195,8 +195,8 @@ func Test_parser(t *testing.T) {
 		prs := &parser{}
 
 		cmds := strings.Join([]string{
-			"*4\r\n+set\r\n$8\r\nuser:123\r\n$13\r\n" + `{"foo":"bar"}` + "\r\n@stg(bar,one_two_three)\n",
-			"*4\r\n+set\r\n$8\r\nuser:456\r\n$11\r\n" + `{"baz":123}` + "\r\n@btg(foo,true)\r\n",
+			"*4\r\n+set\r\n$8\r\nuser:123\r\n$13\r\n" + `{"foo":"bar"}` + "\r\n+stg(bar,one_two_three)\n",
+			"*4\r\n+set\r\n$8\r\nuser:456\r\n$11\r\n" + `{"baz":123}` + "\r\n+btg(foo,true)\r\n",
 			"*2\r\n+del\r\n$8\r\nuser:123\r\n",
 			"*3\r\n+set\r\n$14\r\nproducts/items\r\n$15\r\n" + `[1,4,6,7,8,985]` + "\r\n",
 		}, "")

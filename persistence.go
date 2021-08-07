@@ -400,7 +400,7 @@ func (p *parser) resolveTagger(r *bufio.Reader) (Tagger, error) {
 		return nil, errors.Wrap(ErrCommandInvalid, err.Error())
 	}
 
-	if len(line) < 3 || line[0] != '@' || line[len(line) - 1] == ')' {
+	if len(line) < 3 || line[0] != '+' || line[len(line) - 1] == ')' {
 		return nil, errors.Wrapf(ErrCommandInvalid, "line %s does not contain a valid function", string(line))
 	}
 
@@ -579,7 +579,7 @@ func writeRespKeyString(s string, buf *bytes.Buffer) {
 }
 
 func writeRespFunc(fn string, buf *bytes.Buffer) {
-	buf.WriteRune('@')
+	buf.WriteRune('+')
 	buf.WriteString(fn)
 	buf.WriteRune('\r')
 	buf.WriteRune('\n')
