@@ -151,10 +151,10 @@ func Test_parser(t *testing.T) {
 		prs := &parser{}
 
 		cmds := strings.Join([]string{
-			"*3\r\n+set\r\n+user:123\r\n$13\r\n" + `{"foo":"bar"}` + "\r\n",
-			"*3\r\n+set\r\n+user:456\r\n$11\r\n" + `{"baz":123}` + "\r\n",
-			"*2\r\n+del\r\n+user:123\r\n",
-			"*3\r\n+set\r\n+products\r\n$15\r\n" + `[1,4,6,7,8,985]` + "\r\n",
+			"*3\r\n+set\r\n$8\r\nuser:123\r\n$13\r\n" + `{"foo":"bar"}` + "\r\n",
+			"*3\r\n+set\r\n$8\r\nuser:456\r\n$11\r\n" + `{"baz":123}` + "\r\n",
+			"*2\r\n+del\r\n$8\r\nuser:123\r\n",
+			"*3\r\n+set\r\n$14\r\nproducts/items\r\n$15\r\n" + `[1,4,6,7,8,985]` + "\r\n",
 		}, "")
 
 		r := bufio.NewReader(strings.NewReader(cmds))
@@ -185,7 +185,7 @@ func Test_parser(t *testing.T) {
 
 		cmd4, ok := mock.commands[3].(*entry)
 		require.True(t, ok)
-		assert.Equal(t, cmd4.key, newPK("products"))
+		assert.Equal(t, cmd4.key, newPK("products/items"))
 		assert.Equal(t, cmd4.value, []byte(`[1,4,6,7,8,985]`))
 		assert.Nil(t, cmd2.tags)
 	})
@@ -195,10 +195,10 @@ func Test_parser(t *testing.T) {
 		prs := &parser{}
 
 		cmds := strings.Join([]string{
-			"*4\r\n+set\r\n+user:123\r\n$13\r\n" + `{"foo":"bar"}` + "\r\n@stg(bar,one_two_three)\n",
-			"*4\r\n+set\r\n+user:456\r\n$11\r\n" + `{"baz":123}` + "\r\n@btg(foo,true)\r\n",
-			"*2\r\n+del\r\n+user:123\r\n",
-			"*3\r\n+set\r\n+products\r\n$15\r\n" + `[1,4,6,7,8,985]` + "\r\n",
+			"*4\r\n+set\r\n$8\r\nuser:123\r\n$13\r\n" + `{"foo":"bar"}` + "\r\n@stg(bar,one_two_three)\n",
+			"*4\r\n+set\r\n$8\r\nuser:456\r\n$11\r\n" + `{"baz":123}` + "\r\n@btg(foo,true)\r\n",
+			"*2\r\n+del\r\n$8\r\nuser:123\r\n",
+			"*3\r\n+set\r\n$14\r\nproducts/items\r\n$15\r\n" + `[1,4,6,7,8,985]` + "\r\n",
 		}, "")
 
 		r := bufio.NewReader(strings.NewReader(cmds))
@@ -234,7 +234,7 @@ func Test_parser(t *testing.T) {
 
 		cmd4, ok := mock.commands[3].(*entry)
 		require.True(t, ok)
-		assert.Equal(t, cmd4.key, newPK("products"))
+		assert.Equal(t, cmd4.key, newPK("products/items"))
 		assert.Equal(t, cmd4.value, []byte(`[1,4,6,7,8,985]`))
 		assert.Nil(t, cmd4.tags)
 	})

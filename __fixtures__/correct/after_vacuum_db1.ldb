@@ -1,6 +1,7 @@
 *6
 +set
-+book:400
+$8
+book:400
 $52
 {"author":"Valerio Strozzi","edition":1,"year":2021}
 @stg(type,digital)
@@ -8,7 +9,8 @@ $52
 @ftg(price,24.444)
 *7
 +set
-+book:1001
+$9
+book:1001
 $50
 {"author":"Alessia Valle","edition":3,"year":1978}
 @btg(delivery,true)

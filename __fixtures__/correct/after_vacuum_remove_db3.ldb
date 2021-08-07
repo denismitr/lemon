@@ -6,17 +6,7 @@ $44
 {"100":"username","baz":8989764,"foo":"bar"}
 *3
 +set
-$9
-item:1145
-$44
-{"999":null,"baz12":123.879,"foo":"bar5674"}
-*3
-+set
 $5
 users
 $74
 {"user1":"abc123","user2":"John Smith","user3":"anyone","user4":"someone"}
-*2
-+del
-$9
-item:1145

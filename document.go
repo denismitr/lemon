@@ -34,6 +34,10 @@ func newDocumentFromEntry(ent *entry) *Document {
 	return d
 }
 
+func (d *Document) Value() []byte {
+	return d.value
+}
+
 func (d *Document) RawString() string {
 	return string(d.value)
 }

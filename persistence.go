@@ -160,26 +160,26 @@ func (p *parser) parse(r *bufio.Reader, cb func(d deserializer) error) (int, err
 
 		switch cmdCode {
 		case delCode:
-			key, err := p.resolveRespSimpleString(r)
+			key, err := p.resolveRespKey(r)
 			if err != nil {
 				return p.totalSize, err
 			}
 
-			if err := cb(&deleteCmd{key: newPK(key)}); err != nil {
+			if err := cb(&deleteCmd{key: newPK(string(key))}); err != nil {
 				return p.totalSize, err
 			}
 		case setCode:
-			key, err := p.resolveRespSimpleString(r)
+			key, err := p.resolveRespKey(r)
 			if err != nil {
 				return p.totalSize, err
 			}
 
-			value, err := p.resolveRespBlobString(r)
+			value, err := p.resolveRespBlob(r)
 			if err != nil {
 				return p.totalSize, err
 			}
 
-			ent := newEntryWithTags(key, value, nil)
+			ent := newEntryWithTags(string(key), value, nil)
 
 			// subtracting command, key and value
 			segments -= 3
@@ -458,7 +458,47 @@ func resolveTagFnTypeAndArguments(expression string) (prefix string, args []stri
 	return
 }
 
-func (p *parser) resolveRespBlobString(r *bufio.Reader) ([]byte, error) {
+func (p *parser) resolveRespKey(r *bufio.Reader) ([]byte, error) {
+	strInfoLine, err := r.ReadBytes('\n')
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil, io.ErrUnexpectedEOF
+		}
+
+		return nil, errors.Wrapf(ErrCommandInvalid, "could not resolve blob: %s", err.Error())
+	}
+
+	p.currentCmdSize += len(strInfoLine)
+
+	if len(strInfoLine) == 0 || strInfoLine[0] != '$' {
+		return nil, errors.Wrapf(ErrCommandInvalid, "line %s does not contain valid length", string(strInfoLine))
+	}
+
+	keyLen, err := strconv.Atoi(string(strInfoLine[1:len(strInfoLine) - 2]))
+	if err != nil {
+		return nil, errors.Wrap(ErrCommandInvalid, err.Error())
+	}
+
+	key := make([]byte, keyLen+ 2)
+	n, err := io.ReadFull(r, key)
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil, io.ErrUnexpectedEOF
+		}
+
+		return nil, errors.Wrap(ErrCommandInvalid, err.Error())
+	}
+
+	p.currentCmdSize += n
+
+	if n - 2 != keyLen {
+		return nil, errors.Wrapf(ErrCommandInvalid, "line %s has invalid key", string(strInfoLine))
+	}
+
+	return key[:keyLen], nil
+}
+
+func (p *parser) resolveRespBlob(r *bufio.Reader) ([]byte, error) {
 	strInfoLine, err := r.ReadBytes('\n')
 	if err != nil {
 		if errors.Is(err, io.EOF) {
@@ -523,6 +563,16 @@ func writeRespFloatTag(name string, v float64, buf *bytes.Buffer) {
 
 func writeRespSimpleString(s string, buf *bytes.Buffer) {
 	buf.WriteRune('+')
+	buf.WriteString(s)
+	buf.WriteRune('\r')
+	buf.WriteRune('\n')
+}
+
+func writeRespKeyString(s string, buf *bytes.Buffer) {
+	buf.WriteRune('$')
+	buf.WriteString(strconv.FormatInt(int64(len(s)), 10))
+	buf.WriteRune('\r')
+	buf.WriteRune('\n')
 	buf.WriteString(s)
 	buf.WriteRune('\r')
 	buf.WriteRune('\n')

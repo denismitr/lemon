@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"github.com/pkg/errors"
 	btr "github.com/tidwall/btree"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -523,16 +524,19 @@ func filteringBTreeIterator(
 }
 
 func serializeToValue(d interface{}) ([]byte, error) {
-	var v []byte
-	if s, isStr := d.(string); isStr {
-		v = []byte(s)
-	} else {
-		b, err := json.Marshal(d)
-		if err != nil {
-			return nil, errors.Wrapf(err, "could not marshal data %+Value", d)
-		}
-		v = b
+	switch typedValue := d.(type) {
+	case []byte:
+		return typedValue, nil
+	case int:
+		return []byte(strconv.Itoa(typedValue)), nil
+	case string:
+		return []byte(typedValue), nil
 	}
 
-	return v, nil
+	b, err := json.Marshal(d)
+	if err != nil {
+		return nil, errors.Wrapf(err, "could not marshal data %+v value", d)
+	}
+
+	return b, nil
 }

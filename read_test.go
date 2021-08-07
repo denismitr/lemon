@@ -25,20 +25,36 @@ func TestLemonDB_Read(t *testing.T) {
 		}
 	}()
 
-	//t.Run("seed", func(t *testing.T) {
-	//	if err := db.MultiUpdate(context.Background(), func(tx *lemon.Tx) error {
-	//		if err := tx.Insert("product:8976", lemon.D{
-	//			"100": "foobar",
-	//			"baz":8989764,
-	//			"foo":"bar",
+	//t.Run("seed products without tags", func(t *testing.T) {
+	//	if err := db.Update(context.Background(), func(tx *lemon.Tx) error {
+	//		if err := tx.Insert("product:2", lemon.M{
+	//			"100": "foobar2",
+	//			"baz": 2,
+	//			"foo": "bar",
 	//		}); err != nil {
 	//			return err
 	//		}
 	//
-	//		if err := tx.Insert("product:1145", lemon.D{
-	//			"999":nil,
-	//			"baz12":123.879,
-	//			"foo":"bar5674",
+	//		if err := tx.Insert("product:88", lemon.M{
+	//			"100": "foobar-88",
+	//			"baz": 88,
+	//			"foo": "bar/88",
+	//		}); err != nil {
+	//			return err
+	//		}
+	//
+	//		if err := tx.Insert("product:10", lemon.M{
+	//			"999": nil,
+	//			"baz12": 123.879,
+	//			"foo": "bar5674",
+	//		}); err != nil {
+	//			return err
+	//		}
+	//
+	//		if err := tx.Insert("product:100", lemon.M{
+	//			"999": nil,
+	//			"baz12": 123.879,
+	//			"foo": "bar5674",
 	//		}); err != nil {
 	//			return err
 	//		}
@@ -53,12 +69,12 @@ func TestLemonDB_Read(t *testing.T) {
 		var result1 *lemon.Document
 		var result2 *lemon.Document
 		if err := db.View(context.Background(), func(tx *lemon.Tx) error {
-			doc1, err := tx.Get("product:8976")
+			doc1, err := tx.Get("product:88")
 			if err != nil {
 				return err
 			}
 
-			doc2, err := tx.Get("product:1145")
+			doc2, err := tx.Get("product:100")
 			if err != nil {
 				return err
 			}
@@ -71,10 +87,10 @@ func TestLemonDB_Read(t *testing.T) {
 		}
 
 		json1 := result1.RawString()
-		assert.Equal(t, `{"100":"foobar","baz":8989764,"foo":"bar"}`, json1)
+		assert.Equal(t, `{"100":"foobar-88","baz":88,"foo":"bar/88"}`, json1)
 		foo, err := result1.String("foo")
 		require.NoError(t, err)
-		assert.Equal(t, "bar", foo)
+		assert.Equal(t, "bar/88", foo)
 
 		json2 := result2.RawString()
 		assert.Equal(t, `{"999":null,"baz12":123.879,"foo":"bar5674"}`, json2)

@@ -30,7 +30,7 @@ func newEntry(key string, value []byte) *entry {
 func (ent *entry) serialize(buf *bytes.Buffer) {
 	writeRespArray(3 + ent.tagCount(), buf)
 	writeRespSimpleString("set", buf)
-	writeRespSimpleString(ent.key.String(), buf)
+	writeRespKeyString(ent.key.String(), buf)
 	writeRespBlob(ent.value, buf)
 
 	if ent.tagCount() > 0 {
@@ -72,7 +72,7 @@ type deleteCmd struct {
 func (cmd *deleteCmd) serialize(buf *bytes.Buffer) {
 	writeRespArray(2, buf)
 	writeRespSimpleString("del", buf)
-	writeRespSimpleString(cmd.key.String(), buf)
+	writeRespKeyString(cmd.key.String(), buf)
 }
 
 func (cmd *deleteCmd) deserialize(e *engine) error {

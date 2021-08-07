@@ -230,13 +230,14 @@ func (wts *writeTestSuite) Test_ReplaceInsertedDocs() {
 
 type removeTestSuite struct {
 	suite.Suite
-	db       *lemon.DB
-	closer lemon.Closer
-	fileName string
+	db      *lemon.DB
+	closer  lemon.Closer
+	fixture string
 }
 
 func (rts *removeTestSuite) SetupTest() {
-	db, closer, err := lemon.Open("./__fixtures__/db3.ldb")
+	rts.fixture = "./__fixtures__/remove_db3.ldb"
+	db, closer, err := lemon.Open(rts.fixture)
 	rts.Require().NoError(err)
 
 	rts.db = db
@@ -275,15 +276,15 @@ func (rts *removeTestSuite) SetupTest() {
 }
 
 func (rts *removeTestSuite) TearDownTest() {
-	assertTwoFilesHaveEqualContents(rts.T(), "./__fixtures__/db3.ldb", "./__fixtures__/correct/before_vacuum_db3.ldb")
+	assertTwoFilesHaveEqualContents(rts.T(), rts.fixture, "./__fixtures__/correct/before_vacuum_remove_db3.ldb")
 
 	if err := rts.closer(); err != nil {
 		rts.T().Errorf("ERROR: %v", err)
 	}
 
-	assertTwoFilesHaveEqualContents(rts.T(), "./__fixtures__/db3.ldb", "./__fixtures__/correct/after_vacuum_db3.ldb")
+	assertTwoFilesHaveEqualContents(rts.T(), rts.fixture, "./__fixtures__/correct/after_vacuum_remove_db3.ldb")
 
-	if err := os.Remove("./__fixtures__/db3.ldb"); err != nil {
+	if err := os.Remove(rts.fixture); err != nil {
 		rts.Require().NoError(err)
 	}
 }
@@ -446,6 +447,14 @@ func TestTx_Remove(t *testing.T) {
 	suite.Run(t, &removeTestSuite{})
 }
 
+func loadFixtureContents(t *testing.T, path string) []byte {
+	b, err := ioutil.ReadFile(path)
+	if err != nil {
+		t.Fatalf("could not load file %s: %s", path, err.Error())
+	}
+	return b
+}
+
 func assertTwoFilesHaveEqualContents(t *testing.T, pathA, pathB string) {
 	t.Helper()
 
@@ -470,22 +479,23 @@ func assertTwoFilesHaveEqualContents(t *testing.T, pathA, pathB string) {
 	}
 }
 
-func AssertFileContents(t *testing.T, path string, expectedContents string) {
+func assertFileContentsEquals(t *testing.T, path string, expectedContents []byte) {
 	t.Helper()
 
 	b, err := ioutil.ReadFile(path)
 	if err != nil {
-		t.Errorf("file %s could not be opened\nbecause:  %v", path, err)
+		t.Fatalf("file %s could not be opened\nbecause:  %v", path, err)
 	}
 
-	expectedContents = strings.Trim(expectedContents, " \n")
+	expectedContentsString := strings.Trim(string(expectedContents), " \n")
 	str := strings.Trim(string(b), " \n")
-	if str != expectedContents {
-
-		t.Errorf("file %s contents\n%s\ndoes not match expected\n%s", path, string(b), expectedContents)
+	if str != expectedContentsString {
+		t.Errorf("\nATTENTION! Contents mismatch!!!!")
+		t.Errorf("\nExpected contents length is %d.\nActual length of file %s contents is %d", len(expectedContentsString), path, len(str))
+		t.Errorf("\nfile %s contents\n%s\n\ndoes not match expected value\n\n%s", path, string(b), expectedContents)
+	} else {
+		t.Log("contents match")
 	}
-
-	t.Log("contents match")
 }
 
 func Test_Write(t *testing.T) {

@@ -80,6 +80,20 @@ func (db *DB) Vacuum() error {
 	return nil
 }
 
+func (db *DB) Get(ctx context.Context, key string) (*Document, error) {
+	var doc *Document
+	err := db.View(ctx, func(tx *Tx) error {
+		d, err := tx.Get(key)
+		if err != nil {
+			return err
+		}
+		doc = d
+		return nil
+	})
+
+	return doc, err
+}
+
 func (db *DB) View(ctx context.Context, cb UserCallback) error {
 	tx, err := db.Begin(ctx, true)
 	if err != nil {

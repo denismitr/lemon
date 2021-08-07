@@ -1,18 +1,22 @@
 *3
 +set
-+item:8976
+$9
+item:8976
 $44
 {"100":"username","baz":8989764,"foo":"bar"}
 *3
 +set
-+item:1145
+$9
+item:1145
 $44
 {"999":null,"baz12":123.879,"foo":"bar5674"}
 *3
 +set
-+users
+$5
+users
 $74
 {"user1":"abc123","user2":"John Smith","user3":"anyone","user4":"someone"}
 *2
 +del
-+item:1145
+$9
+item:1145

@@ -8,6 +8,10 @@ import (
 	"testing"
 )
 
+func TestTx_Match(t *testing.T) {
+	suite.Run(t, &matchTestSuite{})
+}
+
 type matchTestSuite struct {
 	suite.Suite
 	fixture string
@@ -27,6 +31,7 @@ func (mts *matchTestSuite) SetupSuite() {
 	seedGranularUsers(mts.T(), db)
 	seedGranularAnimals(mts.T(), db)
 	seedGranularTvProducts(mts.T(), db)
+	seedWebPages(mts.T(), db)
 }
 
 func (mts *matchTestSuite) TearDownSuite() {
@@ -198,7 +203,6 @@ func (mts *matchTestSuite) TestMatchMultipleUsersByPatternAndTagWithAscSorting()
 }
 
 func (mts *matchTestSuite) TestMatchSingleUsersByPreciseAge() {
-	mts.fixture = "./__fixtures__/match_db1.ldb"
 	db, closer, err := lemon.Open(mts.fixture)
 	mts.Require().NoError(err)
 
@@ -230,8 +234,26 @@ func (mts *matchTestSuite) TestMatchSingleUsersByPreciseAge() {
 	mts.Require().Equal(true, docs[0].Tags().Bool("valid"))
 }
 
+func (mts *matchTestSuite) TestMatchSingleUrlKey() {
+	db, closer, err := lemon.Open(mts.fixture)
+	mts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			mts.T().Errorf("ERROR: %v", err)
+		}
+	}()
+
+	doc, err := db.Get(context.Background(), "https://www.php.net/manual/en/function.str-replace")
+	mts.Require().NoError(err)
+
+	mts.Assert().Equal("https://www.php.net/manual/en/function.str-replace", doc.Key())
+	b := doc.Value()
+
+	assertFileContentsEquals(mts.T(), "./__fixtures__/web4.html", b)
+}
+
 func (mts *matchTestSuite) TestMatchMultipleTvsByGtFloatTag() {
-	mts.fixture = "./__fixtures__/match_db1.ldb"
 	db, closer, err := lemon.Open(mts.fixture)
 	mts.Require().NoError(err)
 
@@ -490,7 +512,36 @@ func seedGranularTvProducts(t *testing.T, db *lemon.DB) {
 	}
 }
 
+func seedWebPages(t *testing.T, db *lemon.DB) {
+	err := db.Update(context.Background(), func(tx *lemon.Tx) error {
+		if err := tx.Insert(
+			"https://www.php.net/manual/en/function.str-replace",
+			loadFixtureContents(t, "./__fixtures__/web4.html"),
+			lemon.WithTags().Map(lemon.M{
+				"content": "html",
+				"auth": "none",
+				"active":   true,
+			}),
+		); err != nil {
+			return err
+		}
 
-func TestTx_Match(t *testing.T) {
-	suite.Run(t, &matchTestSuite{})
+		if err := tx.Insert(
+			"https://www.php.net/manual/en/function.str-repeat.php",
+			loadFixtureContents(t, "./__fixtures__/web3.html"),
+			lemon.WithTags().Map(lemon.M{
+				"content": "html",
+				"auth": "none",
+				"active":   true,
+			}),
+		); err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		t.Fatal(err)
+	}
 }
