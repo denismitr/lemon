@@ -213,14 +213,30 @@ func (e *engine) findByKeys(pks []string, ir entryReceiver) error {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
+	resultCh := make(chan *entry)
+	var wg sync.WaitGroup
+
 	for _, k := range pks {
-		found := e.pks.Get(newPK(k))
-		if found == nil {
-			return errors.Wrapf(ErrKeyDoesNotExist, "key %s does not exist in database", k)
-		}
+		wg.Add(1)
+		go func(k string) {
+			defer wg.Done()
 
-		ent := found.(*entry)
+			found, err := e.findByKeyUnderLock(k)
+			if err != nil {
+				// todo: log
+				//return errors.Wrapf(ErrKeyDoesNotExist, "key %s does not exist in database", k)
+			} else {
+				resultCh <- found
+			}
+		}(k)
+	}
 
+	go func() {
+		wg.Wait()
+		close(resultCh)
+	}()
+
+	for ent := range resultCh {
 		if next := ir(ent); !next {
 			break
 		}
@@ -252,33 +268,6 @@ func (e *engine) removeUnderLock(key PK) error {
 
 	e.totalDeletes++
 	e.pks.Delete(&entry{key: key})
-
-	return nil
-}
-
-func (e *engine) update(ent *entry) error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	existing := e.pks.Set(ent)
-	if existing == nil {
-		return errors.Wrapf(ErrKeyDoesNotExist, "could not update non existing document with key %s", ent.key.String())
-	}
-
-	existingEnt, ok := existing.(*entry)
-	if !ok {
-		panic(castPanic)
-	}
-
-	if existingEnt.tags != nil {
-		e.clearEntityTagsUnderLock(ent)
-	}
-
-	if ent.tags != nil {
-		if err := e.setEntityTagsUnderLock(ent); err != nil {
-			return err
-		}
-	}
 
 	return nil
 }

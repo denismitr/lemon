@@ -34,27 +34,91 @@ func newTagIndex() *tagIndex {
 	}
 }
 
+func (ti *tagIndex) keys() int {
+	return len(ti.data)
+}
+
+func (ti *tagIndex) getEntriesFor(name string, v interface{}) map[string]*entry {
+	idx := ti.data[name]
+	if idx == nil {
+		return nil
+	}
+
+	switch typedValue := v.(type) {
+	case float64:
+		item := idx.btr.Get(&floatTag{value: typedValue})
+		if item == nil {
+			return nil
+		}
+		return item.(entryContainer).getEntries()
+	case int:
+		item := idx.btr.Get(&intTag{value: typedValue})
+		if item == nil {
+			return nil
+		}
+		return item.(entryContainer).getEntries()
+	case bool:
+		item := idx.btr.Get(&boolTag{value: typedValue})
+		if item == nil {
+			return nil
+		}
+		return item.(entryContainer).getEntries()
+	case string:
+		item := idx.btr.Get(&strTag{value: typedValue})
+		if item == nil {
+			return nil
+		}
+		return item.(entryContainer).getEntries()
+	}
+
+	return nil
+}
+
 func (ti *tagIndex) removeEntry(ent *entry) {
 	if ent.tags == nil {
 		return
 	}
 
 	for name, value := range ent.tags.floats {
-		if ti.data[name] == nil {
-			continue
-		}
+		ti.remove(name, floatDataType, ent, &floatTag{value: value})
+	}
 
-		idx := ti.data[name]
-		item := idx.btr.Get(&floatTag{value: value})
-		if item == nil {
-			continue
-		}
+	for name, value := range ent.tags.integers {
+		ti.remove(name, intDataType, ent, &intTag{value: value})
+	}
 
-		tag := item.(*floatTag)
-		if tag.entries[ent.key.String()] == nil {
-			continue
-		}
-		delete(tag.entries, ent.key.String())
+	for name, value := range ent.tags.strings {
+		ti.remove(name, strDataType, ent, &strTag{value: value})
+	}
+
+	for name, value := range ent.tags.booleans {
+		ti.remove(name, boolDataType, ent, &boolTag{value: value})
+	}
+}
+
+func (ti *tagIndex) remove(name string, dt indexType, ent *entry, lookup interface{}) {
+	idx := ti.data[name]
+	if idx == nil || idx.dt != dt {
+		return
+	}
+
+	item := idx.btr.Get(lookup)
+	if item == nil {
+		return
+	}
+
+	entryCollection := item.(entryContainer)
+	if !entryCollection.hasEntry(ent.key.String()) {
+		return
+	}
+
+	entryCollection.remove(ent.key.String())
+	if len(entryCollection.getEntries()) == 0 {
+		idx.btr.Delete(item)
+	}
+
+	if idx.btr.Len() == 0 {
+		delete(ti.data, name)
 	}
 }
 
@@ -128,6 +192,8 @@ func (ti *tagIndex) add(name string, value interface{}, ent *entry) error {
 		return err
 	}
 
+	ti.data[name] = idx
+
 	existing := idx.btr.Get(tag)
 	if existing != nil {
 		c, ok := existing.(entryContainer)
@@ -144,8 +210,8 @@ func (ti *tagIndex) add(name string, value interface{}, ent *entry) error {
 	return nil
 }
 
-func (ti *tagIndex) getEqualTagEntities(idx *index, item interface{}) map[string]*entry {
-	found := idx.btr.Get(item)
+func (ti *tagIndex) getEqualTagEntities(idx *index, entry interface{}) map[string]*entry {
+	found := idx.btr.Get(entry)
 	if found == nil {
 		return nil
 	}

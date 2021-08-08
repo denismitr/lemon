@@ -2,6 +2,7 @@ package lemon
 
 import (
 	"github.com/stretchr/testify/assert"
+	"github.com/tidwall/btree"
 	"strings"
 	"testing"
 )
@@ -58,5 +59,56 @@ func TestPK_Match(t *testing.T) {
 			pk.Match(strings.Split(tc.pattern, ":"))
 		})
 	}
+}
+
+func Test_KeyAscend(t *testing.T) {
+	t.Run("users", func(t *testing.T) {
+		idx := btree.New(byPrimaryKeys)
+		idx.Set(newEntry("user:10", nil))
+		idx.Set(newEntry("user:100", nil))
+		idx.Set(newEntry("user:101", nil))
+		idx.Set(newEntry("user:1", nil))
+		idx.Set(newEntry("user:001", nil))
+		idx.Set(newEntry("user:123", nil))
+		idx.Set(newEntry("user:2", nil))
+		idx.Set(newEntry("user:002", nil))
+		idx.Set(newEntry("user:20", nil))
+		idx.Set(newEntry("user:22", nil))
+		idx.Set(newEntry("user:220", nil))
+		idx.Set(newEntry("user:11", nil))
+		idx.Set(newEntry("user:12", nil))
+		idx.Set(newEntry("user:1000", nil))
+		idx.Set(newEntry("user:01", nil))
+		idx.Set(newEntry("user:02", nil))
+		idx.Set(newEntry("user:30", nil))
+
+		var result []string
+		idx.Ascend(nil, func(i interface{}) bool {
+			result = append(result, i.(*entry).key.String())
+			return true
+		})
+
+		assert.Equal(t, []string{
+			"user:001",
+			"user:002",
+			"user:01",
+			"user:02",
+			"user:1",
+			"user:2",
+			"user:10",
+			"user:11",
+			"user:12",
+			"user:20",
+			"user:22",
+			"user:30",
+			"user:100",
+			"user:101",
+			"user:123",
+			"user:220",
+			"user:1000",
+		}, result)
+
+		assert.Equal(t, 17, len(result))
+	})
 }
 

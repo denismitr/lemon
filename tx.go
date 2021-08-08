@@ -70,10 +70,10 @@ func (x *Tx) Get(key string) (*Document, error) { // fixme: decide on ref or val
 	return newDocumentFromEntry(ent), nil
 }
 
-func (x *Tx) MGet(key ...string) ([]*Document, error) { // fixme: decide on ref or value
-	docs := make([]*Document, 0)
+func (x *Tx) MGet(key ...string) (map[string]*Document, error) {
+	docs := make(map[string]*Document)
 	if err := x.e.findByKeys(key, func(ent *entry) bool {
-		docs = append(docs, newDocumentFromEntry(ent))
+		docs[ent.key.String()] = newDocumentFromEntry(ent)
 		return true
 	}); err != nil {
 		return nil, err

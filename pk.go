@@ -72,7 +72,7 @@ func (pk *PK) Less(other PK) bool {
 
 func byPrimaryKeys(a, b interface{}) bool {
 	i1, i2 := a.(*entry), b.(*entry)
-	return i1.key.Less(i2.key) // todo: call PK comparison function
+	return i1.key.Less(i2.key)
 }
 
 func smallestSegmentLen(a, b []string) int {
@@ -84,6 +84,10 @@ func smallestSegmentLen(a, b []string) int {
 }
 
 func convertToINTs(a, b string) (bool, int, int) {
+	if len(a) == 0 || len(b) == 0 || a[0] == '0' || b[0] == '0' {
+		return false, 0, 0
+	}
+
 	an, err := strconv.Atoi(a)
 	if err != nil {
 		return false, 0, 0

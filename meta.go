@@ -146,8 +146,16 @@ func (e entries) getEntry(key string) *entry {
 	return e[key]
 }
 
+func (e entries) hasEntry(key string) bool {
+	return e[key] != nil
+}
+
 func (e entries) getEntries() map[string]*entry {
 	return e
+}
+
+func (e entries) remove(key string) {
+	delete(e, key)
 }
 
 type boolTag struct {
@@ -189,7 +197,9 @@ func newIntTag(value int) *intTag {
 type entryContainer interface {
 	setEntry(ent *entry)
 	getEntry(key string) *entry
+	hasEntry(key string) bool
 	getEntries() map[string]*entry
+	remove(key string)
 }
 
 type floatTag struct {

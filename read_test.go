@@ -101,6 +101,43 @@ func TestLemonDB_Read(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 123.879, baz12)
 	})
+
+	t.Run("get many existing keys ignoring non existent", func(t *testing.T) {
+		var result1 *lemon.Document
+		var result2 *lemon.Document
+		if err := db.View(context.Background(), func(tx *lemon.Tx) error {
+			docs, err := tx.MGet("product:88", "product:100", "non:existing:key")
+			if err != nil {
+				return err
+			}
+
+			require.Len(t, docs, 2)
+
+			result1 = docs["product:88"]
+			require.NotNil(t, result1)
+			result2 = docs["product:100"]
+			require.NotNil(t, result2)
+
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+
+		json1 := result1.RawString()
+		assert.Equal(t, `{"100":"foobar-88","baz":88,"foo":"bar/88"}`, json1)
+		foo, err := result1.String("foo")
+		require.NoError(t, err)
+		assert.Equal(t, "bar/88", foo)
+
+		json2 := result2.RawString()
+		assert.Equal(t, `{"999":null,"baz12":123.879,"foo":"bar5674"}`, json2)
+		bar5674, err := result2.String("foo")
+		require.NoError(t, err)
+		assert.Equal(t, "bar5674", bar5674)
+		baz12, err := result2.Float("baz12")
+		require.NoError(t, err)
+		assert.Equal(t, 123.879, baz12)
+	})
 }
 
 type findByTagsTestSuite struct {
