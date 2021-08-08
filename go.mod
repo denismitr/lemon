@@ -5,6 +5,6 @@ go 1.16
 require (
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.3.0
-	github.com/tidwall/btree v0.5.0
+	github.com/tidwall/btree v0.6.0
 	github.com/tidwall/gjson v1.8.0
 )

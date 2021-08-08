@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/pkg/errors"
-	btr "github.com/tidwall/btree"
+	"github.com/tidwall/btree"
 	"strconv"
 	"sync"
 	"time"
@@ -31,7 +31,7 @@ type engine struct {
 	dbFile        string
 	cfg           *Config
 	persistence   *persistence
-	pks           *btr.BTree
+	pks           *btree.BTree
 	tags          *tagIndex
 	stopCh        chan struct{}
 	runningVacuum bool
@@ -43,7 +43,7 @@ type engine struct {
 func newEngine(dbFile string, cfg *Config) (*engine, error) {
 	e := &engine{
 		dbFile: dbFile,
-		pks:    btr.New(byPrimaryKeys),
+		pks:    btree.NewNonConcurrent(byPrimaryKeys),
 		tags:   newTagIndex(),
 		stopCh: make(chan struct{}, 1),
 		cfg:    cfg,
