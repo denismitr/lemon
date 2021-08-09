@@ -160,7 +160,7 @@ func (e *engine) init() error {
 		}
 
 		if e.cfg.PersistenceStrategy == Async {
-			go e.asyncFlush(time.Second * 1)
+			go e.asyncFlush(e.cfg.AsyncPersistenceIntervals)
 		}
 
 		if !e.cfg.DisableAutoVacuum && !e.cfg.AutoVacuumOnlyOnClose {

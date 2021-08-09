@@ -5,9 +5,11 @@ import "time"
 const defaultAutoVacuumMinSize uint64 = 1000
 
 var defaultAutovacuumIntervals = 10 * time.Minute
+var defaultPersistenceIntervals = 1 * time.Second
 
 type Config struct {
 	PersistenceStrategy PersistenceStrategy
+	AsyncPersistenceIntervals time.Duration
 	DisableAutoVacuum bool
 	AutoVacuumOnlyOnClose bool
 	AutoVacuumMinSize uint64
@@ -21,6 +23,8 @@ type EngineOptions interface {
 func (cfg *Config) applyTo(e *engine) error {
 	if cfg.PersistenceStrategy == "" {
 		cfg.PersistenceStrategy = Sync
+	} else if cfg.PersistenceStrategy == Async && cfg.AsyncPersistenceIntervals == 0 {
+		cfg.AsyncPersistenceIntervals = defaultPersistenceIntervals
 	}
 
 	if cfg.AutoVacuumIntervals == 0 {
