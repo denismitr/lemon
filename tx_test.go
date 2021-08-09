@@ -160,7 +160,7 @@ func (rts *rollbackTestSuite) TestInsertRollbackWithTags() {
 		rts.Require().NoError(err)
 		rts.Require().Equal("book:41", book41.Key())
 		rts.Require().Equal(`{"author":"Valeria Pucci","edition":2,"year":2011}`, book41.RawString())
-		rts.Require().Equal(2, book41.IntOrDefault("edition", 0))
+		rts.Require().Equal(2, book41.Json().IntOrDefault("edition", 0))
 		rts.Require().Equal(`digital`, book41.Tags().String("type"))
 		rts.Require().Equal(29, book41.Tags().Int("inStock"))
 		rts.Require().Equal(30.33, book41.Tags().Float("price"))

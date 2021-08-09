@@ -149,7 +149,7 @@ func resolveIndexIfNotExists(idx *index, dataType indexType, less func(a, b inte
 	if idx == nil {
 		idx = &index{
 			dt:  dataType,
-			btr: btree.New(less),
+			btr: btree.NewNonConcurrent(less),
 		}
 	}
 

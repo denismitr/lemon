@@ -88,16 +88,16 @@ func TestLemonDB_Read(t *testing.T) {
 
 		json1 := result1.RawString()
 		assert.Equal(t, `{"100":"foobar-88","baz":88,"foo":"bar/88"}`, json1)
-		foo, err := result1.String("foo")
+		foo, err := result1.Json().String("foo")
 		require.NoError(t, err)
 		assert.Equal(t, "bar/88", foo)
 
 		json2 := result2.RawString()
 		assert.Equal(t, `{"999":null,"baz12":123.879,"foo":"bar5674"}`, json2)
-		bar5674, err := result2.String("foo")
+		bar5674, err := result2.Json().String("foo")
 		require.NoError(t, err)
 		assert.Equal(t, "bar5674", bar5674)
-		baz12, err := result2.Float("baz12")
+		baz12, err := result2.Json().Float("baz12")
 		require.NoError(t, err)
 		assert.Equal(t, 123.879, baz12)
 	})
@@ -123,18 +123,23 @@ func TestLemonDB_Read(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		json1 := result1.RawString()
-		assert.Equal(t, `{"100":"foobar-88","baz":88,"foo":"bar/88"}`, json1)
-		foo, err := result1.String("foo")
+		rs1 := result1.RawString()
+		assert.Equal(t, `{"100":"foobar-88","baz":88,"foo":"bar/88"}`, rs1)
+		json1 := result1.Json()
+		foo, err := json1.String("foo")
 		require.NoError(t, err)
 		assert.Equal(t, "bar/88", foo)
+		baz, err := json1.Int("baz")
+		require.NoError(t, err)
+		assert.Equal(t, 88, baz)
+		assert.Equal(t, 88, json1.IntOrDefault("baz", 0))
 
 		json2 := result2.RawString()
 		assert.Equal(t, `{"999":null,"baz12":123.879,"foo":"bar5674"}`, json2)
-		bar5674, err := result2.String("foo")
+		bar5674, err := result2.Json().String("foo")
 		require.NoError(t, err)
 		assert.Equal(t, "bar5674", bar5674)
-		baz12, err := result2.Float("baz12")
+		baz12, err := result2.Json().Float("baz12")
 		require.NoError(t, err)
 		assert.Equal(t, 123.879, baz12)
 	})
@@ -257,7 +262,7 @@ func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Descend() {
 
 	for i := 0; i < 9; i++ {
 		fts.Require().Equal(fmt.Sprintf("user:10%d", expectedDocs - i), docs[i].Key())
-		fts.Require().Equal(fmt.Sprintf("username_10%d", expectedDocs - i), docs[i].StringOrDefault("username", ""))
+		fts.Require().Equal(fmt.Sprintf("username_10%d", expectedDocs - i), docs[i].Json().StringOrDefault("username", ""))
 	}
 }
 
@@ -290,8 +295,8 @@ func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Ascend() {
 
 	for i := 500; i < 750; i++ {
 		idx := i - 500
-		fts.Assert().Equal(fmt.Sprintf("product_%d", i), docs[idx].StringOrDefault("Name", ""))
-		fts.Assert().Equal(i, docs[idx].IntOrDefault("id", 0))
+		fts.Assert().Equal(fmt.Sprintf("product_%d", i), docs[idx].Json().StringOrDefault("Name", ""))
+		fts.Assert().Equal(i, docs[idx].Json().IntOrDefault("id", 0))
 	}
 }
 
@@ -323,10 +328,10 @@ func (fts *findTestSuite) TestLemonDB_FindAllUsers_Ascend() {
 	fts.Require().Lenf(docs, 1_000, "users total count mismatch, got %d", len(docs))
 
 	for i := 1; i < 1_001; i++ {
-		fts.Assert().Equal(fmt.Sprintf("username_%d", i), docs[i - 1].StringOrDefault("username", ""))
-		fts.Assert().Equal(fmt.Sprintf("999444555%d", i), docs[i - 1].StringOrDefault("phone", ""))
-		fts.Assert().Equal(i, docs[i - 1].IntOrDefault("logins", 0))
-		fts.Assert().Equal(float64(i), docs[i - 1].FloatOrDefault("balance", 0))
+		fts.Assert().Equal(fmt.Sprintf("username_%d", i), docs[i - 1].Json().StringOrDefault("username", ""))
+		fts.Assert().Equal(fmt.Sprintf("999444555%d", i), docs[i - 1].Json().StringOrDefault("phone", ""))
+		fts.Assert().Equal(i, docs[i - 1].Json().IntOrDefault("logins", 0))
+		fts.Assert().Equal(float64(i), docs[i - 1].Json().FloatOrDefault("balance", 0))
 	}
 }
 
@@ -360,10 +365,10 @@ func (fts *findTestSuite) TestLemonDB_FindAllUsers_Descend() {
 	total := 1_000
 	for i := 0; i < total - 999; i++ {
 		//fts.Assert().Equal("", docs[999].RawString())
-		fts.Assert().Equal(fmt.Sprintf("username_%d", total - i), docs[i].StringOrDefault("username", ""))
-		fts.Assert().Equal(fmt.Sprintf("999444555%d", total - i), docs[i].StringOrDefault("phone", ""))
-		fts.Assert().Equal(total - i, docs[i].IntOrDefault("logins", 0))
-		fts.Assert().Equal(float64(total - i), docs[i].FloatOrDefault("balance", 0))
+		fts.Assert().Equal(fmt.Sprintf("username_%d", total - i), docs[i].Json().StringOrDefault("username", ""))
+		fts.Assert().Equal(fmt.Sprintf("999444555%d", total - i), docs[i].Json().StringOrDefault("phone", ""))
+		fts.Assert().Equal(total - i, docs[i].Json().IntOrDefault("logins", 0))
+		fts.Assert().Equal(float64(total - i), docs[i].Json().FloatOrDefault("balance", 0))
 	}
 }
 
@@ -396,16 +401,16 @@ func (fts *findTestSuite) TestLemonDB_FindAllDocs_Descend() {
 
 	totalUsers := 1_000
 	for i := 0; i < totalUsers; i++ {
-		fts.Assert().Equal(fmt.Sprintf("username_%d", totalUsers - i), docs[i].StringOrDefault("username", ""))
-		fts.Assert().Equal(fmt.Sprintf("999444555%d", totalUsers - i), docs[i].StringOrDefault("phone", ""))
-		fts.Assert().Equal(totalUsers - i, docs[i].IntOrDefault("logins", 0))
-		fts.Assert().Equal(float64(totalUsers - i), docs[i].FloatOrDefault("balance", 0))
+		fts.Assert().Equal(fmt.Sprintf("username_%d", totalUsers - i), docs[i].Json().StringOrDefault("username", ""))
+		fts.Assert().Equal(fmt.Sprintf("999444555%d", totalUsers - i), docs[i].Json().StringOrDefault("phone", ""))
+		fts.Assert().Equal(totalUsers - i, docs[i].Json().IntOrDefault("logins", 0))
+		fts.Assert().Equal(float64(totalUsers - i), docs[i].Json().FloatOrDefault("balance", 0))
 	}
 
 	totalProducts := 1_000
 	for i := 0; i < totalProducts; i++ {
-		fts.Assert().Equal(fmt.Sprintf("product_%d", totalProducts - i), docs[totalUsers + i].StringOrDefault("Name", ""))
-		fts.Assert().Equal(totalProducts - i, docs[totalUsers + i].IntOrDefault("id", 0))
+		fts.Assert().Equal(fmt.Sprintf("product_%d", totalProducts - i), docs[totalUsers + i].Json().StringOrDefault("Name", ""))
+		fts.Assert().Equal(totalProducts - i, docs[totalUsers + i].Json().IntOrDefault("id", 0))
 	}
 }
 
@@ -438,16 +443,16 @@ func (fts *findTestSuite) TestLemonDB_FindAllDocs_Ascend() {
 
 	totalProducts := 1_000
 	for i := 0; i < totalProducts; i++ {
-		fts.Assert().Equal(fmt.Sprintf("product_%d", i + 1), docs[i].StringOrDefault("Name", ""))
-		fts.Assert().Equal(i + 1, docs[i].IntOrDefault("id", 0))
+		fts.Assert().Equal(fmt.Sprintf("product_%d", i + 1), docs[i].Json().StringOrDefault("Name", ""))
+		fts.Assert().Equal(i + 1, docs[i].Json().IntOrDefault("id", 0))
 	}
 
 	totalUsers := 1_000
 	for i := 0; i < totalUsers; i++ {
-		fts.Assert().Equal(fmt.Sprintf("username_%d", i + 1), docs[totalProducts + i].StringOrDefault("username", ""))
-		fts.Assert().Equal(fmt.Sprintf("999444555%d", i + 1), docs[totalProducts + i].StringOrDefault("phone", ""))
-		fts.Assert().Equal(i + 1, docs[totalProducts + i].IntOrDefault("logins", 0))
-		fts.Assert().Equal(float64(i + 1), docs[totalProducts + i].FloatOrDefault("balance", 0))
+		fts.Assert().Equal(fmt.Sprintf("username_%d", i + 1), docs[totalProducts + i].Json().StringOrDefault("username", ""))
+		fts.Assert().Equal(fmt.Sprintf("999444555%d", i + 1), docs[totalProducts + i].Json().StringOrDefault("phone", ""))
+		fts.Assert().Equal(i + 1, docs[totalProducts + i].Json().IntOrDefault("logins", 0))
+		fts.Assert().Equal(float64(i + 1), docs[totalProducts + i].Json().FloatOrDefault("balance", 0))
 	}
 }
 
