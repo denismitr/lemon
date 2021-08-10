@@ -150,10 +150,10 @@ func (x *Tx) InsertOrReplace(key string, data interface{}, metaAppliers ...MetaA
 	return nil
 }
 
-func (x *Tx) Scan(ctx context.Context, opts *queryOptions, cb func(d Document) bool) error {
+func (x *Tx) Scan(ctx context.Context, opts *queryOptions, cb func(d *Document) bool) error {
 	ir := func(ent *entry) bool {
 		d := newDocumentFromEntry(ent)
-		return cb(*d)
+		return cb(d)
 	}
 
 	if err := x.applyScanner(ctx, opts, ir); err != nil {

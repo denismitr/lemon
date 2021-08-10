@@ -7,11 +7,28 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	"math/rand"
 	"os"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestTx_Find(t *testing.T) {
+	suite.Run(t, &findTestSuite{})
+}
+
+func TestTx_FindByTags(t *testing.T) {
+	suite.Run(t, &findByTagsTestSuite{})
+}
+
+func TestTx_Scan(t *testing.T) {
+	suite.Run(t, &scanTestSuite{})
+}
+
+func TestTx_Structs(t *testing.T) {
+	suite.Run(t, &structsTestSuite{})
+}
 
 func TestLemonDB_Read(t *testing.T) {
 	db, closer, err := lemon.Open("./__fixtures__/read_db1.ldb")
@@ -181,7 +198,7 @@ func (fts *findByTagsTestSuite) TestLemonDB_FindByBoolTag() {
 		}
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	var docs []lemon.Document
@@ -242,7 +259,7 @@ func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Descend() {
 		}
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	var docs []lemon.Document
@@ -261,8 +278,8 @@ func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Descend() {
 	fts.Assert().Len(docs, expectedDocs)
 
 	for i := 0; i < 9; i++ {
-		fts.Require().Equal(fmt.Sprintf("user:10%d", expectedDocs - i), docs[i].Key())
-		fts.Require().Equal(fmt.Sprintf("username_10%d", expectedDocs - i), docs[i].Json().StringOrDefault("username", ""))
+		fts.Require().Equal(fmt.Sprintf("user:10%d", expectedDocs-i), docs[i].Key())
+		fts.Require().Equal(fmt.Sprintf("username_10%d", expectedDocs-i), docs[i].Json().StringOrDefault("username", ""))
 	}
 }
 
@@ -276,7 +293,7 @@ func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Ascend() {
 		}
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	var docs []lemon.Document
@@ -310,7 +327,7 @@ func (fts *findTestSuite) TestLemonDB_FindAllUsers_Ascend() {
 		}
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	var docs []lemon.Document
@@ -328,10 +345,10 @@ func (fts *findTestSuite) TestLemonDB_FindAllUsers_Ascend() {
 	fts.Require().Lenf(docs, 1_000, "users total count mismatch, got %d", len(docs))
 
 	for i := 1; i < 1_001; i++ {
-		fts.Assert().Equal(fmt.Sprintf("username_%d", i), docs[i - 1].Json().StringOrDefault("username", ""))
-		fts.Assert().Equal(fmt.Sprintf("999444555%d", i), docs[i - 1].Json().StringOrDefault("phone", ""))
-		fts.Assert().Equal(i, docs[i - 1].Json().IntOrDefault("logins", 0))
-		fts.Assert().Equal(float64(i), docs[i - 1].Json().FloatOrDefault("balance", 0))
+		fts.Assert().Equal(fmt.Sprintf("username_%d", i), docs[i-1].Json().StringOrDefault("username", ""))
+		fts.Assert().Equal(fmt.Sprintf("999444555%d", i), docs[i-1].Json().StringOrDefault("phone", ""))
+		fts.Assert().Equal(i, docs[i-1].Json().IntOrDefault("logins", 0))
+		fts.Assert().Equal(float64(i), docs[i-1].Json().FloatOrDefault("balance", 0))
 	}
 }
 
@@ -345,7 +362,7 @@ func (fts *findTestSuite) TestLemonDB_FindAllUsers_Descend() {
 		}
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	var docs []lemon.Document
@@ -363,12 +380,12 @@ func (fts *findTestSuite) TestLemonDB_FindAllUsers_Descend() {
 	fts.Require().Lenf(docs, 1_000, "users total count mismatch, got %d", len(docs))
 
 	total := 1_000
-	for i := 0; i < total - 999; i++ {
+	for i := 0; i < total-999; i++ {
 		//fts.Assert().Equal("", docs[999].RawString())
-		fts.Assert().Equal(fmt.Sprintf("username_%d", total - i), docs[i].Json().StringOrDefault("username", ""))
-		fts.Assert().Equal(fmt.Sprintf("999444555%d", total - i), docs[i].Json().StringOrDefault("phone", ""))
-		fts.Assert().Equal(total - i, docs[i].Json().IntOrDefault("logins", 0))
-		fts.Assert().Equal(float64(total - i), docs[i].Json().FloatOrDefault("balance", 0))
+		fts.Assert().Equal(fmt.Sprintf("username_%d", total-i), docs[i].Json().StringOrDefault("username", ""))
+		fts.Assert().Equal(fmt.Sprintf("999444555%d", total-i), docs[i].Json().StringOrDefault("phone", ""))
+		fts.Assert().Equal(total-i, docs[i].Json().IntOrDefault("logins", 0))
+		fts.Assert().Equal(float64(total-i), docs[i].Json().FloatOrDefault("balance", 0))
 	}
 }
 
@@ -382,7 +399,7 @@ func (fts *findTestSuite) TestLemonDB_FindAllDocs_Descend() {
 		}
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	var docs []lemon.Document
@@ -401,16 +418,16 @@ func (fts *findTestSuite) TestLemonDB_FindAllDocs_Descend() {
 
 	totalUsers := 1_000
 	for i := 0; i < totalUsers; i++ {
-		fts.Assert().Equal(fmt.Sprintf("username_%d", totalUsers - i), docs[i].Json().StringOrDefault("username", ""))
-		fts.Assert().Equal(fmt.Sprintf("999444555%d", totalUsers - i), docs[i].Json().StringOrDefault("phone", ""))
-		fts.Assert().Equal(totalUsers - i, docs[i].Json().IntOrDefault("logins", 0))
-		fts.Assert().Equal(float64(totalUsers - i), docs[i].Json().FloatOrDefault("balance", 0))
+		fts.Assert().Equal(fmt.Sprintf("username_%d", totalUsers-i), docs[i].Json().StringOrDefault("username", ""))
+		fts.Assert().Equal(fmt.Sprintf("999444555%d", totalUsers-i), docs[i].Json().StringOrDefault("phone", ""))
+		fts.Assert().Equal(totalUsers-i, docs[i].Json().IntOrDefault("logins", 0))
+		fts.Assert().Equal(float64(totalUsers-i), docs[i].Json().FloatOrDefault("balance", 0))
 	}
 
 	totalProducts := 1_000
 	for i := 0; i < totalProducts; i++ {
-		fts.Assert().Equal(fmt.Sprintf("product_%d", totalProducts - i), docs[totalUsers + i].Json().StringOrDefault("Name", ""))
-		fts.Assert().Equal(totalProducts - i, docs[totalUsers + i].Json().IntOrDefault("id", 0))
+		fts.Assert().Equal(fmt.Sprintf("product_%d", totalProducts-i), docs[totalUsers+i].Json().StringOrDefault("Name", ""))
+		fts.Assert().Equal(totalProducts-i, docs[totalUsers+i].Json().IntOrDefault("id", 0))
 	}
 }
 
@@ -424,7 +441,7 @@ func (fts *findTestSuite) TestLemonDB_FindAllDocs_Ascend() {
 		}
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	var docs []lemon.Document
@@ -443,17 +460,122 @@ func (fts *findTestSuite) TestLemonDB_FindAllDocs_Ascend() {
 
 	totalProducts := 1_000
 	for i := 0; i < totalProducts; i++ {
-		fts.Assert().Equal(fmt.Sprintf("product_%d", i + 1), docs[i].Json().StringOrDefault("Name", ""))
-		fts.Assert().Equal(i + 1, docs[i].Json().IntOrDefault("id", 0))
+		fts.Assert().Equal(fmt.Sprintf("product_%d", i+1), docs[i].Json().StringOrDefault("Name", ""))
+		fts.Assert().Equal(i+1, docs[i].Json().IntOrDefault("id", 0))
 	}
 
 	totalUsers := 1_000
 	for i := 0; i < totalUsers; i++ {
-		fts.Assert().Equal(fmt.Sprintf("username_%d", i + 1), docs[totalProducts + i].Json().StringOrDefault("username", ""))
-		fts.Assert().Equal(fmt.Sprintf("999444555%d", i + 1), docs[totalProducts + i].Json().StringOrDefault("phone", ""))
-		fts.Assert().Equal(i + 1, docs[totalProducts + i].Json().IntOrDefault("logins", 0))
-		fts.Assert().Equal(float64(i + 1), docs[totalProducts + i].Json().FloatOrDefault("balance", 0))
+		fts.Assert().Equal(fmt.Sprintf("username_%d", i+1), docs[totalProducts+i].Json().StringOrDefault("username", ""))
+		fts.Assert().Equal(fmt.Sprintf("999444555%d", i+1), docs[totalProducts+i].Json().StringOrDefault("phone", ""))
+		fts.Assert().Equal(i+1, docs[totalProducts+i].Json().IntOrDefault("logins", 0))
+		fts.Assert().Equal(float64(i+1), docs[totalProducts+i].Json().FloatOrDefault("balance", 0))
 	}
+}
+
+type structsTestSuite struct {
+	suite.Suite
+	fixture string
+}
+
+func (sts *structsTestSuite) SetupSuite() {
+	sts.fixture = "./__fixtures__/structs_db1.ldb"
+	db, closer, err := lemon.Open(sts.fixture)
+	sts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			sts.T().Errorf("ERROR: %v", err)
+		}
+	}()
+
+	seedPersonStructs(sts.T(), db, 10_000)
+}
+
+func (sts *structsTestSuite) TearDownSuite() {
+	if err := os.Remove(sts.fixture); err != nil {
+		sts.Require().NoError(err)
+	}
+}
+
+func (sts *structsTestSuite) TestScanAll() {
+	db, closer, err := lemon.Open(sts.fixture)
+	sts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			sts.T().Errorf("ERROR: %v", err)
+		}
+	}()
+
+	ctx := context.Background()
+
+	if err := db.View(context.Background(), func(tx *lemon.Tx) error {
+		i := 0
+
+		err := tx.Scan(ctx, nil, func(d *lemon.Document) bool {
+			var p person
+			sts.Assert().Equal(fmt.Sprintf("person:%d", i), d.Key())
+			sts.Require().NoError(d.Json().Unmarshal(&p))
+			sts.Assert().Equal(uint32(i), p.ID)
+			sts.Assert().True(p.Sex == "male" || p.Sex == "female")
+			sts.Assert().True(strings.HasPrefix(p.Address.Street, "New York"))
+			sts.Assert().True(p.Salary > 0)
+			i++
+			return true
+		})
+
+		sts.Require().NoError(err)
+
+		return nil
+	}); err != nil {
+		sts.T().Fatal(err)
+	}
+}
+
+type address struct {
+	Phone  string `json:"phone"`
+	Street string `json:"street"`
+	Zip    int    `json:"zip"`
+}
+type person struct {
+	ID      uint32  `json:"id"`
+	Name    string  `json:"name"`
+	Age     int     `json:"age"`
+	Salary  float64 `json:"salary"`
+	Sex     string  `json:"sex"`
+	Address address `json:"address"`
+}
+
+func seedPersonStructs(t *testing.T, db *lemon.DB, num int) {
+	t.Helper()
+
+	tx, err := db.Begin(context.Background(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < num; i++ {
+		p := person{
+			ID:     uint32(i),
+			Name:   "name_" + RandomString(10),
+			Age:    rand.Int(),
+			Salary: rand.Float64(),
+			Sex:    RandomBoolString("male", "female"),
+			Address: address{
+				Phone:  fmt.Sprintf("+%d", rand.Uint64()),
+				Street: fmt.Sprintf("New York, %s, avenue, %d", RandomString(10), rand.Uint32()),
+				Zip:    int(rand.Uint32()),
+			},
+		}
+
+		if err := tx.InsertOrReplace(fmt.Sprintf("person:%d", p.ID), p); err != nil {
+			require.NoError(t, tx.Rollback())
+			t.Fatal(err)
+		}
+	}
+
+	require.NoError(t, tx.Commit())
 }
 
 type scanTestSuite struct {
@@ -474,8 +596,8 @@ func (sts *scanTestSuite) SetupSuite() {
 
 	seedUserData(sts.T(), db, 1_000, seedTags{})
 	seedProductData(sts.T(), db, 1_000)
-	seedUserPets(sts.T(), db,10, 50, 3)
-	seedUserPets(sts.T(), db,134, 140, 5)
+	seedUserPets(sts.T(), db, 10, 50, 3)
+	seedUserPets(sts.T(), db, 134, 140, 5)
 }
 
 func (sts *scanTestSuite) TearDownSuite() {
@@ -494,15 +616,15 @@ func (sts *scanTestSuite) Test_ScanUserPets() {
 		}
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	sts.Require().Equal(2158, db.Count())
 
-	var docs []lemon.Document
+	var docs []*lemon.Document
 	if err := db.View(ctx, func(tx *lemon.Tx) error {
 		opts := lemon.Q().KeyOrder(lemon.AscOrder).Prefix("user")
-		if scanErr := tx.Scan(ctx, opts, func (d lemon.Document) bool {
+		if scanErr := tx.Scan(ctx, opts, func(d *lemon.Document) bool {
 			if strings.Contains(d.Key(), ":pet:") {
 				docs = append(docs, d)
 			}
@@ -530,15 +652,15 @@ func (sts *scanTestSuite) Test_ScanUserPetsWithManualLimit() {
 		}
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	sts.Require().Equal(2158, db.Count())
 
-	var docs []lemon.Document
+	var docs []*lemon.Document
 	if err := db.View(ctx, func(tx *lemon.Tx) error {
 		opts := lemon.Q().KeyOrder(lemon.AscOrder).Prefix("user")
-		if scanErr := tx.Scan(ctx, opts, func (d lemon.Document) bool {
+		if scanErr := tx.Scan(ctx, opts, func(d *lemon.Document) bool {
 			if strings.Contains(d.Key(), ":pet:") {
 				docs = append(docs, d)
 			}
@@ -559,17 +681,4 @@ func (sts *scanTestSuite) Test_ScanUserPetsWithManualLimit() {
 
 	sts.Require().Lenf(docs, 21, "docs count mismatch: got %d", len(docs))
 }
-
-func TestTx_Find(t *testing.T) {
-	suite.Run(t, &findTestSuite{})
-}
-
-func TestTx_FindByTags(t *testing.T) {
-	suite.Run(t, &findByTagsTestSuite{})
-}
-
-func TestTx_Scan(t *testing.T) {
-	suite.Run(t, &scanTestSuite{})
-}
-
 
