@@ -554,7 +554,7 @@ func writeRespStrTag(name, v string, buf *bytes.Buffer) {
 }
 
 func writeRespIntTag(name string, v int, buf *bytes.Buffer) {
-	writeRespFunc(fmt.Sprintf("itg(%s,%d)", name, v), buf)
+	writeRespFunc(fmt.Sprintf("%s(%s,%d)", intTagFn, name, v), buf)
 }
 
 func writeRespFloatTag(name string, v float64, buf *bytes.Buffer) {

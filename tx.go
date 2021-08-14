@@ -3,7 +3,9 @@ package lemon
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"github.com/pkg/errors"
+	"sync"
 )
 
 var ErrKeyDoesNotExist = errors.New("key does not exist in DB")
@@ -11,13 +13,14 @@ var ErrTxIsReadOnly = errors.New("transaction is read only")
 var ErrTxAlreadyClosed = errors.New("transaction already closed")
 
 type Tx struct {
-	readOnly bool
-	buf      *bytes.Buffer
-	e        *engine
-	ctx      context.Context
-	commands []serializer
-	modified []*entry
-	added    []*entry
+	readOnly        bool
+	mu              sync.RWMutex
+	buf             *bytes.Buffer
+	e               *engine
+	ctx             context.Context
+	persistCommands []serializer
+	modified        []*entry
+	added           []*entry
 }
 
 func (x *Tx) Commit() error {
@@ -25,8 +28,16 @@ func (x *Tx) Commit() error {
 		return ErrTxAlreadyClosed
 	}
 
-	if x.e.persistence != nil && x.commands != nil {
-		for _, cmd := range x.commands {
+	defer func() {
+		x.e = nil
+		x.persistCommands = nil
+		x.modified = nil
+		x.added = nil
+		x.buf = nil
+	}()
+
+	if x.e.persistence != nil && x.persistCommands != nil {
+		for _, cmd := range x.persistCommands {
 			cmd.serialize(x.buf)
 		}
 
@@ -34,8 +45,6 @@ func (x *Tx) Commit() error {
 			return err
 		}
 	}
-
-	x.e = nil
 
 	return nil
 }
@@ -101,7 +110,7 @@ func (x *Tx) Insert(key string, data interface{}, metaAppliers ...MetaApplier) e
 		return err
 	}
 
-	x.commands = append(x.commands, ent)
+	x.persistCommands = append(x.persistCommands, ent)
 	x.added = append(x.added, ent)
 
 	return nil
@@ -135,7 +144,7 @@ func (x *Tx) InsertOrReplace(key string, data interface{}, metaAppliers ...MetaA
 			return updateErr
 		}
 
-		x.commands = append(x.commands, &deleteCmd{key: existing.key})
+		x.persistCommands = append(x.persistCommands, &deleteCmd{key: existing.key})
 		x.modified = append(x.modified, existing)
 	} else {
 		if insertErr := x.e.putUnderLock(ent, false); insertErr != nil {
@@ -145,7 +154,50 @@ func (x *Tx) InsertOrReplace(key string, data interface{}, metaAppliers ...MetaA
 		x.added = append(x.added, ent)
 	}
 
-	x.commands = append(x.commands, ent)
+	x.persistCommands = append(x.persistCommands, ent)
+
+	return nil
+}
+
+// Tag adds new tags or replaces existing tags only those specified in the keys of the given map of tags
+// in a document with argument `key` if found
+func (x *Tx) Tag(key string, m M) error {
+	defer func() {
+		r := recover()
+		if r != nil {
+			err := r.(error)
+			panic(fmt.Sprintf(err.Error()))
+		}
+	}()
+
+	if x.readOnly {
+		return ErrTxIsReadOnly
+	}
+
+	x.e.mu.Lock()
+	defer x.e.mu.Unlock()
+
+	ent, err := x.e.findByKeyUnderLock(key)
+	if err != nil {
+		return err
+	}
+
+	// save a copy of the updated entry in case of rollback
+	x.modified = append(x.modified, ent.clone())
+
+	for name, v := range m {
+		if err := x.e.upsertTagUnderLock(name, v, ent); err != nil {
+			return err
+		}
+	}
+
+	nt, err := newTagsFromMap(m)
+	if err != nil {
+		return err
+	}
+
+	// on commit commands should be persisted in order
+	x.persistCommands = append(x.persistCommands, &tagCmd{newPK(key), nt})
 
 	return nil
 }
@@ -180,6 +232,9 @@ func (x *Tx) applyScanner(ctx context.Context, q *queryOptions, ir entryReceiver
 	if q == nil {
 		q = Q()
 	}
+
+	x.e.mu.RLock()
+	defer x.e.mu.RUnlock()
 
 	fe := x.e.filterEntities(q)
 	var sc scanner
@@ -222,13 +277,12 @@ func (x *Tx) Remove(keys ...string) error {
 			return err
 		}
 
-
 		if err := x.e.remove(found.key); err != nil {
 			return err
 		}
 
 		x.modified = append(x.modified, found)
-		x.commands = append(x.commands, &deleteCmd{found.key})
+		x.persistCommands = append(x.persistCommands, &deleteCmd{found.key})
 	}
 
 	return nil

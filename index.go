@@ -13,7 +13,8 @@ type indexType uint8
 const invalidTagTypeConversion = "invalid tag type conversion"
 
 const (
-	floatDataType = iota
+	nilDataType = iota
+	floatDataType
 	intDataType
 	strDataType
 	boolDataType
@@ -122,25 +123,58 @@ func (ti *tagIndex) remove(name string, dt indexType, ent *entry, lookup interfa
 	}
 }
 
-func (ti *tagIndex) removeEntryByTag(name string, v interface{}, ent *entry) {
+func (ti *tagIndex) mustRemoveEntryByNameAndValue(name string, v interface{}, ent *entry) error {
+	idx := ti.data[name]
+	if idx == nil {
+		return errors.Wrapf(ErrTagNameNotFound, "name %s is not in any db index", name)
+	}
+
+	switch typedValue := v.(type) {
+	case float64:
+		ti.remove(name, floatDataType, ent, &floatTag{value: typedValue})
+	case int:
+		ti.remove(name, intDataType, ent, &intTag{value: typedValue})
+	case bool:
+		ti.remove(name, boolDataType, ent, &boolTag{value: typedValue})
+	case string:
+		ti.remove(name, strDataType, ent, &strTag{value: typedValue})
+	default:
+		panic(fmt.Sprintf("Invalid type %T", v))
+	}
+
+	return nil
+}
+
+func (ti *tagIndex) removeEntryByNameAndType(name string, dt indexType, ent *entry) {
 	idx := ti.data[name]
 	if idx == nil {
 		return
 	}
 
-	var item interface{}
-	switch typedValue := v.(type) {
-	case float64:
-		item = idx.btr.Get(&floatTag{value: typedValue})
-		if item == nil {
-			return
+	switch dt {
+	case intDataType:
+		for n, v := range ent.tags.integers {
+			if n == name {
+				ti.remove(name, intDataType, ent, &intTag{value: v})
+			}
 		}
-		tag, ok := item.(*floatTag)
-		if !ok {
-			panic(invalidTagTypeConversion)
+	case floatDataType:
+		for n, v := range ent.tags.floats {
+			if n == name {
+				ti.remove(name, floatDataType, ent, &floatTag{value: v})
+			}
 		}
-		if tag.entries[ent.key.String()] != nil {
-			delete(tag.entries, ent.key.String())
+	case strDataType:
+		for n, v := range ent.tags.strings {
+			if n == name {
+				ti.remove(name, strDataType, ent, &strTag{value: v})
+			}
+		}
+	case boolDataType:
+		for n, v := range ent.tags.booleans {
+			if n == name {
+				ti.remove(name, boolDataType, ent, &boolTag{value: v})
+			}
 		}
 	}
 }

@@ -8,19 +8,35 @@ import (
 type M map[string]interface{}
 
 func (m M) String(k string) string {
-	return m[k].(string)
+	v, ok := m[k].(string)
+	if !ok {
+		return ""
+	}
+	return v
 }
 
 func (m M) Int(k string) int {
-	return m[k].(int)
+	v, ok := m[k].(int)
+	if !ok {
+		return 0
+	}
+	return v
 }
 
 func (m M) Bool(k string) bool {
-	return m[k].(bool)
+	v, ok := m[k].(bool)
+	if !ok {
+		return false
+	}
+	return v
 }
 
 func (m M) Float(k string) float64 {
-	return m[k].(float64)
+	v, ok := m[k].(float64)
+	if !ok {
+		return 0
+	}
+	return v
 }
 
 type KeyRange struct {
