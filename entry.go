@@ -75,13 +75,46 @@ func (ent *entry) tagCount() int {
 	return count
 }
 
+type untagCmd struct {
+	key PK
+	names []string
+}
+
+func (cmd *untagCmd) serialize(buf *bytes.Buffer) {
+	segments := len(cmd.names)
+	writeRespArray(segments, buf)
+	writeRespSimpleString("untag", buf)
+	writeRespKeyString(cmd.key.String(), buf)
+	for _, n := range cmd.names {
+		writeRespSimpleString(n, buf)
+	}
+}
+
+func (cmd *untagCmd) deserialize(e *engine) error {
+	ent, err := e.findByKeyUnderLock(cmd.key.String())
+	if err != nil {
+		return errors.Wrapf(err, "could not deserialize tag command for key %s command", cmd.key.String())
+	}
+
+	for _, name := range cmd.names {
+		dt, ok := ent.tags.getTypeByName(name)
+		if ok {
+			e.tags.removeEntryByNameAndType(name, dt, ent)
+			ent.tags.removeByNameAndType(name, dt)
+		}
+	}
+
+	return nil
+}
+
 type tagCmd struct {
 	key PK
 	tags *tags
 }
 
 func (cmd *tagCmd) serialize(buf *bytes.Buffer) {
-	writeRespArray(2, buf)
+	segments := cmd.tags.count()
+	writeRespArray(segments, buf)
 	writeRespSimpleString("tag", buf)
 	writeRespKeyString(cmd.key.String(), buf)
 	for n, v := range cmd.tags.integers {

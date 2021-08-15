@@ -180,6 +180,15 @@ func (t *tags) removeByNameAndType(name string, dt indexType) {
 	}
 }
 
+func (t *tags) count() int {
+	return len(t.names)
+}
+
+func (t *tags) getTypeByName(name string) (indexType, bool) {
+	typ, ok := t.names[name]
+	return typ, ok
+}
+
 func newTags() *tags {
 	return &tags{
 		names:    make(map[string]indexType),

@@ -3,7 +3,6 @@ package lemon
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"github.com/pkg/errors"
 	"sync"
 )
@@ -162,14 +161,6 @@ func (x *Tx) InsertOrReplace(key string, data interface{}, metaAppliers ...MetaA
 // Tag adds new tags or replaces existing tags only those specified in the keys of the given map of tags
 // in a document with argument `key` if found
 func (x *Tx) Tag(key string, m M) error {
-	defer func() {
-		r := recover()
-		if r != nil {
-			err := r.(error)
-			panic(fmt.Sprintf(err.Error()))
-		}
-	}()
-
 	if x.readOnly {
 		return ErrTxIsReadOnly
 	}
@@ -198,6 +189,34 @@ func (x *Tx) Tag(key string, m M) error {
 
 	// on commit commands should be persisted in order
 	x.persistCommands = append(x.persistCommands, &tagCmd{newPK(key), nt})
+
+	return nil
+}
+
+func (x *Tx) RemoveTags(key string, names ...string) error {
+	if x.readOnly {
+		return ErrTxIsReadOnly
+	}
+
+	x.e.mu.Lock()
+	defer x.e.mu.Unlock()
+
+	ent, err := x.e.findByKeyUnderLock(key)
+	if err != nil {
+		return err
+	}
+
+	// save a copy of the updated entry in case of rollback
+	x.modified = append(x.modified, ent.clone())
+
+	for _, name := range names {
+		if err := x.e.removeTagUnderLock(name, ent); err != nil {
+			return err
+		}
+	}
+
+	// on commit commands should be persisted in order
+	x.persistCommands = append(x.persistCommands, &untagCmd{newPK(key), names})
 
 	return nil
 }

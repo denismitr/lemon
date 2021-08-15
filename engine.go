@@ -492,6 +492,31 @@ func (e *engine) upsertTagUnderLock(name string, v interface{}, ent *entry) erro
 	return e.tags.add(name, v, ent)
 }
 
+// removeTagUnderLock - removes a tag from entity and secondary index
+func (e *engine) removeTagUnderLock(name string, ent *entry) error {
+	// if tag name exists in entity, remove it from secondary index
+	// and remove it from entity itself
+	existingTagType, ok := ent.tags.names[name]
+	if ok {
+		switch existingTagType {
+		case boolDataType:
+			e.tags.removeEntryByNameAndType(name, boolDataType, ent)
+			delete(ent.tags.booleans, name)
+		case intDataType:
+			e.tags.removeEntryByNameAndType(name, intDataType, ent)
+			delete(ent.tags.integers, name)
+		case floatDataType:
+			e.tags.removeEntryByNameAndType(name, floatDataType, ent)
+			delete(ent.tags.floats, name)
+		case strDataType:
+			e.tags.removeEntryByNameAndType(name, strDataType, ent)
+			delete(ent.tags.strings, name)
+		}
+	}
+
+	return nil
+}
+
 func (e *engine) putUnderLock(ent *entry, replace bool) error {
 	existing := e.pks.Set(ent)
 	if existing != nil {

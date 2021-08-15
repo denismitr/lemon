@@ -492,7 +492,9 @@ func (sts *structsTestSuite) SetupSuite() {
 	sts.modAddress = 4
 	sts.totalPersons = 10_000
 
-	db, closer, err := lemon.Open(sts.fixture)
+	db, closer, err := lemon.Open(sts.fixture, &lemon.Config{
+		DisableAutoVacuum: true,
+	})
 	sts.Require().NoError(err)
 
 	defer func() {
@@ -515,7 +517,10 @@ func (sts *structsTestSuite) TestCheckTagsAsync() {
 		sts.Fail("cannot check tags")
 	}
 
-	db, closer, err := lemon.Open(sts.fixture)
+	db, closer, err := lemon.Open(sts.fixture, &lemon.Config{
+		DisableAutoVacuum: true,
+	})
+
 	sts.Require().NoError(err)
 
 	defer func() {
@@ -551,7 +556,10 @@ func (sts *structsTestSuite) TestCheckTagsAsync() {
 }
 
 func (sts *structsTestSuite) TestScanAll() {
-	db, closer, err := lemon.Open(sts.fixture)
+	db, closer, err := lemon.Open(sts.fixture, &lemon.Config{
+		DisableAutoVacuum: true,
+	})
+
 	sts.Require().NoError(err)
 
 	defer func() {
@@ -643,7 +651,6 @@ func seedPersonStructs(t *testing.T, db *lemon.DB, num int, tag bool, modAddress
 
 		if tag {
 			if err := tx.Tag(key, lemon.M{
-				"content-type": "application/json",
 				"has-address": p.Address != nil,
 			}); err != nil {
 				require.NoError(t, tx.Rollback())
@@ -653,6 +660,21 @@ func seedPersonStructs(t *testing.T, db *lemon.DB, num int, tag bool, modAddress
 	}
 
 	require.NoError(t, tx.Commit())
+
+	if tag {
+		err = db.Update(context.Background(), func(tx *lemon.Tx) error {
+			for i := 1; i <= num; i++ {
+				key := personKey(i)
+				if err := tx.Tag(key, lemon.M{
+					"content-type": "application/json",
+				}); err != nil {
+					require.NoError(t, tx.Rollback())
+					t.Fatal(err)
+				}
+			}
+			return nil
+		})
+	}
 }
 
 type scanTestSuite struct {
