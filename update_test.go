@@ -238,6 +238,85 @@ func (wts *writeTestSuite) Test_ReplaceInsertedDocs() {
 	//AssertFileContents(wts.T(), wts.fixture, expectedContent)
 }
 
+func (wts *writeTestSuite) Test_RollbackReplaceOfInsertedDocs() {
+	db, closer, err := lemon.Open(wts.fixture)
+	if err != nil {
+		wts.Require().NoError(err)
+	}
+
+	defer func() {
+		if err := closer(); err != nil {
+			wts.T().Errorf("ERROR: %v", err)
+		}
+	}()
+
+	if txErr := db.Update(context.Background(), func(tx *lemon.Tx) error {
+		if err := tx.Insert("item:567", lemon.M{
+			"foo": "bar",
+			"baz": 8989764,
+			"100": "username",
+		}); err != nil {
+			return err
+		}
+
+		if err := tx.Insert("item:2233", lemon.M{
+			"foo":   "bar5674",
+			"baz12": 123.879,
+			"999":   nil,
+		}); err != nil {
+			return err
+		}
+
+		return nil
+	}); txErr != nil {
+		wts.Require().NoError(txErr)
+	}
+
+	wts.Assert().Equal(4, db.Count())
+
+	if txErr := db.Update(context.Background(), func(tx *lemon.Tx) error {
+		if err := tx.InsertOrReplace("item:567", lemon.M{
+			"foo": "bar22",
+			"baz": 1,
+			"bar": nil,
+		}); err != nil {
+			return err
+		}
+
+		if err := tx.InsertOrReplace("item:2233", lemon.M{
+			"foo1":   "0",
+			"baz": 123.879,
+			"999":   "bar",
+		}, lemon.WithTags().Bool("valid", true)); err != nil {
+			return err
+		}
+
+		return errors.New("roll me back")
+	}); txErr != nil {
+		// we expect the rollback
+		wts.Require().Error(txErr)
+	}
+
+	wts.Assert().Equal(4, db.Count())
+
+	// Confirm that those keys are accessible after previous transaction has rolled back
+	// and results should be as after the first insert
+	readResult1, err := db.Get(context.Background(), "item:567")
+	wts.Require().NoError(err)
+	readResult2, err := db.Get(context.Background(), "item:2233")
+	wts.Require().NoError(err)
+
+	readJson1 := readResult1.RawString()
+	wts.Assert().Equal(`{"100":"username","baz":8989764,"foo":"bar"}`, readJson1)
+	wts.Assert().Equal("bar", readResult1.JSON().StringOrDefault("foo", ""))
+	wts.Assert().Equal(8989764, readResult1.JSON().IntOrDefault("baz", 0))
+
+	readJson2 := readResult2.RawString()
+	wts.Assert().Equal(`{"999":null,"baz12":123.879,"foo":"bar5674"}`, readJson2)
+	wts.Assert().Equal(123.879, readResult2.JSON().FloatOrDefault("baz12", 0))
+	wts.Assert().Equal("", readResult2.JSON().StringOrDefault("999", ""))
+}
+
 type removeTestSuite struct {
 	suite.Suite
 	db      *lemon.DB
