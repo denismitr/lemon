@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"github.com/pkg/errors"
-	"sync"
 )
 
 var ErrKeyDoesNotExist = errors.New("key does not exist in DB")
@@ -13,7 +12,6 @@ var ErrTxAlreadyClosed = errors.New("transaction already closed")
 
 type Tx struct {
 	readOnly        bool
-	mu              sync.RWMutex
 	buf             *bytes.Buffer
 	e               *engine
 	ctx             context.Context

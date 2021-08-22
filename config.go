@@ -8,12 +8,12 @@ var defaultAutovacuumIntervals = 10 * time.Minute
 var defaultPersistenceIntervals = 1 * time.Second
 
 type Config struct {
-	PersistenceStrategy PersistenceStrategy
+	PersistenceStrategy       PersistenceStrategy
 	AsyncPersistenceIntervals time.Duration
-	DisableAutoVacuum bool
-	AutoVacuumOnlyOnClose bool
-	AutoVacuumMinSize uint64
-	AutoVacuumIntervals time.Duration
+	DisableAutoVacuum         bool
+	AutoVacuumOnlyOnClose     bool
+	AutoVacuumMinSize         uint64
+	AutoVacuumIntervals       time.Duration
 }
 
 type EngineOptions interface {

@@ -9,5 +9,3 @@ type serializer interface {
 type deserializer interface {
 	deserialize(e *engine) error
 }
-
-

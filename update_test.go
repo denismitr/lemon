@@ -101,11 +101,11 @@ func (wts *writeTestSuite) Test_WriteAndRead_InTwoTransactions() {
 		wts.Require().NoError(txErr)
 	}
 
-	wts.Assert().Equal("bar", result1.Json().StringOrDefault("foo", ""))
-	wts.Assert().Equal(8989764, result1.Json().IntOrDefault("baz", 0))
-	wts.Assert().Equal("username", result1.Json().StringOrDefault("100", ""))
-	wts.Assert().Equal("bar5674", result2.Json().StringOrDefault("foo", ""))
-	wts.Assert().Equal(123.879, result2.Json().FloatOrDefault("baz12", 0))
+	wts.Assert().Equal("bar", result1.JSON().StringOrDefault("foo", ""))
+	wts.Assert().Equal(8989764, result1.JSON().IntOrDefault("baz", 0))
+	wts.Assert().Equal("username", result1.JSON().StringOrDefault("100", ""))
+	wts.Assert().Equal("bar5674", result2.JSON().StringOrDefault("foo", ""))
+	wts.Assert().Equal(123.879, result2.JSON().FloatOrDefault("baz12", 0))
 	/*assert.Equal(t, nil, docs[1]["999"])*/
 
 	var readResult1 *lemon.Document
@@ -226,13 +226,13 @@ func (wts *writeTestSuite) Test_ReplaceInsertedDocs() {
 
 	readJson1 := readResult1.RawString()
 	wts.Assert().Equal(`{"bar":null,"baz":1,"foo":"bar22"}`, readJson1)
-	wts.Assert().Equal("bar22", readResult1.Json().StringOrDefault("foo", ""))
-	wts.Assert().Equal(1, readResult1.Json().IntOrDefault("baz", 0))
+	wts.Assert().Equal("bar22", readResult1.JSON().StringOrDefault("foo", ""))
+	wts.Assert().Equal(1, readResult1.JSON().IntOrDefault("baz", 0))
 
 	readJson2 := readResult2.RawString()
 	wts.Assert().Equal(`{"999":"bar","baz":123.879,"foo1":"0"}`, readJson2)
-	wts.Assert().Equal(123.879, readResult2.Json().FloatOrDefault("baz", 0))
-	wts.Assert().Equal("bar", readResult2.Json().StringOrDefault("999", ""))
+	wts.Assert().Equal(123.879, readResult2.JSON().FloatOrDefault("baz", 0))
+	wts.Assert().Equal("bar", readResult2.JSON().StringOrDefault("999", ""))
 
 	//expectedContent := ``
 	//AssertFileContents(wts.T(), wts.fixture, expectedContent)

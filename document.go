@@ -6,16 +6,16 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-var ErrJsonCouldNotBeUnmarshalled = errors.New("json contents could not be unmarshalled, probably is invalid")
-var ErrJsonPathInvalid = errors.New("json path is invalid")
+var ErrJSONCouldNotBeUnmarshalled = errors.New("json contents could not be unmarshalled, probably is invalid")
+var ErrJSONPathInvalid = errors.New("json path is invalid")
 
-type JsonValue struct {
+type JSONValue struct {
 	b []byte
 }
 
 type Document struct {
-	key string
-	tags M
+	key   string
+	tags  M
 	value []byte
 }
 
@@ -24,10 +24,10 @@ func (d *Document) Key() string {
 }
 
 func newDocumentFromEntry(ent *entry) *Document {
-	d :=  &Document{
-		key: ent.key.String(),
+	d := &Document{
+		key:   ent.key.String(),
 		value: ent.value, // fixme: maybe copy
-		tags: createMapFromTags(ent.tags),
+		tags:  createMapFromTags(ent.tags),
 	}
 
 	return d
@@ -37,8 +37,8 @@ func (d *Document) Value() []byte {
 	return d.value
 }
 
-func (d *Document) Json() *JsonValue {
-	return &JsonValue{b: d.value}
+func (d *Document) JSON() *JSONValue {
+	return &JSONValue{b: d.value}
 }
 
 func (d *Document) RawString() string {
@@ -74,60 +74,59 @@ func (d *Document) Tags() M {
 	return d.tags
 }
 
-func (js *JsonValue) Unmarshal(dest interface{}) error {
+func (js *JSONValue) Unmarshal(dest interface{}) error {
 	err := json.Unmarshal(js.b, &dest)
 	if err != nil {
-		return errors.Wrap(ErrJsonCouldNotBeUnmarshalled, err.Error())
+		return errors.Wrap(ErrJSONCouldNotBeUnmarshalled, err.Error())
 	}
 
 	return nil
 }
 
-func (js *JsonValue) String(path string) (string, error) {
+func (js *JSONValue) String(path string) (string, error) {
 	raw := gjson.GetBytes(js.b, path)
 	if !raw.Exists() {
-		return "", ErrJsonPathInvalid
+		return "", ErrJSONPathInvalid
 	}
 	return raw.String(), nil
 }
 
-func (js *JsonValue) StringOrDefault(path, def string) string {
-	if v, err := js.String(path); err != nil {
+func (js *JSONValue) StringOrDefault(path, def string) string {
+	v, err := js.String(path)
+	if err != nil {
 		return def
-	} else {
-		return v
 	}
+	return v
 }
 
-func (js *JsonValue) Float(path string) (float64, error) {
+func (js *JSONValue) Float(path string) (float64, error) {
 	get := gjson.GetBytes(js.b, path)
 	if !get.Exists() {
-		return 0, ErrJsonPathInvalid
+		return 0, ErrJSONPathInvalid
 	}
 	return get.Float(), nil
 }
 
-func (js *JsonValue) FloatOrDefault(path string, def float64) float64 {
-	if v, err := js.Float(path); err != nil {
+func (js *JSONValue) FloatOrDefault(path string, def float64) float64 {
+	v, err := js.Float(path)
+	if err != nil {
 		return def
-	} else {
-		return v
 	}
+	return v
 }
 
-func (js *JsonValue) Int(path string) (int, error) {
+func (js *JSONValue) Int(path string) (int, error) {
 	get := gjson.GetBytes(js.b, path)
 	if !get.Exists() {
-		return 0, ErrJsonPathInvalid
+		return 0, ErrJSONPathInvalid
 	}
-
 	return int(get.Int()), nil
 }
 
-func (js *JsonValue) IntOrDefault(path string, def int) int {
-	if v, err := js.Int(path); err != nil {
+func (js *JSONValue) IntOrDefault(path string, def int) int {
+	v, err := js.Int(path)
+	if err != nil {
 		return def
-	} else {
-		return v
 	}
+	return v
 }

@@ -64,7 +64,7 @@ func (mts *matchTestSuite) TestMatchSingleUserByPatternAndTag() {
 	mts.Require().Len(docs, 1)
 	mts.Require().Equal("user:12:animals", docs[0].Key())
 	mts.Require().Equal(`[123, 987, 6789]`, docs[0].RawString())
-	mts.Require().Equal(123, docs[0].Json().IntOrDefault(`0`, 0))
+	mts.Require().Equal(123, docs[0].JSON().IntOrDefault(`0`, 0))
 	mts.Require().Equal(lemon.M{"content":"list"}, docs[0].Tags())
 	mts.Require().Equal("list", docs[0].Tags().String("content"))
 }

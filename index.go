@@ -291,7 +291,7 @@ func (ti *tagIndex) filterEntities(tagKey tagKey, v interface{}, ft *filterEntri
 
 			tag, ok := found.(entryContainer)
 			if !ok {
-				panic(fmt.Sprintf("how can intIndex item not be of type *intTag?"))
+				panic("how can intIndex item not be of type *intTag?")
 			}
 
 			if tag.getEntries() == nil {

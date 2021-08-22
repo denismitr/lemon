@@ -53,18 +53,18 @@ func (pk *PK) Less(other PK) bool {
 		if bothInts {
 			if a != b {
 				return a < b
-			} else {
-				prevEq = true
-				continue
 			}
+
+			prevEq = true
+			continue
 		}
 
 		// try to compare as strings
 		if pk.segments[i] != other.segments[i]  {
 			return pk.segments[i] < other.segments[i]
-		} else {
-			prevEq = pk.segments[i] == other.segments[i]
 		}
+
+		prevEq = pk.segments[i] == other.segments[i]
 	}
 
 	return prevEq && len(other.segments) > len(pk.segments)
@@ -84,7 +84,7 @@ func smallestSegmentLen(a, b []string) int {
 }
 
 func convertToINTs(a, b string) (bool, int, int) {
-	if len(a) == 0 || len(b) == 0 || a[0] == '0' || b[0] == '0' {
+	if a == "" || b == "" || a[0] == '0' || b[0] == '0' {
 		return false, 0, 0
 	}
 

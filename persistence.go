@@ -15,7 +15,7 @@ import (
 var ErrDbFileWriteFailed = errors.New("database write failed")
 var ErrSourceFileReadFailed = errors.New("source file read failed")
 var ErrCommandInvalid = errors.New("command invalid")
-var ErrUnexpectedEof = errors.New("unexpected end of file")
+var ErrUnexpectedEOF = errors.New("unexpected end of file")
 var ErrParseFailed = errors.New("commands parse error")
 var ErrStorageFailed = errors.New("storage error")
 
@@ -137,13 +137,13 @@ func (p *parser) parse(r *bufio.Reader, cb func(d deserializer) error) (int, err
 		if err != nil {
 			if err == io.EOF {
 				return p.totalSize, nil
-			} else {
-				return p.totalSize, errors.Wrap(ErrSourceFileReadFailed, err.Error())
 			}
+
+			return p.totalSize, errors.Wrap(ErrSourceFileReadFailed, err.Error())
 		}
 
 		if firstByte == 0 {
-			p.n += 1
+			p.n++
 			continue
 		}
 
@@ -235,7 +235,7 @@ func (p *parser) parse(r *bufio.Reader, cb func(d deserializer) error) (int, err
 			}
 		}
 
-		p.totalCommands += 1
+		p.totalCommands++
 		p.totalSize += p.currentCmdSize
 	}
 }
@@ -355,7 +355,10 @@ func (p *parser) resolveRespArrayFromLine(r *bufio.Reader) (int, error) {
 	// should be \*\d{1,}\\r
 	// for now we only expects array like commands
 	if len(line) < 2 || line[0] != '*' {
-		return p.totalSize, errors.Wrapf(ErrCommandInvalid, "line #%d - %s should actually start with *", p.currentLine, string(line))
+		return p.totalSize, errors.Wrapf(
+			ErrCommandInvalid,
+			"line #%d - %s should actually start with *",
+			p.currentLine, string(line))
 	}
 
 	cmdBuf := p.buf[:0]
@@ -468,13 +471,18 @@ func (p *parser) resolveTagger(r *bufio.Reader) (Tagger, error) {
 	case intTagFn:
 		v, err := strconv.Atoi(args[1])
 		if err != nil {
-			panic(fmt.Sprintf("tag function itg contains invalid integer %s at line %d - %s", args[1], p.currentLine, line))
+			return nil, errors.Errorf(
+			"tag function itg contains invalid integer %s at line %d - %s",
+					args[1], p.currentLine, line,
+				)
 		}
 		return IntTag(args[0], v), nil
 	case floatTagFn:
 		v, err := strconv.ParseFloat(args[1], 64)
 		if err != nil {
-			panic(fmt.Sprintf("tag function ftg contains invalid float %s in line #%d - %s", args[1], p.currentLine, line))
+			return nil, errors.Errorf(
+				"tag function ftg contains invalid float %s in line #%d - %s",
+				args[1], p.currentLine, line)
 		}
 		return FloatTag(args[0], v), nil
 	default:
@@ -514,13 +522,19 @@ func (p *parser) resolveRespKey(r *bufio.Reader) ([]byte, error) {
 			return nil, io.ErrUnexpectedEOF
 		}
 
-		return nil, errors.Wrapf(ErrCommandInvalid, "could not resolve blob: %s at line #%d", err.Error(), p.currentLine)
+		return nil, errors.Wrapf(
+			ErrCommandInvalid,
+			"could not resolve blob: %s at line #%d",
+			err.Error(), p.currentLine)
 	}
 
 	p.currentCmdSize += len(strInfoLine)
 
 	if len(strInfoLine) == 0 || strInfoLine[0] != '$' {
-		return nil, errors.Wrapf(ErrCommandInvalid, "line #%d - %s does not contain valid length", p.currentLine, string(strInfoLine))
+		return nil, errors.Wrapf(
+			ErrCommandInvalid,
+			"line #%d - %s does not contain valid length",
+			p.currentLine, string(strInfoLine))
 	}
 
 	keyLen, err := strconv.Atoi(string(strInfoLine[1:len(strInfoLine) - 2]))
@@ -541,7 +555,10 @@ func (p *parser) resolveRespKey(r *bufio.Reader) ([]byte, error) {
 	p.currentCmdSize += n
 
 	if n - 2 != keyLen {
-		return nil, errors.Wrapf(ErrCommandInvalid, "line #%d - %s has invalid key", p.currentLine, string(strInfoLine))
+		return nil, errors.Wrapf(
+			ErrCommandInvalid,
+			"line #%d - %s has invalid key",
+			p.currentLine, string(strInfoLine))
 	}
 
 	return key[:keyLen], nil
@@ -555,7 +572,10 @@ func (p *parser) resolveRespBlob(r *bufio.Reader) ([]byte, error) {
 			return nil, io.ErrUnexpectedEOF
 		}
 
-		return nil, errors.Wrapf(ErrCommandInvalid, "could not resolve blob at line #%d: %v", p.currentLine, err)
+		return nil, errors.Wrapf(
+			ErrCommandInvalid,
+			"could not resolve blob at line #%d: %v",
+			p.currentLine, err)
 	}
 
 	p.currentCmdSize += len(strInfoLine)
@@ -608,7 +628,12 @@ func (p *parser) resolveNamesToUntag(segments int, r *bufio.Reader) ([]string, e
 
 		name := string(line[1:len(line) - 2])
 		if name == "" {
-			return nil, errors.Wrapf(ErrCommandInvalid, "line #%d - %s does not contain a valid tag name", p.currentLine, string(line))
+			return nil, errors.Wrapf(
+				ErrCommandInvalid,
+				"line #%d - %s does not contain a valid tag name",
+				p.currentLine,
+				string(line),
+			)
 		}
 
 		result[i] = name
