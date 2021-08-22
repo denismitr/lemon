@@ -20,12 +20,29 @@ type Tx struct {
 	added           []*entry
 }
 
+func (x *Tx) lock() {
+	if x.readOnly {
+		x.e.mu.RLock()
+	} else {
+		x.e.mu.Lock()
+	}
+}
+
+func (x *Tx) unlock() {
+	if x.readOnly {
+		x.e.mu.RUnlock()
+	} else {
+		x.e.mu.Unlock()
+	}
+}
+
 func (x *Tx) Commit() error {
 	if x.e == nil {
 		return ErrTxAlreadyClosed
 	}
 
 	defer func() {
+		x.unlock()
 		x.e = nil
 		x.persistCommands = nil
 		x.modified = nil
@@ -47,8 +64,10 @@ func (x *Tx) Commit() error {
 }
 
 func (x *Tx) Rollback() error {
-	x.e.mu.Lock()
-	defer x.e.mu.Unlock()
+	defer func() {
+		x.unlock()
+		x.e = nil
+	}()
 
 	for _, ent := range x.modified {
 		if err := x.e.putUnderLock(ent, true); err != nil {
@@ -62,13 +81,11 @@ func (x *Tx) Rollback() error {
 		}
 	}
 
-	x.e = nil
-
 	return nil
 }
 
 func (x *Tx) Get(key string) (*Document, error) { // fixme: decide on ref or value
-	ent, err := x.e.findByKey(key)
+	ent, err := x.e.findByKeyUnderLock(key)
 	if err != nil {
 		return nil, err
 	}
@@ -128,9 +145,6 @@ func (x *Tx) InsertOrReplace(key string, data interface{}, metaAppliers ...MetaA
 		applier.applyTo(ent)
 	}
 
-	x.e.mu.Lock()
-	defer x.e.mu.Unlock()
-
 	existing, err := x.e.findByKeyUnderLock(key)
 	if err != nil && !errors.Is(err, ErrKeyDoesNotExist) {
 		return err
@@ -163,9 +177,6 @@ func (x *Tx) Tag(key string, m M) error {
 		return ErrTxIsReadOnly
 	}
 
-	x.e.mu.Lock()
-	defer x.e.mu.Unlock()
-
 	ent, err := x.e.findByKeyUnderLock(key)
 	if err != nil {
 		return err
@@ -195,9 +206,6 @@ func (x *Tx) RemoveTags(key string, names ...string) error {
 	if x.readOnly {
 		return ErrTxIsReadOnly
 	}
-
-	x.e.mu.Lock()
-	defer x.e.mu.Unlock()
 
 	ent, err := x.e.findByKeyUnderLock(key)
 	if err != nil {
@@ -250,9 +258,6 @@ func (x *Tx) applyScanner(ctx context.Context, q *queryOptions, ir entryReceiver
 		q = Q()
 	}
 
-	x.e.mu.RLock()
-	defer x.e.mu.RUnlock()
-
 	fe := x.e.filterEntities(q)
 	var sc scanner
 
@@ -289,7 +294,7 @@ func (x *Tx) Remove(keys ...string) error {
 	}
 
 	for _, k := range keys {
-		found, err := x.e.findByKey(k)
+		found, err := x.e.findByKeyUnderLock(k)
 		if err != nil {
 			return err
 		}

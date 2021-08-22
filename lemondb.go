@@ -62,6 +62,8 @@ func (db *DB) Begin(ctx context.Context, readOnly bool) (*Tx, error) {
 		buf:      &bytes.Buffer{},
 	}
 
+	tx.lock()
+
 	return &tx, nil
 }
 

@@ -12,7 +12,7 @@ import (
 )
 
 var ErrKeyAlreadyExists = errors.New("key already exists")
-var ErrConflictingTagType = errors.New("conflicting tag type")
+//var ErrConflictingTagType = errors.New("conflicting tag type")
 
 const castPanic = "how could primary keys item not be of type *entry"
 
@@ -172,9 +172,6 @@ func (e *engine) init() error {
 }
 
 func (e *engine) insert(ent *entry) error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
 	existing := e.pks.Set(ent)
 	if existing != nil {
 		return errors.Wrapf(ErrKeyAlreadyExists, "key: %s", ent.key.String())
@@ -187,12 +184,6 @@ func (e *engine) insert(ent *entry) error {
 	}
 
 	return nil
-}
-
-func (e *engine) findByKey(key string) (*entry, error) {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-	return e.findByKeyUnderLock(key)
 }
 
 func (e *engine) findByKeyUnderLock(key string) (*entry, error) {
@@ -210,9 +201,6 @@ func (e *engine) findByKeyUnderLock(key string) (*entry, error) {
 }
 
 func (e *engine) findByKeys(pks []string, ir entryReceiver) error {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
 	resultCh := make(chan *entry)
 	var wg sync.WaitGroup
 
@@ -246,9 +234,6 @@ func (e *engine) findByKeys(pks []string, ir entryReceiver) error {
 }
 
 func (e *engine) remove(key PK) error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
 	ent := e.pks.Get(&entry{key: key})
 	if ent == nil {
 		return errors.Wrapf(ErrKeyDoesNotExist, "key %s does not exist in DB", key.String())
@@ -305,8 +290,6 @@ func (e *engine) clearEntityTagsUnderLock(ent *entry) {
 }
 
 func (e *engine) Count() int {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
 	return e.pks.Len()
 }
 
@@ -316,9 +299,6 @@ func (e *engine) scanBetweenDescend(
 	fe *filterEntries,
 	ir entryReceiver,
 ) (err error) {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
 	// Descend required a reverse order of `from` and `to`
 	descendRange(
 		e.pks,
@@ -336,9 +316,6 @@ func (e *engine) scanBetweenAscend(
 	fe *filterEntries,
 	ir entryReceiver,
 ) (err error) {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
 	ascendRange(
 		e.pks,
 		&entry{key: newPK(q.keyRange.From)},
@@ -355,9 +332,6 @@ func (e *engine) scanPrefixAscend(
 	fe *filterEntries,
 	ir entryReceiver,
 ) (err error) {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
 	e.pks.Ascend(&entry{key: newPK(q.prefix)}, filteringBTreeIterator(ctx, fe, q, ir))
 
 	return
@@ -369,9 +343,6 @@ func (e *engine) scanPrefixDescend(
 	fe *filterEntries,
 	ir entryReceiver,
 ) (err error) {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
 	descendGreaterThan(e.pks, &entry{key: newPK(q.prefix)}, filteringBTreeIterator(ctx, fe, q, ir))
 	return
 }
@@ -382,9 +353,6 @@ func (e *engine) scanAscend(
 	fe *filterEntries,
 	ir entryReceiver,
 ) (err error) {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
 	e.pks.Ascend(nil, filteringBTreeIterator(ctx, fe, q, ir))
 	return
 }
@@ -395,17 +363,11 @@ func (e *engine) scanDescend(
 	fe *filterEntries,
 	ir entryReceiver,
 ) (err error) {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
 	e.pks.Descend(nil, filteringBTreeIterator(ctx, fe, q, ir))
 	return
 }
 
 func (e *engine) filterEntities(q *queryOptions) *filterEntries {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
 	if q == nil || q.allTags == nil {
 		return nil
 	}
