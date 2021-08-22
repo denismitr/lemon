@@ -301,21 +301,7 @@ func (e *engine) setEntityTagsUnderLock(ent *entry) error {
 }
 
 func (e *engine) clearEntityTagsUnderLock(ent *entry) {
-	for n, v := range ent.tags.booleans {
-		e.tags.removeEntryByTag(n, v, ent)
-	}
-
-	for n, v := range ent.tags.strings {
-		e.tags.removeEntryByTag(n, v, ent)
-	}
-
-	for n, v := range ent.tags.integers {
-		e.tags.removeEntryByTag(n, v, ent)
-	}
-
-	for n, v := range ent.tags.floats {
-		e.tags.removeEntryByTag(n, v, ent)
-	}
+	e.tags.removeEntry(ent)
 }
 
 func (e *engine) Count() int {
@@ -461,6 +447,76 @@ func (e *engine) filterEntities(q *queryOptions) *filterEntries {
 	return ft
 }
 
+// upsertTagUnderLock - updates or inserts a new tag to entity and secondary index
+func (e *engine) upsertTagUnderLock(name string, v interface{}, ent *entry) error {
+	// just a precaution
+	if ent.tags == nil {
+		ent.tags = newTags()
+	}
+
+	// if tag name exists in entity, remove it from secondary index
+	// and remove it from entity itself
+	existingTagType, ok := ent.tags.names[name]
+	if ok {
+		if err := e.tags.mustRemoveEntryByNameAndValue(name, v, ent); err != nil {
+			return err
+		}
+
+		switch existingTagType {
+		case boolDataType:
+			delete(ent.tags.booleans, name)
+		case intDataType:
+			delete(ent.tags.integers, name)
+		case floatDataType:
+			delete(ent.tags.floats, name)
+		case strDataType:
+			delete(ent.tags.strings, name)
+		}
+	}
+
+	// do type check of value
+	// same name may now contain a different value type
+	switch typedValue := v.(type) {
+	case int:
+		ent.tags.integers[name] = typedValue
+	case bool:
+		ent.tags.booleans[name] = typedValue
+	case string:
+		ent.tags.strings[name] = typedValue
+	case float64:
+		ent.tags.floats[name] = typedValue
+	}
+
+	// add to secondary index
+	// todo: avoid another type cast in the add method
+	return e.tags.add(name, v, ent)
+}
+
+// removeTagUnderLock - removes a tag from entity and secondary index
+func (e *engine) removeTagUnderLock(name string, ent *entry) error {
+	// if tag name exists in entity, remove it from secondary index
+	// and remove it from entity itself
+	existingTagType, ok := ent.tags.names[name]
+	if ok {
+		switch existingTagType {
+		case boolDataType:
+			e.tags.removeEntryByNameAndType(name, boolDataType, ent)
+			delete(ent.tags.booleans, name)
+		case intDataType:
+			e.tags.removeEntryByNameAndType(name, intDataType, ent)
+			delete(ent.tags.integers, name)
+		case floatDataType:
+			e.tags.removeEntryByNameAndType(name, floatDataType, ent)
+			delete(ent.tags.floats, name)
+		case strDataType:
+			e.tags.removeEntryByNameAndType(name, strDataType, ent)
+			delete(ent.tags.strings, name)
+		}
+	}
+
+	return nil
+}
+
 func (e *engine) putUnderLock(ent *entry, replace bool) error {
 	existing := e.pks.Set(ent)
 	if existing != nil {
@@ -517,7 +573,7 @@ func serializeToValue(d interface{}) ([]byte, error) {
 	case []byte:
 		return typedValue, nil
 	case int:
-		return []byte(strconv.Itoa(typedValue)), nil
+		return []byte(strconv.Itoa(typedValue)), nil // fixme: probably we do not want pure ints as values
 	case string:
 		return []byte(typedValue), nil
 	}

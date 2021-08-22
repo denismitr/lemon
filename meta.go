@@ -2,6 +2,9 @@ package lemon
 
 import "github.com/pkg/errors"
 
+var ErrTagNameConflict = errors.New("tag name conflict")
+var ErrTagNameNotFound = errors.New("tag name not found")
+
 type MetaApplier interface {
 	applyTo(e *entry)
 }
@@ -117,6 +120,7 @@ func (ta *TagApplier) applyTo(e *entry) {
 }
 
 type tags struct {
+	names    map[string]indexType
 	booleans map[string]bool
 	floats   map[string]float64
 	integers map[string]int
@@ -127,13 +131,105 @@ func (t *tags) applyTo(e *entry) {
 	e.tags = t
 }
 
+func (t *tags) set(name string, v interface{}) {
+	existingTagType, ok := t.names[name]
+	if ok {
+		delete(t.names, name)
+
+		switch existingTagType {
+		case boolDataType:
+			delete(t.booleans, name)
+		case intDataType:
+			delete(t.integers, name)
+		case floatDataType:
+			delete(t.floats, name)
+		case strDataType:
+			delete(t.strings, name)
+		}
+	}
+
+	switch typedValue := v.(type) {
+	case int:
+		t.names[name] = intDataType
+		t.integers[name] = typedValue
+	case bool:
+		t.names[name] = boolDataType
+		t.booleans[name] = typedValue
+	case string:
+		t.names[name] = strDataType
+		t.strings[name] = typedValue
+	case float64:
+		t.names[name] = floatDataType
+		t.floats[name] = typedValue
+	}
+}
+
+func (t *tags) removeByNameAndType(name string, dt indexType) {
+	existingTagType, ok := t.names[name]
+	if ok {
+		switch existingTagType {
+		case boolDataType:
+			delete(t.booleans, name)
+		case intDataType:
+			delete(t.integers, name)
+		case floatDataType:
+			delete(t.floats, name)
+		case strDataType:
+			delete(t.strings, name)
+		}
+	}
+}
+
+func (t *tags) count() int {
+	return len(t.names)
+}
+
+func (t *tags) getTypeByName(name string) (indexType, bool) {
+	typ, ok := t.names[name]
+	return typ, ok
+}
+
 func newTags() *tags {
 	return &tags{
+		names:    make(map[string]indexType),
 		booleans: make(map[string]bool),
 		floats:   make(map[string]float64),
 		integers: make(map[string]int),
 		strings:  make(map[string]string),
 	}
+}
+
+func newTagsFromMap(m M) (*tags, error) {
+	t := &tags{
+		names:    make(map[string]indexType),
+		booleans: make(map[string]bool),
+		floats:   make(map[string]float64),
+		integers: make(map[string]int),
+		strings:  make(map[string]string),
+	}
+
+	for n, v := range m {
+		if t.names[n] != nilDataType {
+			return nil, errors.Wrapf(ErrTagNameConflict, "tag name %s already taken", n)
+		}
+
+		switch typedValue := v.(type) {
+		case int:
+			t.names[n] = intDataType
+			t.integers[n] = typedValue
+		case string:
+			t.names[n] = strDataType
+			t.strings[n] = typedValue
+		case bool:
+			t.names[n] = boolDataType
+			t.booleans[n] = typedValue
+		case float64:
+			t.names[n] = floatDataType
+			t.floats[n] = typedValue
+		}
+	}
+
+	return t, nil
 }
 
 type entries map[string]*entry
@@ -165,7 +261,7 @@ type boolTag struct {
 
 func newBoolTag(value bool) *boolTag {
 	return &boolTag{
-		value: value,
+		value:   value,
 		entries: make(entries),
 	}
 }
@@ -177,19 +273,19 @@ type strTag struct {
 
 func newStrTag(value string) *strTag {
 	return &strTag{
-		value: value,
+		value:   value,
 		entries: make(entries),
 	}
 }
 
 type intTag struct {
-	value   int
+	value int
 	entries
 }
 
 func newIntTag(value int) *intTag {
 	return &intTag{
-		value: value,
+		value:   value,
 		entries: make(entries),
 	}
 }
@@ -203,13 +299,13 @@ type entryContainer interface {
 }
 
 type floatTag struct {
-	value   float64
+	value float64
 	entries
 }
 
 func newFloatTag(value float64) *floatTag {
 	return &floatTag{
-		value: value,
+		value:   value,
 		entries: make(entries),
 	}
 }

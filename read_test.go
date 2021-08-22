@@ -10,23 +10,28 @@ import (
 	"math/rand"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
 
 func TestTx_Find(t *testing.T) {
+	t.Parallel()
 	suite.Run(t, &findTestSuite{})
 }
 
 func TestTx_FindByTags(t *testing.T) {
+	t.Parallel()
 	suite.Run(t, &findByTagsTestSuite{})
 }
 
 func TestTx_Scan(t *testing.T) {
+	t.Parallel()
 	suite.Run(t, &scanTestSuite{})
 }
 
 func TestTx_Structs(t *testing.T) {
+	t.Parallel()
 	suite.Run(t, &structsTestSuite{})
 }
 
@@ -474,13 +479,22 @@ func (fts *findTestSuite) TestLemonDB_FindAllDocs_Ascend() {
 }
 
 type structsTestSuite struct {
+	hasTags bool
+	modAddress int
+	totalPersons int
 	suite.Suite
 	fixture string
 }
 
 func (sts *structsTestSuite) SetupSuite() {
 	sts.fixture = "./__fixtures__/structs_db1.ldb"
-	db, closer, err := lemon.Open(sts.fixture)
+	sts.hasTags = true
+	sts.modAddress = 4
+	sts.totalPersons = 10_000
+
+	db, closer, err := lemon.Open(sts.fixture, &lemon.Config{
+		DisableAutoVacuum: true,
+	})
 	sts.Require().NoError(err)
 
 	defer func() {
@@ -489,7 +503,7 @@ func (sts *structsTestSuite) SetupSuite() {
 		}
 	}()
 
-	seedPersonStructs(sts.T(), db, 10_000)
+	seedPersonStructs(sts.T(), db, 10_000, sts.hasTags, sts.modAddress)
 }
 
 func (sts *structsTestSuite) TearDownSuite() {
@@ -498,8 +512,54 @@ func (sts *structsTestSuite) TearDownSuite() {
 	}
 }
 
+func (sts *structsTestSuite) TestCheckTagsAsync() {
+	if !sts.hasTags {
+		sts.Fail("cannot check tags")
+	}
+
+	db, closer, err := lemon.Open(sts.fixture, &lemon.Config{
+		DisableAutoVacuum: true,
+	})
+
+	sts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			sts.T().Errorf("ERROR: %v", err)
+		}
+	}()
+
+	var wg sync.WaitGroup
+
+	for i := 1; i <= sts.totalPersons; i++ {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+
+			if sts.totalPersons == index {
+				return
+			}
+
+			id := sts.totalPersons - index
+			key := personKey(id)
+			ctx := context.Background()
+			doc, err := db.Get(ctx, key)
+			sts.Require().NoError(err)
+
+			sts.Assert().Equal(id % sts.modAddress == 0, doc.Tags().Bool("has-address"))
+			sts.Assert().Equal("application/json", doc.Tags().String("content-type"))
+			sts.Assert().Equal(0, doc.Tags().Int("non-existent"))
+		}(i)
+	}
+
+	wg.Wait()
+}
+
 func (sts *structsTestSuite) TestScanAll() {
-	db, closer, err := lemon.Open(sts.fixture)
+	db, closer, err := lemon.Open(sts.fixture, &lemon.Config{
+		DisableAutoVacuum: true,
+	})
+
 	sts.Require().NoError(err)
 
 	defer func() {
@@ -511,7 +571,7 @@ func (sts *structsTestSuite) TestScanAll() {
 	ctx := context.Background()
 
 	if err := db.View(context.Background(), func(tx *lemon.Tx) error {
-		i := 0
+		i := 1
 
 		err := tx.Scan(ctx, nil, func(d *lemon.Document) bool {
 			var p person
@@ -519,7 +579,12 @@ func (sts *structsTestSuite) TestScanAll() {
 			sts.Require().NoError(d.Json().Unmarshal(&p))
 			sts.Assert().Equal(uint32(i), p.ID)
 			sts.Assert().True(p.Sex == "male" || p.Sex == "female")
-			sts.Assert().True(strings.HasPrefix(p.Address.Street, "New York"))
+			if p.Address != nil {
+				sts.Assert().True(strings.HasPrefix(p.Address.Street, "New York"))
+			} else {
+				sts.Assert().Truef(p.ID % uint32(sts.modAddress) != 0, "there should be no address here")
+			}
+
 			sts.Assert().True(p.Salary > 0)
 			i++
 			return true
@@ -544,38 +609,72 @@ type person struct {
 	Age     int     `json:"age"`
 	Salary  float64 `json:"salary"`
 	Sex     string  `json:"sex"`
-	Address address `json:"address"`
+	Address *address `json:"address"`
 }
 
-func seedPersonStructs(t *testing.T, db *lemon.DB, num int) {
+func seedPersonStructs(t *testing.T, db *lemon.DB, num int, tag bool, modAddress int) {
 	t.Helper()
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("Whoops %+v", r)
+		}
+	}()
 
 	tx, err := db.Begin(context.Background(), false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	for i := 0; i < num; i++ {
+	for i := 1; i <= num; i++ {
 		p := person{
 			ID:     uint32(i),
 			Name:   "name_" + RandomString(10),
 			Age:    rand.Int(),
 			Salary: rand.Float64(),
 			Sex:    RandomBoolString("male", "female"),
-			Address: address{
+		}
+
+		if i % modAddress == 0 {
+			p.Address = &address{
 				Phone:  fmt.Sprintf("+%d", rand.Uint64()),
 				Street: fmt.Sprintf("New York, %s, avenue, %d", RandomString(10), rand.Uint32()),
 				Zip:    int(rand.Uint32()),
-			},
+			}
 		}
 
-		if err := tx.InsertOrReplace(fmt.Sprintf("person:%d", p.ID), p); err != nil {
+		key := personKey(i)
+		if err := tx.InsertOrReplace(key, p); err != nil {
 			require.NoError(t, tx.Rollback())
 			t.Fatal(err)
+		}
+
+		if tag {
+			if err := tx.Tag(key, lemon.M{
+				"has-address": p.Address != nil,
+			}); err != nil {
+				require.NoError(t, tx.Rollback())
+				t.Fatal(err)
+			}
 		}
 	}
 
 	require.NoError(t, tx.Commit())
+
+	if tag {
+		err = db.Update(context.Background(), func(tx *lemon.Tx) error {
+			for i := 1; i <= num; i++ {
+				key := personKey(i)
+				if err := tx.Tag(key, lemon.M{
+					"content-type": "application/json",
+				}); err != nil {
+					require.NoError(t, tx.Rollback())
+					t.Fatal(err)
+				}
+			}
+			return nil
+		})
+	}
 }
 
 type scanTestSuite struct {
@@ -682,3 +781,6 @@ func (sts *scanTestSuite) Test_ScanUserPetsWithManualLimit() {
 	sts.Require().Lenf(docs, 21, "docs count mismatch: got %d", len(docs))
 }
 
+func personKey(i int) string {
+	return fmt.Sprintf("person:%d", i)
+}

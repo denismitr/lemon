@@ -13,6 +13,16 @@ import (
 	"testing"
 )
 
+func TestTx_Remove(t *testing.T) {
+	t.Parallel()
+	suite.Run(t, &removeTestSuite{})
+}
+
+func Test_Write(t *testing.T) {
+	t.Parallel()
+	suite.Run(t, &writeTestSuite{})
+}
+
 type writeTestSuite struct {
 	suite.Suite
 	fixture string
@@ -443,10 +453,6 @@ func seedProductData(t *testing.T, db *lemon.DB, n int) {
 	}
 }
 
-func TestTx_Remove(t *testing.T) {
-	suite.Run(t, &removeTestSuite{})
-}
-
 func loadFixtureContents(t *testing.T, path string) []byte {
 	b, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -496,8 +502,4 @@ func assertFileContentsEquals(t *testing.T, path string, expectedContents []byte
 	} else {
 		t.Log("contents match")
 	}
-}
-
-func Test_Write(t *testing.T) {
-	suite.Run(t, &writeTestSuite{})
 }
