@@ -479,7 +479,7 @@ func (e *engine) removeTagUnderLock(name string, ent *entry) error {
 	return nil
 }
 
-func (e *engine) putUnderLock(ent *entry, replace bool) error {
+func (e *engine) put(ent *entry, replace bool) error {
 	existing := e.pks.Set(ent)
 	if existing != nil {
 		if !replace {
@@ -502,6 +502,19 @@ func (e *engine) putUnderLock(ent *entry, replace bool) error {
 			return err
 		}
 	}
+
+	return nil
+}
+
+func (e *engine) flushAll(ff func (ent *entry)) error {
+	e.pks.Ascend(nil, func (i interface{}) bool {
+		ent := i.(*entry)
+		ff(ent)
+		return true
+	})
+
+	e.pks = btree.NewNonConcurrent(byPrimaryKeys)
+	e.tags = newTagIndex()
 
 	return nil
 }

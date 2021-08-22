@@ -16,7 +16,8 @@ type Tx struct {
 	e               *engine
 	ctx             context.Context
 	persistCommands []serializer
-	modified        []*entry
+	updates         []*entry
+	replaced        []*entry
 	added           []*entry
 }
 
@@ -45,7 +46,7 @@ func (x *Tx) Commit() error {
 		x.unlock()
 		x.e = nil
 		x.persistCommands = nil
-		x.modified = nil
+		x.replaced = nil
 		x.added = nil
 		x.buf = nil
 	}()
@@ -60,6 +61,14 @@ func (x *Tx) Commit() error {
 		}
 	}
 
+	for i := range x.updates {
+		x.updates[i].committed = true
+	}
+
+	for i := range x.added {
+		x.added[i].committed = true
+	}
+
 	return nil
 }
 
@@ -69,8 +78,8 @@ func (x *Tx) Rollback() error {
 		x.e = nil
 	}()
 
-	for _, ent := range x.modified {
-		if err := x.e.putUnderLock(ent, true); err != nil {
+	for _, ent := range x.replaced {
+		if err := x.e.put(ent, true); err != nil {
 			return err
 		}
 	}
@@ -82,6 +91,18 @@ func (x *Tx) Rollback() error {
 	}
 
 	return nil
+}
+
+func (x *Tx) FlushAll() error {
+	if x.readOnly {
+		return ErrTxIsReadOnly
+	}
+
+	return x.e.flushAll(func(ent *entry) {
+		if ent.committed {
+			x.replaced = append(x.replaced, ent)
+		}
+	})
 }
 
 func (x *Tx) Get(key string) (*Document, error) { // fixme: decide on ref or value
@@ -151,14 +172,17 @@ func (x *Tx) InsertOrReplace(key string, data interface{}, metaAppliers ...MetaA
 	}
 
 	if existing != nil {
-		if updateErr := x.e.putUnderLock(ent, true); updateErr != nil {
+		if updateErr := x.e.put(ent, true); updateErr != nil {
 			return updateErr
 		}
 
-		x.persistCommands = append(x.persistCommands, &deleteCmd{key: existing.key})
-		x.modified = append(x.modified, existing)
+		x.updates = append(x.updates, ent)
+		if existing.committed {
+			x.persistCommands = append(x.persistCommands, &deleteCmd{key: existing.key})
+			x.replaced = append(x.replaced, existing)
+		}
 	} else {
-		if insertErr := x.e.putUnderLock(ent, false); insertErr != nil {
+		if insertErr := x.e.put(ent, false); insertErr != nil {
 			return insertErr
 		}
 
@@ -183,7 +207,7 @@ func (x *Tx) Tag(key string, m M) error {
 	}
 
 	// save a copy of the updated entry in case of rollback
-	x.modified = append(x.modified, ent.clone())
+	x.replaced = append(x.replaced, ent.clone())
 
 	for name, v := range m {
 		if err := x.e.upsertTagUnderLock(name, v, ent); err != nil {
@@ -213,7 +237,7 @@ func (x *Tx) RemoveTags(key string, names ...string) error {
 	}
 
 	// save a copy of the updated entry in case of rollback
-	x.modified = append(x.modified, ent.clone())
+	x.replaced = append(x.replaced, ent.clone())
 
 	for _, name := range names {
 		if err := x.e.removeTagUnderLock(name, ent); err != nil {
@@ -303,7 +327,7 @@ func (x *Tx) Remove(keys ...string) error {
 			return err
 		}
 
-		x.modified = append(x.modified, found)
+		x.replaced = append(x.replaced, found)
 		x.persistCommands = append(x.persistCommands, &deleteCmd{found.key})
 	}
 

@@ -11,9 +11,10 @@ var ErrInvalidTagType = errors.New("invalid tag type")
 type MetaSetter func(e *entry) error
 
 type entry struct {
-	key PK
-	value []byte
-	tags *tags
+	key       PK
+	value     []byte
+	tags      *tags
+	committed bool
 }
 
 func (ent *entry) clone() *entry {
@@ -26,7 +27,8 @@ func (ent *entry) clone() *entry {
 }
 
 func (ent *entry) deserialize(e *engine) error {
-	return e.putUnderLock(ent, true) // todo: append under lock?
+	ent.committed = true
+	return e.put(ent, true)
 }
 
 func newEntryWithTags(key string, value []byte, tags *tags) *entry {
