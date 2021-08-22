@@ -11,14 +11,17 @@ import (
 )
 
 func TestTx_Rollback(t *testing.T) {
+	t.Parallel()
 	suite.Run(t, &rollbackTestSuite{})
 }
 
 func TestTx_AutoVacuum(t *testing.T) {
+	t.Parallel()
 	suite.Run(t, &autoVacuumTestSuite{})
 }
 
 func TestTx_ManualVacuum(t *testing.T) {
+	t.Parallel()
 	suite.Run(t, &manualVacuumTestSuite{})
 }
 
