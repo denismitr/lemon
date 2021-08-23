@@ -112,6 +112,11 @@ func (cmd *tagCmd) deserialize(e *engine) error {
 
 type flushAllCmd struct {}
 
+func (c flushAllCmd) serialize(buf *bytes.Buffer) {
+	writeRespArray(1, buf)
+	writeRespSimpleString("flushall", buf)
+}
+
 func (flushAllCmd) deserialize(e *engine) error {
 	return e.flushAll(func (*entry) {})
 }

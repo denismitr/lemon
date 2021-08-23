@@ -98,6 +98,8 @@ func (x *Tx) FlushAll() error {
 		return ErrTxIsReadOnly
 	}
 
+	x.persistCommands = append(x.persistCommands, &flushAllCmd{})
+
 	return x.e.flushAll(func(ent *entry) {
 		if ent.committed {
 			x.replaced = append(x.replaced, ent)
