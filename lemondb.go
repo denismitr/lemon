@@ -139,3 +139,9 @@ func (db *DB) Update(ctx context.Context, cb UserCallback) error {
 
 	return nil
 }
+
+func (db *DB) FlushAll(ctx context.Context) error {
+	return db.Update(ctx, func(tx *Tx) error {
+		return tx.FlushAll()
+	})
+}

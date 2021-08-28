@@ -17,13 +17,13 @@ var ErrKeyAlreadyExists = errors.New("key already exists")
 const castPanic = "how could primary keys item not be of type *entry"
 
 type (
-	entryReceiver func(ent *entry) bool
+	entryIterator func(ent *entry) bool
 
 	scanner func(
 		ctx context.Context,
 		q *queryOptions,
 		fe *filterEntries,
-		ir entryReceiver,
+		ir entryIterator,
 	) error
 )
 
@@ -200,7 +200,7 @@ func (e *engine) findByKeyUnderLock(key string) (*entry, error) {
 	return ent, nil
 }
 
-func (e *engine) findByKeys(pks []string, ir entryReceiver) error {
+func (e *engine) findByKeys(pks []string, ir entryIterator) error {
 	resultCh := make(chan *entry)
 	var wg sync.WaitGroup
 
@@ -297,7 +297,7 @@ func (e *engine) scanBetweenDescend(
 	ctx context.Context,
 	q *queryOptions,
 	fe *filterEntries,
-	ir entryReceiver,
+	ir entryIterator,
 ) (err error) {
 	// Descend required a reverse order of `from` and `to`
 	descendRange(
@@ -314,7 +314,7 @@ func (e *engine) scanBetweenAscend(
 	ctx context.Context,
 	q *queryOptions,
 	fe *filterEntries,
-	ir entryReceiver,
+	ir entryIterator,
 ) (err error) {
 	ascendRange(
 		e.pks,
@@ -330,7 +330,7 @@ func (e *engine) scanPrefixAscend(
 	ctx context.Context,
 	q *queryOptions,
 	fe *filterEntries,
-	ir entryReceiver,
+	ir entryIterator,
 ) (err error) {
 	e.pks.Ascend(&entry{key: newPK(q.prefix)}, filteringBTreeIterator(ctx, fe, q, ir))
 
@@ -341,7 +341,7 @@ func (e *engine) scanPrefixDescend(
 	ctx context.Context,
 	q *queryOptions,
 	fe *filterEntries,
-	ir entryReceiver,
+	ir entryIterator,
 ) (err error) {
 	descendGreaterThan(e.pks, &entry{key: newPK(q.prefix)}, filteringBTreeIterator(ctx, fe, q, ir))
 	return
@@ -351,7 +351,7 @@ func (e *engine) scanAscend(
 	ctx context.Context,
 	q *queryOptions,
 	fe *filterEntries,
-	ir entryReceiver,
+	ir entryIterator,
 ) (err error) {
 	e.pks.Ascend(nil, filteringBTreeIterator(ctx, fe, q, ir))
 	return
@@ -361,7 +361,7 @@ func (e *engine) scanDescend(
 	ctx context.Context,
 	q *queryOptions,
 	fe *filterEntries,
-	ir entryReceiver,
+	ir entryIterator,
 ) (err error) {
 	e.pks.Descend(nil, filteringBTreeIterator(ctx, fe, q, ir))
 	return
@@ -523,7 +523,7 @@ func filteringBTreeIterator(
 	ctx context.Context,
 	fe *filterEntries,
 	q *queryOptions,
-	ir entryReceiver,
+	ir entryIterator,
 ) func(item interface{}) bool {
 	return func(item interface{}) bool {
 		if ctx.Err() != nil {

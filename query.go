@@ -1,6 +1,7 @@
 package lemon
 
 import (
+	"sort"
 	"strings"
 	"sync"
 )
@@ -90,7 +91,6 @@ func (qt *QueryTags) IntTagGt(name string, value int) *QueryTags {
 	qt.integers[tagKey{name: name, comp: greaterThan}] = value
 	return qt
 }
-
 
 func (qt *QueryTags) FloatTagEq(name string, value float64) *QueryTags {
 	qt.floats[tagKey{name: name, comp: equal}] = value
@@ -210,6 +210,7 @@ func Q() *queryOptions {
 
 type filterEntries struct {
 	sync.RWMutex
+	keys     []PK
 	patterns []string
 	entries  map[string]*entry
 }
@@ -217,7 +218,29 @@ type filterEntries struct {
 func newFilterEntries(patterns []string) *filterEntries {
 	return &filterEntries{
 		patterns: patterns,
+		keys:     make([]PK, 0),
 		entries:  make(map[string]*entry),
+	}
+}
+
+func (fe *filterEntries) all(order Order, it entryIterator) {
+	fe.RLock()
+	defer fe.RUnlock()
+
+	if order == AscOrder {
+		sort.Slice(fe.keys, func(i, j int) bool {
+			return fe.keys[i].Less(fe.keys[j])
+		})
+	} else {
+		sort.Slice(fe.keys, func(i, j int) bool {
+			return fe.keys[j].Less(fe.keys[i])
+		})
+	}
+
+	for i := range fe.keys {
+		if cont := it(fe.entries[fe.keys[i].String()]); !cont {
+			break
+		}
 	}
 }
 
@@ -230,6 +253,7 @@ func (fe *filterEntries) add(ent *entry) {
 	}
 
 	if fe.entries[ent.key.String()] == nil {
+		fe.keys = append(fe.keys, ent.key)
 		fe.entries[ent.key.String()] = ent
 	}
 }
@@ -238,4 +262,8 @@ func (fe *filterEntries) exists(ent *entry) bool {
 	fe.RLock()
 	defer fe.RUnlock()
 	return fe.entries[ent.key.String()] != nil
+}
+
+func (fe *filterEntries) empty() bool {
+	return len(fe.keys) > 0
 }

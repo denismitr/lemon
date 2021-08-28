@@ -279,12 +279,25 @@ func (x *Tx) Find(ctx context.Context, q *queryOptions, dest *[]Document) error 
 	return nil
 }
 
-func (x *Tx) applyScanner(ctx context.Context, q *queryOptions, ir entryReceiver) error {
+func (x *Tx) applyScanner(ctx context.Context, q *queryOptions, it entryIterator) error {
 	if q == nil {
 		q = Q()
 	}
 
+	if q.order == "" {
+		q.order = AscOrder
+	}
+
 	fe := x.e.filterEntities(q)
+
+	// if we have entries chosen by secondary indexes
+	// and filtered by primary key patterns
+	// we can just sort by keys, iterate and return
+	if fe != nil && !fe.empty() {
+		fe.all(q.order, it)
+		return nil
+	}
+
 	var sc scanner
 
 	if q.keyRange != nil {
@@ -307,7 +320,7 @@ func (x *Tx) applyScanner(ctx context.Context, q *queryOptions, ir entryReceiver
 		}
 	}
 
-	if err := sc(ctx, q, fe, ir); err != nil {
+	if err := sc(ctx, q, fe, it); err != nil {
 		return err
 	}
 

@@ -6,6 +6,7 @@ import (
 	"github.com/denismitr/lemon"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"io/ioutil"
 	"os"
@@ -21,6 +22,121 @@ func TestTx_Remove(t *testing.T) {
 func Test_Write(t *testing.T) {
 	t.Parallel()
 	suite.Run(t, &writeTestSuite{})
+}
+
+func TestTx_FlushAll(t *testing.T) {
+	t.Run("database can be opened, seeded and than flushed completely", func(t *testing.T) {
+		fixture := createDbForFlushAllTest(t, "flush1")
+
+		t.Logf("Database %s created and seeded", fixture)
+
+		db, closer, err := lemon.Open(fixture)
+		if err != nil {
+			require.NoError(t, err)
+		}
+
+		defer closeDbAndRemoveFile(t, closer, fixture)
+
+		assert.Equal(t, 10000, db.Count())
+
+		if err := db.FlushAll(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+
+		assert.Equal(t, 0, db.Count())
+		assert.NoError(t, db.Vacuum())
+
+		assertFileContentsEquals(t, fixture, []byte(""))
+	})
+
+	t.Run("database can be opened, seeded flushed and rolled back immediately", func(t *testing.T) {
+		fixture := createDbForFlushAllTest(t, "flush2")
+
+		t.Logf("Database %s created and seeded", fixture)
+
+		db, closer, err := lemon.Open(fixture)
+		if err != nil {
+			require.NoError(t, err)
+		}
+
+		defer closeDbAndRemoveFile(t, closer, fixture)
+
+		assert.Equal(t, 10000, db.Count())
+
+		assert.Error(t, db.Update(context.Background(), func(tx *lemon.Tx) error {
+			t.Logf("Now we insert a record, update a record, flush all and than rollback everyting")
+
+			assert.NoError(t, tx.Insert("foo:bar:baz", lemon.M{
+				"abc": true,
+				"bar": "baz",
+				"lemon": "database",
+			}))
+
+			assert.NoError(t, tx.InsertOrReplace("person:100", lemon.M{
+				"def": 1000.987,
+			}))
+
+			assert.NoError(t, tx.FlushAll())
+
+			return errors.New("rollback")
+		}))
+
+		t.Logf("Now we check that everythin was rolled back with success")
+		assert.Equal(t, 10000, db.Count())
+		t.Logf("\t\tRecoord count did not change")
+
+		t.Logf("Checking that update was rolled back")
+		p100, err := db.Get(context.Background(), "person:100")
+		require.NoError(t, err)
+		assert.Equal(t, "person:100", p100.Key())
+		assert.Equal(t, 100, p100.JSON().IntOrDefault("id", 0))
+		t.Logf("\t\tUpdate was rolled back")
+
+		t.Logf("Checking that insert was rolled back")
+		fbz, err := db.Get(context.Background(), "foo:bar:baz")
+		require.Error(t, err)
+		require.Nil(t, fbz)
+		t.Logf("\t\tInsert was rolled back")
+	})
+}
+
+func createDbForFlushAllTest(t *testing.T, name string) string {
+	t.Helper()
+
+	fixture := fmt.Sprintf("./__fixtures__/%s.ldb", name)
+
+	// only init new database
+	db, closer, err := lemon.Open(fixture)
+	if err != nil {
+		require.NoError(t, err)
+	}
+
+	defer closeDB(t, closer, fixture)
+
+	assert.FileExists(t, fixture)
+	seedPersonStructs(t, db,10_000, true, 3)
+
+	return fixture
+}
+
+func closeDB(t *testing.T, closer lemon.Closer, fixture string) {
+	t.Helper()
+
+	if err := closer(); err != nil {
+		t.Errorf("ERROR: %+v", err)
+	}
+}
+
+func closeDbAndRemoveFile(t *testing.T, closer lemon.Closer, fixture string) {
+	t.Helper()
+
+	if err := closer(); err != nil {
+		t.Errorf("ERROR: %+v", err)
+	}
+
+	if err := os.Remove(fixture); err != nil {
+		require.NoError(t, err)
+	}
 }
 
 type writeTestSuite struct {

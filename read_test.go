@@ -579,6 +579,7 @@ func (sts *structsTestSuite) TestScanAll() {
 			sts.Require().NoError(d.JSON().Unmarshal(&p))
 			sts.Assert().Equal(uint32(i), p.ID)
 			sts.Assert().True(p.Sex == "male" || p.Sex == "female")
+
 			if p.Address != nil {
 				sts.Assert().True(strings.HasPrefix(p.Address.Street, "New York"))
 			} else {
