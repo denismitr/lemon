@@ -244,8 +244,8 @@ func (ti *tagIndex) add(name string, value interface{}, ent *entry) error {
 	return nil
 }
 
-func (ti *tagIndex) getEqualTagEntities(idx *index, entry interface{}) map[string]*entry {
-	found := idx.btr.Get(entry)
+func (ti *tagIndex) getEqualTagEntities(idx *index, tagEntry interface{}) map[string]*entry {
+	found := idx.btr.Get(tagEntry)
 	if found == nil {
 		return nil
 	}
@@ -264,27 +264,27 @@ func (ti *tagIndex) filterEntities(tagKey tagKey, v interface{}, ft *filterEntri
 		return
 	}
 
-	var item interface{}
+	var tg interface{}
 	switch typedValue := v.(type) {
 	case float64:
-		item = newFloatTag(typedValue)
+		tg = newFloatTag(typedValue)
 	case int:
-		item = newIntTag(typedValue)
+		tg = newIntTag(typedValue)
 	case string:
-		item = newStrTag(typedValue)
+		tg = newStrTag(typedValue)
 	case bool:
-		item = newBoolTag(typedValue)
+		tg = newBoolTag(typedValue)
 	default:
 		panic(fmt.Sprintf("Type %T is not supported", v))
 	}
 
 	switch tagKey.comp {
 	case equal:
-		for _, ent := range ti.getEqualTagEntities(idx, item) {
+		for _, ent := range ti.getEqualTagEntities(idx, tg) {
 			ft.add(ent)
 		}
 	case greaterThan:
-		idx.btr.Ascend(item, func(found interface{}) bool {
+		idx.btr.Ascend(tg, func(found interface{}) bool {
 			if found == nil {
 				return true
 			}
@@ -299,7 +299,9 @@ func (ti *tagIndex) filterEntities(tagKey tagKey, v interface{}, ft *filterEntri
 			}
 
 			for _, ent := range tag.getEntries() {
-				ft.add(ent)
+				if tagKey.matches(ent, v) {
+					ft.add(ent)
+				}
 			}
 
 			return true

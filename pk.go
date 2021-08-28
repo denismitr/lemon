@@ -18,7 +18,7 @@ func newPK(k string) PK {
 }
 
 func (pk *PK) Match(patterns []string) bool {
-	if len(patterns) == 0 || patterns[0] == "*" {
+	if len(patterns) == 0 || (len(patterns) == 1 && patterns[0] == "*") {
 		return true
 	}
 

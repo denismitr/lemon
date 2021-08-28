@@ -15,6 +15,7 @@ type entry struct {
 	value     []byte
 	tags      *tags
 	committed bool
+	txID      uint64
 }
 
 func (ent *entry) clone() *entry {

@@ -599,6 +599,93 @@ func (sts *structsTestSuite) TestScanAll() {
 	}
 }
 
+func (sts *structsTestSuite) TestScanCanBeInterrupted() {
+	db, closer, err := lemon.Open(sts.fixture, &lemon.Config{
+		DisableAutoVacuum: true,
+	})
+
+	sts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			sts.T().Errorf("ERROR: %v", err)
+		}
+	}()
+
+	ctx := context.Background()
+
+	if err := db.View(context.Background(), func(tx *lemon.Tx) error {
+		i := 1
+
+		err := tx.Scan(ctx, nil, func(d *lemon.Document) bool {
+			if i >= 3 {
+				return false
+			}
+
+			var p person
+			sts.Assert().Equal(fmt.Sprintf("person:%d", i), d.Key())
+			sts.Require().NoError(d.JSON().Unmarshal(&p))
+			sts.Assert().Equal(uint32(i), p.ID)
+			sts.Assert().True(p.Sex == "male" || p.Sex == "female")
+
+			if p.Address != nil {
+				sts.Assert().True(strings.HasPrefix(p.Address.Street, "New York"))
+			} else {
+				sts.Assert().Truef(p.ID % uint32(sts.modAddress) != 0, "there should be no address here")
+			}
+
+			sts.Assert().True(p.Salary > 0)
+			i++
+			return true
+		})
+
+		sts.Require().Equal(3, i)
+		sts.Require().NoError(err)
+
+		return nil
+	}); err != nil {
+		sts.T().Fatal(err)
+	}
+}
+
+func (sts *structsTestSuite) Test_ItCanReadOwnWrites() {
+	db, closer, err := lemon.Open(sts.fixture, &lemon.Config{
+		DisableAutoVacuum: true,
+	})
+
+	sts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			sts.T().Errorf("ERROR: %v", err)
+		}
+	}()
+
+	ctx := context.Background()
+
+	if err := db.Update(context.Background(), func(tx *lemon.Tx) error {
+		i := 0
+
+		sts.NoError(tx.Insert("foo:bar:baz", lemon.M{"foo": []string{"bar", "baz"}}))
+		sts.NoError(tx.Insert("123:bar:baz", lemon.M{"123": []string{"bar123","bar123"}}))
+
+		var docs []*lemon.Document
+		q := lemon.Q().Match("*:bar:baz").KeyOrder(lemon.AscOrder)
+		err := tx.Scan(ctx, q, func(d *lemon.Document) bool {
+			docs = append(docs, d)
+			i++
+			return true
+		})
+
+		sts.Require().Equal(2, i)
+		sts.Require().NoError(err)
+
+		return nil
+	}); err != nil {
+		sts.T().Fatal(err)
+	}
+}
+
 type address struct {
 	Phone  string `json:"phone"`
 	Street string `json:"street"`

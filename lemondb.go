@@ -7,7 +7,7 @@ import (
 )
 
 type DB struct {
-	e *engine
+	e   *engine
 }
 
 type UserCallback func(tx *Tx) error

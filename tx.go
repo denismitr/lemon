@@ -15,6 +15,7 @@ type Tx struct {
 	buf             *bytes.Buffer
 	e               *engine
 	ctx             context.Context
+	txID            uint64
 	persistCommands []serializer
 	updates         []*entry
 	replaced        []*entry
@@ -259,7 +260,7 @@ func (x *Tx) Scan(ctx context.Context, opts *queryOptions, cb func(d *Document) 
 		return cb(d)
 	}
 
-	if err := x.applyScanner(ctx, opts, ir); err != nil {
+	if err := x.applyScanner(ctx, opts, x.txID, ir); err != nil {
 		return err
 	}
 
@@ -272,14 +273,14 @@ func (x *Tx) Find(ctx context.Context, q *queryOptions, dest *[]Document) error 
 		return true
 	}
 
-	if err := x.applyScanner(ctx, q, ir); err != nil {
+	if err := x.applyScanner(ctx, q, x.txID, ir); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (x *Tx) applyScanner(ctx context.Context, q *queryOptions, it entryIterator) error {
+func (x *Tx) applyScanner(ctx context.Context, q *queryOptions, txID uint64, it entryIterator) error {
 	if q == nil {
 		q = Q()
 	}

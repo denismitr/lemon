@@ -12,6 +12,7 @@ import (
 )
 
 var ErrKeyAlreadyExists = errors.New("key already exists")
+
 //var ErrConflictingTagType = errors.New("conflicting tag type")
 
 const castPanic = "how could primary keys item not be of type *entry"
@@ -28,6 +29,7 @@ type (
 )
 
 type engine struct {
+	mu            sync.RWMutex
 	dbFile        string
 	cfg           *Config
 	persistence   *persistence
@@ -35,7 +37,6 @@ type engine struct {
 	tags          *tagIndex
 	stopCh        chan struct{}
 	runningVacuum bool
-	mu            sync.RWMutex
 	totalDeletes  uint64
 	closed        bool
 }
@@ -506,8 +507,8 @@ func (e *engine) put(ent *entry, replace bool) error {
 	return nil
 }
 
-func (e *engine) flushAll(ff func (ent *entry)) error {
-	e.pks.Ascend(nil, func (i interface{}) bool {
+func (e *engine) flushAll(ff func(ent *entry)) error {
+	e.pks.Ascend(nil, func(i interface{}) bool {
 		ent := i.(*entry)
 		ff(ent)
 		return true
@@ -535,7 +536,7 @@ func filteringBTreeIterator(
 			panic(castPanic)
 		}
 
-		if fe != nil && (!q.matchTags(ent) || !ent.key.Match(q.patterns)) {
+		if !ent.key.Match(q.patterns) {
 			return true
 		}
 

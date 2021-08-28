@@ -1,6 +1,7 @@
 package lemon
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -49,11 +50,73 @@ type comparator int8
 const (
 	equal comparator = iota
 	greaterThan
+	lessThan
 )
 
 type tagKey struct {
 	name string
 	comp comparator
+}
+
+func (tk *tagKey) matches(ent *entry, v interface{}) bool {
+	switch typedValue := v.(type) {
+	case float64:
+		fv, ok := ent.tags.floats[tk.name]
+		if !ok {
+			return false
+		}
+
+		if tk.comp == equal {
+			return fv == typedValue
+		} else if tk.comp == greaterThan {
+			return fv > typedValue
+		} else if tk.comp == lessThan {
+			return fv < typedValue
+		}
+	case int:
+		iv, ok := ent.tags.integers[tk.name]
+		if !ok {
+			return false
+		}
+
+		if tk.comp == equal {
+			return iv == typedValue
+		} else if tk.comp == greaterThan {
+			return iv > typedValue
+		} else if tk.comp == lessThan {
+			return iv < typedValue
+		}
+	case string:
+		sv, ok := ent.tags.strings[tk.name]
+		if !ok {
+			return false
+		}
+
+		if tk.comp == equal {
+			return sv == typedValue
+		} else if tk.comp == greaterThan {
+			return sv > typedValue
+		} else if tk.comp == lessThan {
+			return sv < typedValue
+		}
+	case bool:
+		bv, ok := ent.tags.booleans[tk.name]
+		if !ok {
+			return false
+		}
+
+		if tk.comp == equal {
+			return bv == typedValue
+		} else if tk.comp == greaterThan {
+			return bv == true && typedValue == false
+		} else if tk.comp == lessThan {
+			return bv == false && typedValue == true
+		}
+	default:
+		panic(fmt.Sprintf("Type %T is not supported", v))
+	}
+
+	return false
 }
 
 type QueryTags struct {
@@ -265,5 +328,5 @@ func (fe *filterEntries) exists(ent *entry) bool {
 }
 
 func (fe *filterEntries) empty() bool {
-	return len(fe.keys) > 0
+	return len(fe.keys) == 0
 }
