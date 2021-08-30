@@ -1,7 +1,6 @@
 package lemon
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -58,65 +57,82 @@ type tagKey struct {
 	comp comparator
 }
 
-func (tk *tagKey) matches(ent *entry, v interface{}) bool {
-	switch typedValue := v.(type) {
-	case float64:
-		fv, ok := ent.tags.floats[tk.name]
-		if !ok {
-			return false
-		}
+type matcher func(ent *entry) bool
 
-		if tk.comp == equal {
-			return fv == typedValue
-		} else if tk.comp == greaterThan {
-			return fv > typedValue
-		} else if tk.comp == lessThan {
-			return fv < typedValue
-		}
-	case int:
-		iv, ok := ent.tags.integers[tk.name]
-		if !ok {
-			return false
-		}
-
-		if tk.comp == equal {
-			return iv == typedValue
-		} else if tk.comp == greaterThan {
-			return iv > typedValue
-		} else if tk.comp == lessThan {
-			return iv < typedValue
-		}
-	case string:
+func (tk *tagKey) getStringMatcher(v string) matcher {
+	return func(ent *entry) bool {
 		sv, ok := ent.tags.strings[tk.name]
 		if !ok {
 			return false
 		}
 
 		if tk.comp == equal {
-			return sv == typedValue
+			return sv == v
 		} else if tk.comp == greaterThan {
-			return sv > typedValue
+			return sv > v
 		} else if tk.comp == lessThan {
-			return sv < typedValue
+			return sv < v
 		}
-	case bool:
+
+		return false
+	}
+}
+
+func (tk *tagKey) getFloatMatcher(v float64) matcher {
+	return func(ent *entry) bool {
+		sv, ok := ent.tags.floats[tk.name]
+		if !ok {
+			return false
+		}
+
+		if tk.comp == equal {
+			return sv == v
+		} else if tk.comp == greaterThan {
+			return sv > v
+		} else if tk.comp == lessThan {
+			return sv < v
+		}
+
+		return false
+	}
+}
+
+func (tk *tagKey) getIntMatcher(v int) matcher {
+	return func(ent *entry) bool {
+		sv, ok := ent.tags.integers[tk.name]
+		if !ok {
+			return false
+		}
+
+		if tk.comp == equal {
+			return sv == v
+		} else if tk.comp == greaterThan {
+			return sv > v
+		} else if tk.comp == lessThan {
+			return sv < v
+		}
+
+		return false
+	}
+}
+
+func (tk *tagKey) getBoolMatcher(v bool) matcher {
+	return func(ent *entry) bool {
 		bv, ok := ent.tags.booleans[tk.name]
 		if !ok {
 			return false
 		}
 
 		if tk.comp == equal {
-			return bv == typedValue
+			return bv == v
 		} else if tk.comp == greaterThan {
-			return bv == true && typedValue == false
+			return bv == true && v == false
 		} else if tk.comp == lessThan {
-			return bv == false && typedValue == true
+			return bv == false && v == true
 		}
-	default:
-		panic(fmt.Sprintf("Type %T is not supported", v))
-	}
 
-	return false
+		return false
+	}
 }
 
 type QueryTags struct {

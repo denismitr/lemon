@@ -258,27 +258,32 @@ func (ti *tagIndex) getEqualTagEntities(idx *index, tagEntry interface{}) map[st
 	return tag.getEntries()
 }
 
-func (ti *tagIndex) filterEntities(tagKey tagKey, v interface{}, ft *filterEntries) {
-	idx := ti.data[tagKey.name]
+func (ti *tagIndex) filterEntities(key tagKey, v interface{}, ft *filterEntries) {
+	idx := ti.data[key.name]
 	if idx == nil {
 		return
 	}
 
 	var tg interface{}
+	var m matcher
 	switch typedValue := v.(type) {
 	case float64:
 		tg = newFloatTag(typedValue)
+		m = key.getFloatMatcher(typedValue)
 	case int:
 		tg = newIntTag(typedValue)
+		m = key.getIntMatcher(typedValue)
 	case string:
 		tg = newStrTag(typedValue)
+		m = key.getStringMatcher(typedValue)
 	case bool:
 		tg = newBoolTag(typedValue)
+		m = key.getBoolMatcher(typedValue)
 	default:
 		panic(fmt.Sprintf("Type %T is not supported", v))
 	}
 
-	switch tagKey.comp {
+	switch key.comp {
 	case equal:
 		for _, ent := range ti.getEqualTagEntities(idx, tg) {
 			ft.add(ent)
@@ -299,7 +304,30 @@ func (ti *tagIndex) filterEntities(tagKey tagKey, v interface{}, ft *filterEntri
 			}
 
 			for _, ent := range tag.getEntries() {
-				if tagKey.matches(ent, v) {
+				if m(ent) {
+					ft.add(ent)
+				}
+			}
+
+			return true
+		})
+	case lessThan:
+		idx.btr.Descend(tg, func(found interface{}) bool {
+			if found == nil {
+				return true
+			}
+
+			tag, ok := found.(entryContainer)
+			if !ok {
+				panic("how can intIndex item not be of type *intTag?")
+			}
+
+			if tag.getEntries() == nil {
+				return true
+			}
+
+			for _, ent := range tag.getEntries() {
+				if m(ent) {
 					ft.add(ent)
 				}
 			}
