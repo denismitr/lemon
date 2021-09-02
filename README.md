@@ -18,3 +18,43 @@ Any document can be tagged by an arbitrary number of tags. Queries can use these
 results.
 
 Tags in LemonDB are basically secondary indexes of 4 basic types `float64`, `int`, `string`, `boolean`.
+
+## Usage
+Create/open a lemonDB database file
+```go
+db, closer, err := lemon.Open(mts.fixture)
+if err != nil {
+	// handle
+}
+
+defer func() {
+    if err := closer(); err != nil {
+        log.Println(err)
+    }
+}()
+```
+
+### Insert several entries in a transaction
+```go
+err := db.Update(context.Background(), func(tx *lemon.Tx) error {
+    if err := tx.Insert("item:8976", lemon.M{
+        "foo": "bar",
+        "baz": 8989764,
+        "someList": []int{100, 200, 345},
+    }); err != nil {
+        return err
+    }
+
+    if err := tx.Insert("product:1145", lemon.M{
+        "foo":   "bar5674",
+        "baz12": 123.879,
+        "anotherMap": lemon.M{"abc": 123},
+    }); err != nil {
+        return err	
+    }
+    
+    return nil
+})
+```
+
+`lemon.M` is actually a `type M map[string]interface{}`

@@ -7,6 +7,8 @@ import (
 )
 
 func Test_AddAndRemove_ByEntry(t *testing.T) {
+	t.Parallel()
+
 	e1 := newEntry("e1", nil)
 	e1.tags = newTags()
 	e1.tags.integers["int_foobar"] = 9
