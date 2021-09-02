@@ -12,6 +12,7 @@ import (
 )
 
 var ErrKeyAlreadyExists = errors.New("key already exists")
+var ErrDatabaseAlreadyClosed = errors.New("database already closed")
 
 //var ErrConflictingTagType = errors.New("conflicting tag type")
 
@@ -19,13 +20,7 @@ const castPanic = "how could primary keys item not be of type *entry"
 
 type (
 	entryIterator func(ent *entry) bool
-
-	scanner func(
-		ctx context.Context,
-		q *queryOptions,
-		fe *filterEntries,
-		ir entryIterator,
-	) error
+	scanner func(ctx context.Context, q *queryOptions, ir entryIterator) error
 )
 
 type engine struct {
@@ -111,8 +106,6 @@ func (e *engine) runVacuumUnderLock() error {
 	return nil
 }
 
-var ErrDatabaseAlreadyClosed = errors.New("database already closed")
-
 func (e *engine) close() error {
 	e.mu.Lock()
 
@@ -179,7 +172,7 @@ func (e *engine) insert(ent *entry) error {
 	}
 
 	if ent.tags != nil {
-		if err := e.setEntityTagsUnderLock(ent); err != nil {
+		if err := e.setEntityTags(ent); err != nil {
 			return err
 		}
 	}
@@ -187,7 +180,7 @@ func (e *engine) insert(ent *entry) error {
 	return nil
 }
 
-func (e *engine) findByKeyUnderLock(key string) (*entry, error) {
+func (e *engine) findByKey(key string) (*entry, error) {
 	found := e.pks.Get(&entry{key: newPK(key)})
 	if found == nil {
 		return nil, errors.Wrapf(ErrKeyDoesNotExist, "key %s does not exist in database", key)
@@ -201,7 +194,8 @@ func (e *engine) findByKeyUnderLock(key string) (*entry, error) {
 	return ent, nil
 }
 
-func (e *engine) findByKeys(pks []string, ir entryIterator) error {
+// iterateByKeys - takes a slice of primary keys and iterates over matched entries
+func (e *engine) iterateByKeys(pks []string, ir entryIterator) error {
 	resultCh := make(chan *entry)
 	var wg sync.WaitGroup
 
@@ -210,7 +204,7 @@ func (e *engine) findByKeys(pks []string, ir entryIterator) error {
 		go func(k string) {
 			defer wg.Done()
 
-			found, err := e.findByKeyUnderLock(k)
+			found, err := e.findByKey(k)
 			if err != nil {
 				// todo: log
 				//return errors.Wrapf(ErrKeyDoesNotExist, "key %s does not exist in database", k)
@@ -234,6 +228,7 @@ func (e *engine) findByKeys(pks []string, ir entryIterator) error {
 	return nil
 }
 
+// remove entry by primary key
 func (e *engine) remove(key PK) error {
 	ent := e.pks.Get(&entry{key: key})
 	if ent == nil {
@@ -246,19 +241,7 @@ func (e *engine) remove(key PK) error {
 	return nil
 }
 
-func (e *engine) removeUnderLock(key PK) error {
-	ent := e.pks.Get(&entry{key: key})
-	if ent == nil {
-		return errors.Wrapf(ErrKeyDoesNotExist, "key %s does not exist in DB", key.String())
-	}
-
-	e.totalDeletes++
-	e.pks.Delete(&entry{key: key})
-
-	return nil
-}
-
-func (e *engine) setEntityTagsUnderLock(ent *entry) error {
+func (e *engine) setEntityTags(ent *entry) error {
 	for n, v := range ent.tags.booleans {
 		if err := e.tags.add(n, v, ent); err != nil {
 			return err
@@ -286,18 +269,17 @@ func (e *engine) setEntityTagsUnderLock(ent *entry) error {
 	return nil
 }
 
-func (e *engine) clearEntityTagsUnderLock(ent *entry) {
+func (e *engine) clearEntityTags(ent *entry) {
 	e.tags.removeEntry(ent)
 }
 
-func (e *engine) Count() int {
+func (e *engine) count() int {
 	return e.pks.Len()
 }
 
 func (e *engine) scanBetweenDescend(
 	ctx context.Context,
 	q *queryOptions,
-	fe *filterEntries,
 	ir entryIterator,
 ) (err error) {
 	// Descend required a reverse order of `from` and `to`
@@ -305,7 +287,7 @@ func (e *engine) scanBetweenDescend(
 		e.pks,
 		&entry{key: newPK(q.keyRange.From)},
 		&entry{key: newPK(q.keyRange.To)},
-		filteringBTreeIterator(ctx, fe, q, ir),
+		filteringBTreeIterator(ctx, q, ir),
 	)
 
 	return
@@ -314,14 +296,13 @@ func (e *engine) scanBetweenDescend(
 func (e *engine) scanBetweenAscend(
 	ctx context.Context,
 	q *queryOptions,
-	fe *filterEntries,
 	ir entryIterator,
 ) (err error) {
 	ascendRange(
 		e.pks,
 		&entry{key: newPK(q.keyRange.From)},
 		&entry{key: newPK(q.keyRange.To)},
-		filteringBTreeIterator(ctx, fe, q, ir),
+		filteringBTreeIterator(ctx, q, ir),
 	)
 
 	return
@@ -330,10 +311,9 @@ func (e *engine) scanBetweenAscend(
 func (e *engine) scanPrefixAscend(
 	ctx context.Context,
 	q *queryOptions,
-	fe *filterEntries,
 	ir entryIterator,
 ) (err error) {
-	e.pks.Ascend(&entry{key: newPK(q.prefix)}, filteringBTreeIterator(ctx, fe, q, ir))
+	e.pks.Ascend(&entry{key: newPK(q.prefix)}, filteringBTreeIterator(ctx, q, ir))
 
 	return
 }
@@ -341,84 +321,135 @@ func (e *engine) scanPrefixAscend(
 func (e *engine) scanPrefixDescend(
 	ctx context.Context,
 	q *queryOptions,
-	fe *filterEntries,
 	ir entryIterator,
 ) (err error) {
-	descendGreaterThan(e.pks, &entry{key: newPK(q.prefix)}, filteringBTreeIterator(ctx, fe, q, ir))
+	descendGreaterThan(e.pks, &entry{key: newPK(q.prefix)}, filteringBTreeIterator(ctx, q, ir))
 	return
 }
 
 func (e *engine) scanAscend(
 	ctx context.Context,
 	q *queryOptions,
-	fe *filterEntries,
 	ir entryIterator,
 ) (err error) {
-	e.pks.Ascend(nil, filteringBTreeIterator(ctx, fe, q, ir))
+	e.pks.Ascend(nil, filteringBTreeIterator(ctx, q, ir))
 	return
 }
 
 func (e *engine) scanDescend(
 	ctx context.Context,
 	q *queryOptions,
-	fe *filterEntries,
 	ir entryIterator,
 ) (err error) {
-	e.pks.Descend(nil, filteringBTreeIterator(ctx, fe, q, ir))
+	e.pks.Descend(nil, filteringBTreeIterator(ctx, q, ir))
 	return
 }
 
-func (e *engine) filterEntities(q *queryOptions) *filterEntries {
+// filterEntriesByTags - uses secondary indexes (tags) to filter entries
+// and puts them to sink, which it creates to store all the matched entries
+func (e *engine) filterEntriesByTags(q *queryOptions) (*filterEntriesSink, error) {
 	if q == nil || q.allTags == nil {
-		return nil
+		return nil, nil
 	}
 
-	ft := newFilterEntries(q.patterns)
+	fes := newFilteredEntriesSink(q.patterns)
 
-	for tk, v := range q.allTags.booleans {
-		if e.tags.data[tk.name] == nil {
-			continue
+	errCh := make(chan error, 4)
+	var wg sync.WaitGroup
+	wg.Add(4)
+
+	go func() {
+		defer wg.Done()
+
+		for tk, v := range q.allTags.booleans {
+			if e.tags.data[tk.name] == nil {
+				continue
+			}
+
+			btf, err := createBoolTagFilter(e.tags, tk, v)
+			if err != nil {
+				errCh <- err
+				return
+			}
+
+			e.tags.filterEntities(btf, fes)
 		}
+	}()
 
-		e.tags.filterEntities(tk, v, ft)
-	}
+	go func() {
+		defer wg.Done()
 
-	for tk, v := range q.allTags.strings {
-		if e.tags.data[tk.name] == nil {
-			continue
+		for tk, v := range q.allTags.strings {
+			if e.tags.data[tk.name] == nil {
+				continue
+			}
+
+			stf, err := createStringTagFilter(e.tags, tk, v)
+			if err != nil {
+				errCh <- err
+				return
+			}
+
+			e.tags.filterEntities(stf, fes)
 		}
+	}()
 
-		e.tags.filterEntities(tk, v, ft)
-	}
+	go func() {
+		defer wg.Done()
 
-	for tk, v := range q.allTags.integers {
-		if e.tags.data[tk.name] == nil {
-			continue
+		for tk, v := range q.allTags.integers {
+			if e.tags.data[tk.name] == nil {
+				continue
+			}
+
+			itf, err := createIntegerTagFilter(e.tags, tk, v)
+			if err != nil {
+				errCh <- err
+				return
+			}
+
+			e.tags.filterEntities(itf, fes)
 		}
+	}()
 
-		e.tags.filterEntities(tk, v, ft)
-	}
+	go func() {
+		defer wg.Done()
 
-	for tk, v := range q.allTags.floats {
-		if e.tags.data[tk.name] == nil {
-			continue
+		for tk, v := range q.allTags.floats {
+			if e.tags.data[tk.name] == nil {
+				continue
+			}
+
+			ftf, err := createFloatTagFilter(e.tags, tk, v)
+			if err != nil {
+				errCh <- err
+				return
+			}
+
+			e.tags.filterEntities(ftf, fes)
 		}
+	}()
 
-		e.tags.filterEntities(tk, v, ft)
+	wg.Wait()
+
+	select {
+	case err := <-errCh:
+		return nil, err
+	default:
+		return fes, nil
 	}
-
-	return ft
 }
 
-// upsertTagUnderLock - updates or inserts a new tag to entity and secondary index
-func (e *engine) upsertTagUnderLock(name string, v interface{}, ent *entry) error {
+// upsertTag - updates or inserts a new tag, adding it to the entity
+// and corresponding secondary index
+func (e *engine) upsertTag(name string, v interface{}, ent *entry) error {
 	// just a precaution
 	if ent.tags == nil {
 		ent.tags = newTags()
 	}
 
 	// if tag name exists in entity, remove it from secondary index
-	// and remove it from entity itself
+	// and remove it from entry itself
 	existingTagType, ok := ent.tags.names[name]
 	if ok {
 		if err := e.tags.mustRemoveEntryByNameAndValue(name, v, ent); err != nil {
@@ -455,8 +486,8 @@ func (e *engine) upsertTagUnderLock(name string, v interface{}, ent *entry) erro
 	return e.tags.add(name, v, ent)
 }
 
-// removeTagUnderLock - removes a tag from entity and secondary index
-func (e *engine) removeTagUnderLock(name string, ent *entry) error {
+// removeTag - removes a tag from entity and secondary index
+func (e *engine) removeTag(name string, ent *entry) error {
 	// if tag name exists in entity, remove it from secondary index
 	// and remove it from entity itself
 	existingTagType, ok := ent.tags.names[name]
@@ -494,12 +525,12 @@ func (e *engine) put(ent *entry, replace bool) error {
 		}
 
 		if existingEnt.tags != nil {
-			e.clearEntityTagsUnderLock(ent)
+			e.clearEntityTags(ent)
 		}
 	}
 
 	if ent.tags != nil {
-		if err := e.setEntityTagsUnderLock(ent); err != nil {
+		if err := e.setEntityTags(ent); err != nil {
 			return err
 		}
 	}
@@ -522,7 +553,6 @@ func (e *engine) flushAll(ff func(ent *entry)) error {
 
 func filteringBTreeIterator(
 	ctx context.Context,
-	fe *filterEntries,
 	q *queryOptions,
 	ir entryIterator,
 ) func(item interface{}) bool {

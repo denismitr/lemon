@@ -29,7 +29,7 @@ func (cmd *untagCmd) serialize(buf *bytes.Buffer) {
 }
 
 func (cmd *untagCmd) deserialize(e *engine) error {
-	ent, err := e.findByKeyUnderLock(cmd.key.String())
+	ent, err := e.findByKey(cmd.key.String())
 	if err != nil {
 		return errors.Wrapf(err, "could not deserialize tag command for key %s command", cmd.key.String())
 	}
@@ -70,7 +70,7 @@ func (cmd *tagCmd) serialize(buf *bytes.Buffer) {
 }
 
 func (cmd *tagCmd) deserialize(e *engine) error {
-	ent, err := e.findByKeyUnderLock(cmd.key.String())
+	ent, err := e.findByKey(cmd.key.String())
 	if err != nil {
 		return errors.Wrapf(err, "could not deserialize tag command for key %s command", cmd.key.String())
 	}

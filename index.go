@@ -13,7 +13,7 @@ type indexType uint8
 const invalidTagTypeConversion = "invalid tag type conversion"
 
 const (
-	nilDataType = iota
+	nilDataType indexType = iota
 	floatDataType
 	intDataType
 	strDataType
@@ -258,82 +258,132 @@ func (ti *tagIndex) getEqualTagEntities(idx *index, tagEntry interface{}) map[st
 	return tag.getEntries()
 }
 
-func (ti *tagIndex) filterEntities(key tagKey, v interface{}, ft *filterEntries) {
+type tagFilter struct {
+	key tagKey
+	m matcher
+	idx *index
+	tag interface{}
+}
+
+func createFloatTagFilter(ti *tagIndex, key tagKey, v float64) (*tagFilter, error) {
 	idx := ti.data[key.name]
 	if idx == nil {
-		return
+		return nil, errors.Wrapf(ErrTagNameNotFound, "tag name %s", key.name)
 	}
 
-	var tg interface{}
-	var m matcher
-	switch typedValue := v.(type) {
-	case float64:
-		tg = newFloatTag(typedValue)
-		m = key.getFloatMatcher(typedValue)
-	case int:
-		tg = newIntTag(typedValue)
-		m = key.getIntMatcher(typedValue)
-	case string:
-		tg = newStrTag(typedValue)
-		m = key.getStringMatcher(typedValue)
-	case bool:
-		tg = newBoolTag(typedValue)
-		m = key.getBoolMatcher(typedValue)
-	default:
-		panic(fmt.Sprintf("Type %T is not supported", v))
+	if idx.dt != floatDataType {
+		return nil, errors.Wrapf(ErrInvalidTagType, "tag with name %s is not of type float", key.name)
 	}
 
-	switch key.comp {
+	f := tagFilter{}
+	f.idx = idx
+	f.key = key
+	f.tag = newFloatTag(v)
+	f.m = key.getFloatMatcher(v)
+
+	return &f, nil
+}
+
+func createBoolTagFilter(ti *tagIndex, key tagKey, v bool) (*tagFilter, error) {
+	idx := ti.data[key.name]
+	if idx == nil {
+		return nil, errors.Wrapf(ErrTagNameNotFound, "tag name %s", key.name)
+	}
+
+	if idx.dt != boolDataType {
+		return nil, errors.Wrapf(ErrInvalidTagType, "tag with name %s is not of type boolean", key.name)
+	}
+
+	f := tagFilter{}
+	f.idx = idx
+	f.key = key
+	f.tag = newBoolTag(v)
+	f.m = key.getBoolMatcher(v)
+
+	return &f, nil
+}
+
+func createIntegerTagFilter(ti *tagIndex, key tagKey, v int) (*tagFilter, error) {
+	idx := ti.data[key.name]
+	if idx == nil {
+		return nil, errors.Wrapf(ErrTagNameNotFound, "tag name %s", key.name)
+	}
+
+	if idx.dt != intDataType {
+		return nil, errors.Wrapf(ErrInvalidTagType, "tag with name %s is not of type integer", key.name)
+	}
+
+	f := tagFilter{}
+	f.idx = idx
+	f.key = key
+	f.tag = newIntTag(v)
+	f.m = key.getIntMatcher(v)
+
+	return &f, nil
+}
+
+func createStringTagFilter(ti *tagIndex, key tagKey, v string) (*tagFilter, error) {
+	idx := ti.data[key.name]
+	if idx == nil {
+		return nil, errors.Wrapf(ErrTagNameNotFound, "tag name %s", key.name)
+	}
+
+	if idx.dt != strDataType {
+		return nil, errors.Wrapf(ErrInvalidTagType, "tag with name %s is not of type string", key.name)
+	}
+
+	f := tagFilter{}
+	f.idx = idx
+	f.key = key
+	f.tag = newStrTag(v)
+	f.m = key.getStringMatcher(v)
+
+	return &f, nil
+}
+
+func (ti *tagIndex) filterEntities(tf *tagFilter, fes *filterEntriesSink) {
+	scanIter := func(found interface{}) bool {
+		if found == nil {
+			return true
+		}
+
+		tag, ok := found.(entryContainer)
+		if !ok {
+			panic("how can intIndex item not be of type *intTag?")
+		}
+
+		if tag.getEntries() == nil {
+			return true
+		}
+
+		for _, ent := range tag.getEntries() {
+			if tf.m(ent) {
+				fes.add(ent)
+			}
+		}
+
+		return true
+	}
+
+	switch tf.key.comp {
 	case equal:
-		for _, ent := range ti.getEqualTagEntities(idx, tg) {
-			ft.add(ent)
+		found := tf.idx.btr.Get(tf.tag)
+		if found == nil {
+			return
+		}
+
+		tag, ok := found.(entryContainer)
+		if !ok {
+			panic("not an entity container") // fixme
+		}
+
+		for _, ent := range tag.getEntries() {
+			fes.add(ent)
 		}
 	case greaterThan:
-		idx.btr.Ascend(tg, func(found interface{}) bool {
-			if found == nil {
-				return true
-			}
-
-			tag, ok := found.(entryContainer)
-			if !ok {
-				panic("how can intIndex item not be of type *intTag?")
-			}
-
-			if tag.getEntries() == nil {
-				return true
-			}
-
-			for _, ent := range tag.getEntries() {
-				if m(ent) {
-					ft.add(ent)
-				}
-			}
-
-			return true
-		})
+		tf.idx.btr.Ascend(tf.tag, scanIter)
 	case lessThan:
-		idx.btr.Descend(tg, func(found interface{}) bool {
-			if found == nil {
-				return true
-			}
-
-			tag, ok := found.(entryContainer)
-			if !ok {
-				panic("how can intIndex item not be of type *intTag?")
-			}
-
-			if tag.getEntries() == nil {
-				return true
-			}
-
-			for _, ent := range tag.getEntries() {
-				if m(ent) {
-					ft.add(ent)
-				}
-			}
-
-			return true
-		})
+		tf.idx.btr.Descend(tf.tag, scanIter)
 	}
 }
 

@@ -68,7 +68,7 @@ func (db *DB) Begin(ctx context.Context, readOnly bool) (*Tx, error) {
 }
 
 func (db *DB) Count() int {
-	return db.e.Count()
+	return db.e.count()
 }
 
 func (db *DB) Vacuum() error {

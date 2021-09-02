@@ -287,22 +287,22 @@ func Q() *queryOptions {
 	return &queryOptions{order: AscOrder}
 }
 
-type filterEntries struct {
+type filterEntriesSink struct {
 	sync.RWMutex
 	keys     []PK
 	patterns []string
 	entries  map[string]*entry
 }
 
-func newFilterEntries(patterns []string) *filterEntries {
-	return &filterEntries{
+func newFilteredEntriesSink(patterns []string) *filterEntriesSink {
+	return &filterEntriesSink{
 		patterns: patterns,
 		keys:     make([]PK, 0),
 		entries:  make(map[string]*entry),
 	}
 }
 
-func (fe *filterEntries) all(order Order, it entryIterator) {
+func (fe *filterEntriesSink) iterate(order Order, it entryIterator) {
 	fe.RLock()
 	defer fe.RUnlock()
 
@@ -323,7 +323,7 @@ func (fe *filterEntries) all(order Order, it entryIterator) {
 	}
 }
 
-func (fe *filterEntries) add(ent *entry) {
+func (fe *filterEntriesSink) add(ent *entry) {
 	fe.Lock()
 	defer fe.Unlock()
 
@@ -337,12 +337,14 @@ func (fe *filterEntries) add(ent *entry) {
 	}
 }
 
-func (fe *filterEntries) exists(ent *entry) bool {
+func (fe *filterEntriesSink) exists(ent *entry) bool {
 	fe.RLock()
 	defer fe.RUnlock()
 	return fe.entries[ent.key.String()] != nil
 }
 
-func (fe *filterEntries) empty() bool {
+func (fe *filterEntriesSink) empty() bool {
+	fe.RLock()
+	defer fe.RUnlock()
 	return len(fe.keys) == 0
 }
