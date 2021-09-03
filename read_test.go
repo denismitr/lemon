@@ -36,7 +36,10 @@ func TestTx_Structs(t *testing.T) {
 }
 
 func TestLemonDB_Read(t *testing.T) {
-	db, closer, err := lemon.Open("./__fixtures__/read_db1.ldb")
+	readDb1 := "./__fixtures__/read_db1.ldb"
+	seedSomeProducts(t, readDb1, true)
+
+	db, closer, err := lemon.Open(readDb1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,46 +49,6 @@ func TestLemonDB_Read(t *testing.T) {
 			t.Errorf("ERROR: %v", err)
 		}
 	}()
-
-	//t.Run("seed products without tags", func(t *testing.T) {
-	//	if err := db.Update(context.Background(), func(tx *lemon.Tx) error {
-	//		if err := tx.Insert("product:2", lemon.M{
-	//			"100": "foobar2",
-	//			"baz": 2,
-	//			"foo": "bar",
-	//		}); err != nil {
-	//			return err
-	//		}
-	//
-	//		if err := tx.Insert("product:88", lemon.M{
-	//			"100": "foobar-88",
-	//			"baz": 88,
-	//			"foo": "bar/88",
-	//		}); err != nil {
-	//			return err
-	//		}
-	//
-	//		if err := tx.Insert("product:10", lemon.M{
-	//			"999": nil,
-	//			"baz12": 123.879,
-	//			"foo": "bar5674",
-	//		}); err != nil {
-	//			return err
-	//		}
-	//
-	//		if err := tx.Insert("product:100", lemon.M{
-	//			"999": nil,
-	//			"baz12": 123.879,
-	//			"foo": "bar5674",
-	//		}); err != nil {
-	//			return err
-	//		}
-	//
-	//		return nil
-	//	}); err != nil {
-	//		t.Fatal(err)
-	//	}
-	//})
 
 	t.Run("get existing keys", func(t *testing.T) {
 		var result1 *lemon.Document

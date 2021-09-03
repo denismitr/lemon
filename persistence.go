@@ -53,8 +53,17 @@ type persistence struct {
 	cursor   int
 }
 
-func newPersistence(filepath string, strategy PersistenceStrategy) (*persistence, error) {
-	f, err := os.OpenFile(filepath, os.O_CREATE|os.O_RDWR, 0666)
+func newPersistence(
+	filepath string,
+	strategy PersistenceStrategy,
+	truncateFileOnOpen bool,
+) (*persistence, error) {
+	flags := os.O_CREATE|os.O_RDWR
+	if truncateFileOnOpen {
+		flags |= os.O_TRUNC
+	}
+
+	f, err := os.OpenFile(filepath, flags, 0666)
 	if err != nil {
 		return nil, err
 	}

@@ -24,6 +24,35 @@ func Test_Write(t *testing.T) {
 	suite.Run(t, &writeTestSuite{})
 }
 
+func Test_TruncateExistingDatabase(t *testing.T) {
+	t.Parallel()
+
+	path := "./__fixtures__/truncate_db1.ldb"
+	seedSomeProducts(t, path, true)
+
+	t.Run("existing database should be truncated on open", func(t *testing.T) {
+		db, closer, err := lemon.Open(path, &lemon.Config{
+			TruncateFileWhenOpen: true,
+		})
+
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		defer func() {
+			if err := closer(); err != nil {
+				t.Errorf("ERROR: %v", err)
+			}
+		}()
+
+		require.NoError(t, db.Insert(context.Background(), "product:2", lemon.M{
+			"100": "foobar2",
+			"baz": 2,
+			"foo": "bar",
+		}))
+	})
+}
+
 func TestTx_FlushAll(t *testing.T) {
 	t.Run("database can be opened, seeded and than flushed completely", func(t *testing.T) {
 		fixture := createDbForFlushAllTest(t, "flush1")

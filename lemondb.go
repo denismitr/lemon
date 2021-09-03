@@ -7,7 +7,7 @@ import (
 )
 
 type DB struct {
-	e   *engine
+	e *engine
 }
 
 type UserCallback func(tx *Tx) error
@@ -19,6 +19,7 @@ func NullCloser() error { return nil }
 func Open(path string, engineOptions ...EngineOptions) (*DB, Closer, error) {
 	defaultCfg := &Config{
 		DisableAutoVacuum:     false,
+		TruncateFileWhenOpen:  false,
 		PersistenceStrategy:   Sync,
 		AutoVacuumIntervals:   defaultAutovacuumIntervals,
 		AutoVacuumMinSize:     defaultAutoVacuumMinSize,

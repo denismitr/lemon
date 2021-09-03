@@ -141,7 +141,7 @@ func (e *engine) init() error {
 	defer e.mu.Unlock()
 
 	if e.dbFile != ":memory:" {
-		p, err := newPersistence(e.dbFile, e.cfg.PersistenceStrategy)
+		p, err := newPersistence(e.dbFile, e.cfg.PersistenceStrategy, e.cfg.TruncateFileWhenOpen)
 		if err != nil {
 			return err
 		}
