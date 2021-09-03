@@ -96,6 +96,18 @@ func (db *DB) Get(ctx context.Context, key string) (*Document, error) {
 	return doc, err
 }
 
+func (db *DB) Insert(ctx context.Context, key string, data interface{}, metaAppliers ...MetaApplier) error {
+	return db.Update(ctx, func(tx *Tx) error {
+		return tx.Insert(key, data, metaAppliers...)
+	})
+}
+
+func (db *DB) InsertOrReplace(ctx context.Context, key string, data interface{}, metaAppliers ...MetaApplier) error {
+	return db.Update(ctx, func(tx *Tx) error {
+		return tx.InsertOrReplace(key, data, metaAppliers...)
+	})
+}
+
 func (db *DB) View(ctx context.Context, cb UserCallback) error {
 	tx, err := db.Begin(ctx, true)
 	if err != nil {
