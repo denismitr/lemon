@@ -43,6 +43,8 @@ func Test_TruncateExistingDatabase(t *testing.T) {
 			if err := closer(); err != nil {
 				t.Errorf("ERROR: %v", err)
 			}
+
+			_ = os.Remove(path)
 		}()
 
 		require.NoError(t, db.Insert(context.Background(), "product:2", lemon.M{
