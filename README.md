@@ -57,8 +57,19 @@ err := db.Update(context.Background(), func(tx *lemon.Tx) error {
     return nil
 })
 ```
-
 `lemon.M` is actually a `type M map[string]interface{}`
+
+alternatively you can do a single operation, without manually opening a transaction, instead
+a single operation will be wrapped in a transaction automatically, the only difference is that you have to
+pass a context as the first argument.
+
+```go
+err := db.Insert(context.Background(), "item:1145", lemon.M{
+        "foo1":   "0",
+        "baz": 123.879,
+        "999":   "bar",
+    }, lemon.WithTags().Bool("valid", true).Str("city", "Budapest"))
+```
 
 ### InsertOrReplace one or several entries in a transaction
 in case an entry already exists it is overwritten, including all of it tags (secondary indexes), otherwise
@@ -83,4 +94,14 @@ err := db.Update(context.Background(), func(tx *lemon.Tx) error {
 		
 		return nil
 	})
+```
+alternatively, like with regular inserts, you can do a single operation, without manually opening a transaction, instead
+a single operation will be wrapped in a transaction automatically, the only difference is that you have to
+pass a context as the first argument.
+```go
+err := db.InsertOrReplace(context.Background(), "item:1145", lemon.M{
+        "foo1":   "0",
+        "baz": 123.879,
+        "999":   "bar",
+    }, lemon.WithTags().Bool("valid", true).Str("city", "Budapest"))
 ```
