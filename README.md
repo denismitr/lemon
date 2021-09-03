@@ -35,6 +35,7 @@ defer func() {
 ```
 
 ### Insert several entries in a transaction
+tags can be provided as a third argument and will service as secondary index
 ```go
 err := db.Update(context.Background(), func(tx *lemon.Tx) error {
     if err := tx.Insert("item:8976", lemon.M{
@@ -49,7 +50,7 @@ err := db.Update(context.Background(), func(tx *lemon.Tx) error {
         "foo":   "bar5674",
         "baz12": 123.879,
         "anotherMap": lemon.M{"abc": 123},
-    }); err != nil {
+    }, lemon.WithTags().Bool("valid", true).Str("city", "Budapest")); err != nil {
         return err	
     }
     
@@ -58,3 +59,28 @@ err := db.Update(context.Background(), func(tx *lemon.Tx) error {
 ```
 
 `lemon.M` is actually a `type M map[string]interface{}`
+
+### InsertOrReplace one or several entries in a transaction
+in case an entry already exists it is overwritten, including all of it tags (secondary indexes), otherwise
+a new entry is created with tags, if provided
+```go
+err := db.Update(context.Background(), func(tx *lemon.Tx) error {
+		if err := tx.InsertOrReplace("item:77", lemon.M{
+			"foo": "bar22",
+			"baz": 1,
+			"bar": nil,
+		}); err != nil {
+			return err
+		}
+
+		if err := tx.InsertOrReplace("item:1145", lemon.M{
+			"foo1":   "0",
+			"baz": 123.879,
+			"999":   "bar",
+		}, lemon.WithTags().Bool("valid", true).Str("city", "Budapest")); err != nil {
+			return err
+		}
+		
+		return nil
+	})
+```
