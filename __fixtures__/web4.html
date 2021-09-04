@@ -59,68 +59,6 @@
                 If <code class="parameter">search</code> or <code class="parameter">replace</code>
                 are arrays, their elements are processed first to last.
             </p>
-            <p class="para">
-            <dl>
-
-                <dt>
-                    <code class="parameter">search</code></dt>
-
-                <dd>
-
-                    <p class="para">
-                        The value being searched for, otherwise known as the <em class="emphasis">needle</em>.
-                        An array may be used to designate multiple needles.
-                    </p>
-                </dd>
-
-
-
-                <dt>
-                    <code class="parameter">replace</code></dt>
-
-                <dd>
-
-                    <p class="para">
-                        The replacement value that replaces found <code class="parameter">search</code>
-                        values. An array may be used to designate multiple replacements.
-                    </p>
-                </dd>
-
-
-
-                <dt>
-                    <code class="parameter">subject</code></dt>
-
-                <dd>
-
-                    <p class="para">
-                        The string or array being searched and replaced on,
-                        otherwise known as the <em class="emphasis">haystack</em>.
-                    </p>
-                    <p class="para">
-                        If <code class="parameter">subject</code> is an array, then the search and
-                        replace is performed with every entry of
-                        <code class="parameter">subject</code>, and the return value is an array as
-                        well.
-                    </p>
-                </dd>
-
-
-
-                <dt>
-                    <code class="parameter">count</code></dt>
-
-                <dd>
-
-                    <p class="para">
-                        If passed, this will be set to the number of replacements performed.
-                    </p>
-                </dd>
-
-
-            </dl>
-
-            </p>
         </div>
 
 
@@ -236,23 +174,6 @@ A faster way to replace the strings in multidimensional array is to json_encode(
             </div>
                 <a href="#105939" class="name">
                     <strong class="user"><em>moostende at gmail dot com</em></strong></a><a class="genanchor" href="#105939"> &para;</a><div class="date" title="2011-09-26 11:20"><strong>9 years ago</strong></div>
-                <div class="text" id="Hcom105939">
-                    <div class="phpcode"><code><span class="html">
-Note that this does not replace strings that become part of replacement strings. This may be a problem when you want to remove multiple instances of the same repetative pattern, several times in a row.
-<br />
-<br />If you want to remove all dashes but one from the string '-aaa----b-c-----d--e---f' resulting in '-aaa-b-c-d-e-f', you cannot use str_replace. Instead, use preg_replace:
-<br />
-<br /><span class="default">&lt;?php
-<br />$challenge </span><span class="keyword">= </span><span class="string">'-aaa----b-c-----d--e---f'</span><span class="keyword">;
-<br />echo </span><span class="default">str_replace</span><span class="keyword">(</span><span class="string">'--'</span><span class="keyword">, </span><span class="string">'-'</span><span class="keyword">, </span><span class="default">$challenge</span><span class="keyword">).</span><span class="string">'&lt;br&gt;'</span><span class="keyword">;
-<br />echo </span><span class="default">preg_replace</span><span class="keyword">(</span><span class="string">'/--+/'</span><span class="keyword">, </span><span class="string">'-'</span><span class="keyword">, </span><span class="default">$challenge</span><span class="keyword">).</span><span class="string">'&lt;br&gt;'</span><span class="keyword">;
-<br /></span><span class="default">?&gt;
-<br /></span>
-<br />This outputs the following:
-<br />-aaa--b-c---d-e--f
-<br />-aaa-b-c-d-e-f</span>
-                    </code></div>
-                </div>
             </div>
             <div class="note" id="91536">  <div class="votes">
                 <div id="Vu91536">
@@ -267,34 +188,6 @@ Note that this does not replace strings that become part of replacement strings.
             </div>
                 <a href="#91536" class="name">
                     <strong class="user"><em>Alberto Lepe</em></strong></a><a class="genanchor" href="#91536"> &para;</a><div class="date" title="2009-06-15 07:44"><strong>12 years ago</strong></div>
-                <div class="text" id="Hcom91536">
-                    <div class="phpcode"><code><span class="html">
-Be careful when replacing characters (or repeated patterns in the FROM and TO arrays):
-<br />
-<br />For example:
-<br />
-<br /><span class="default">&lt;?php
-<br />$arrFrom </span><span class="keyword">= array(</span><span class="string">"1"</span><span class="keyword">,</span><span class="string">"2"</span><span class="keyword">,</span><span class="string">"3"</span><span class="keyword">,</span><span class="string">"B"</span><span class="keyword">);
-<br /></span><span class="default">$arrTo </span><span class="keyword">= array(</span><span class="string">"A"</span><span class="keyword">,</span><span class="string">"B"</span><span class="keyword">,</span><span class="string">"C"</span><span class="keyword">,</span><span class="string">"D"</span><span class="keyword">);
-<br /></span><span class="default">$word </span><span class="keyword">= </span><span class="string">"ZBB2"</span><span class="keyword">;
-<br />echo </span><span class="default">str_replace</span><span class="keyword">(</span><span class="default">$arrFrom</span><span class="keyword">, </span><span class="default">$arrTo</span><span class="keyword">, </span><span class="default">$word</span><span class="keyword">);
-<br /></span><span class="default">?&gt;
-<br /></span>
-<br />I would expect as result: "ZDDB"
-<br />However, this return: "ZDDD"
-<br />(Because B = D according to our array)
-<br />
-<br />To make this work, use "strtr" instead:
-<br />
-<br /><span class="default">&lt;?php
-<br />$arr </span><span class="keyword">= array(</span><span class="string">"1" </span><span class="keyword">=&gt; </span><span class="string">"A"</span><span class="keyword">,</span><span class="string">"2" </span><span class="keyword">=&gt; </span><span class="string">"B"</span><span class="keyword">,</span><span class="string">"3" </span><span class="keyword">=&gt; </span><span class="string">"C"</span><span class="keyword">,</span><span class="string">"B" </span><span class="keyword">=&gt; </span><span class="string">"D"</span><span class="keyword">);
-<br /></span><span class="default">$word </span><span class="keyword">= </span><span class="string">"ZBB2"</span><span class="keyword">;
-<br />echo </span><span class="default">strtr</span><span class="keyword">(</span><span class="default">$word</span><span class="keyword">,</span><span class="default">$arr</span><span class="keyword">);
-<br /></span><span class="default">?&gt;
-<br /></span>
-<br />This returns: "ZDDB"</span>
-                    </code></div>
-                </div>
             </div>
             <div class="note" id="122929">  <div class="votes">
                 <div id="Vu122929">
@@ -307,51 +200,10 @@ Be careful when replacing characters (or repeated patterns in the FROM and TO ar
                     8
                 </div>
             </div>
-                <a href="#122929" class="name">
-                    <strong class="user"><em>ravenswd at gmail dot com</em></strong></a><a class="genanchor" href="#122929"> &para;</a><div class="date" title="2018-07-11 01:33"><strong>3 years ago</strong></div>
-                <div class="text" id="Hcom122929">
-                    <div class="phpcode"><code><span class="html">
-This is what happens when the search and replace arrays are different sizes:<br /><br /><span class="default">&lt;?php<br />$search&nbsp; </span><span class="keyword">= array(</span><span class="string">'a'</span><span class="keyword">, </span><span class="string">'b'</span><span class="keyword">, </span><span class="string">'c'</span><span class="keyword">, </span><span class="string">'d'</span><span class="keyword">, </span><span class="string">'e'</span><span class="keyword">);<br /></span><span class="default">$replace </span><span class="keyword">= array(</span><span class="string">'A'</span><span class="keyword">, </span><span class="string">'B'</span><span class="keyword">, </span><span class="string">'C'</span><span class="keyword">);<br /></span><span class="default">$subject </span><span class="keyword">= </span><span class="string">'abcdefg'</span><span class="keyword">;<br />echo </span><span class="default">str_replace</span><span class="keyword">(</span><span class="default">$search</span><span class="keyword">, </span><span class="default">$replace</span><span class="keyword">, </span><span class="default">$subject</span><span class="keyword">);<br /></span><span class="comment">// result: 'ABCfg'<br /><br /></span><span class="default">$search&nbsp; </span><span class="keyword">= array(</span><span class="string">'a'</span><span class="keyword">, </span><span class="string">'b'</span><span class="keyword">, </span><span class="string">'c'</span><span class="keyword">);<br /></span><span class="default">$replace </span><span class="keyword">= array(</span><span class="string">'A'</span><span class="keyword">, </span><span class="string">'B'</span><span class="keyword">, </span><span class="string">'C'</span><span class="keyword">, </span><span class="string">'D'</span><span class="keyword">, </span><span class="string">'E'</span><span class="keyword">);<br /></span><span class="default">$subject </span><span class="keyword">= </span><span class="string">'abcdefg'</span><span class="keyword">;<br />echo </span><span class="default">str_replace</span><span class="keyword">(</span><span class="default">$search</span><span class="keyword">, </span><span class="default">$replace</span><span class="keyword">, </span><span class="default">$subject</span><span class="keyword">);<br /></span><span class="comment">// result: 'ABCdefg'<br /></span><span class="default">?&gt;<br /></span><br />No warning or error is generated in either of these cases.</span>
-                    </code></div>
-                </div>
+
             </div>
-            <div class="note" id="95198">  <div class="votes">
-                <div id="Vu95198">
-                    <a href="/manual/vote-note.php?id=95198&amp;page=function.str-replace&amp;vote=up" title="Vote up!" class="usernotes-voteu">up</a>
-                </div>
-                <div id="Vd95198">
-                    <a href="/manual/vote-note.php?id=95198&amp;page=function.str-replace&amp;vote=down" title="Vote down!" class="usernotes-voted">down</a>
-                </div>
-                <div class="tally" id="V95198" title="61% like this...">
-                    38
-                </div>
+            <div class="note" id="95198">
             </div>
-                <a href="#95198" class="name">
-                    <strong class="user"><em>Wes Foster</em></strong></a><a class="genanchor" href="#95198"> &para;</a><div class="date" title="2009-12-17 01:32"><strong>11 years ago</strong></div>
-                <div class="text" id="Hcom95198">
-                    <div class="phpcode"><code><span class="html">
-Feel free to optimize this using the while/for or anything else, but this is a bit of code that allows you to replace strings found in an associative array.
-                    </code></div>
-                </div>
-            </div>
-            <div class="note" id="118785">  <div class="votes">
-                <div id="Vu118785">
-                    <a href="/manual/vote-note.php?id=118785&amp;page=function.str-replace&amp;vote=up" title="Vote up!" class="usernotes-voteu">up</a>
-                </div>
-                <div id="Vd118785">
-                    <a href="/manual/vote-note.php?id=118785&amp;page=function.str-replace&amp;vote=down" title="Vote down!" class="usernotes-voted">down</a>
-                </div>
-                <div class="tally" id="V118785" title="63% like this...">
-                    16
-                </div>
-            </div>
-                <a href="#118785" class="name">
-                    <strong class="user"><em>David Holt</em></strong></a><a class="genanchor" href="#118785"> &para;</a><div class="date" title="2016-02-05 02:59"><strong>5 years ago</strong></div>
-                <div class="text" id="Hcom118785">
-                    <div class="phpcode"><code><span class="html">
-Be aware that if you use this for filtering &amp; sanitizing some form of user input, or remove ALL instances of a string, there's another gotcha to watch out for:<br /><br />// Remove all double characters<br />$string="1001011010";<br />$string=str_replace(array("11","00"),"",$string);<br />// Output: "110010"<br /><br />$string="&lt;ht&lt;html&gt;ml&gt; Malicious code &lt;/&lt;html&gt;html&gt; etc";<br />$string=str_replace(array("&lt;html&gt;","&lt;/html&gt;"),"",$string);<br />// Output: "&lt;html&gt; Malicious code &lt;/html&gt; etc"</span>
-                    </code></div>
-                </div>
             </div>
             <div class="note" id="88569">  <div class="votes">
                 <div id="Vu88569">
@@ -393,26 +245,6 @@ Here's a deep replace function allowing multi-dimensional arrays in $search, $re
                     </code></div>
                 </div>
             </div>
-            <div class="note" id="63783">  <div class="votes">
-                <div id="Vu63783">
-                    <a href="/manual/vote-note.php?id=63783&amp;page=function.str-replace&amp;vote=up" title="Vote up!" class="usernotes-voteu">up</a>
-                </div>
-                <div id="Vd63783">
-                    <a href="/manual/vote-note.php?id=63783&amp;page=function.str-replace&amp;vote=down" title="Vote down!" class="usernotes-voted">down</a>
-                </div>
-                <div class="tally" id="V63783" title="60% like this...">
-                    6
-                </div>
-            </div>
-                <a href="#63783" class="name">
-                    <strong class="user"><em>matt wheaton</em></strong></a><a class="genanchor" href="#63783"> &para;</a><div class="date" title="2006-03-30 07:40"><strong>15 years ago</strong></div>
-                <div class="text" id="Hcom63783">
-                    <div class="phpcode"><code><span class="html">
-As an effort to remove those Word copy and paste smart quotes, I've found that this works with UTF8 encoded strings (where $text in the following example is UTF8). Also the elipsis and em and en dashes are replaced.<br /><br />There is an "invisible" character after the â€ for the right side double smart quote that doesn't seem to display here. It is chr(157).<br /><br /><span class="default">&lt;?php<br />&nbsp; $find</span><span class="keyword">[] = </span><span class="string">'â€œ'</span><span class="keyword">;&nbsp; </span><span class="comment">// left side double smart quote<br />&nbsp; </span><span class="default">$find</span><span class="keyword">[] = </span><span class="string">'â€'</span><span class="keyword">;&nbsp; </span><span class="comment">// right side double smart quote<br />&nbsp; </span><span class="default">$find</span><span class="keyword">[] = </span><span class="string">'â€˜'</span><span class="keyword">;&nbsp; </span><span class="comment">// left side single smart quote<br />&nbsp; </span><span class="default">$find</span><span class="keyword">[] = </span><span class="string">'â€™'</span><span class="keyword">;&nbsp; </span><span class="comment">// right side single smart quote<br />&nbsp; </span><span class="default">$find</span><span class="keyword">[] = </span><span class="string">'â€¦'</span><span class="keyword">;&nbsp; </span><span class="comment">// elipsis<br />&nbsp; </span><span class="default">$find</span><span class="keyword">[] = </span><span class="string">'â€”'</span><span class="keyword">;&nbsp; </span><span class="comment">// em dash<br />&nbsp; </span><span class="default">$find</span><span class="keyword">[] = </span><span class="string">'â€“'</span><span class="keyword">;&nbsp; </span><span class="comment">// en dash<br /><br />&nbsp; </span><span class="default">$replace</span><span class="keyword">[] = </span><span class="string">'"'</span><span class="keyword">;<br />&nbsp; </span><span class="default">$replace</span><span class="keyword">[] = </span><span class="string">'"'</span><span class="keyword">;<br />&nbsp; </span><span class="default">$replace</span><span class="keyword">[] = </span><span class="string">"'"</span><span class="keyword">;<br />&nbsp; </span><span class="default">$replace</span><span class="keyword">[] = </span><span class="string">"'"</span><span class="keyword">;<br />&nbsp; </span><span class="default">$replace</span><span class="keyword">[] = </span><span class="string">"..."</span><span class="keyword">;<br />&nbsp; </span><span class="default">$replace</span><span class="keyword">[] = </span><span class="string">"-"</span><span class="keyword">;<br />&nbsp; </span><span class="default">$replace</span><span class="keyword">[] = </span><span class="string">"-"</span><span class="keyword">;<br /><br />&nbsp; </span><span class="default">$text </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">(</span><span class="default">$find</span><span class="keyword">, </span><span class="default">$replace</span><span class="keyword">, </span><span class="default">$text</span><span class="keyword">);<br /></span><span class="default">?&gt;</span>
-</span>
-                    </code></div>
-                </div>
-            </div>
             <div class="note" id="102465">  <div class="votes">
                 <div id="Vu102465">
                     <a href="/manual/vote-note.php?id=102465&amp;page=function.str-replace&amp;vote=up" title="Vote up!" class="usernotes-voteu">up</a>
@@ -433,159 +265,7 @@ This strips out horrible MS word characters. <br /><br />Just keep fine tuning i
                     </code></div>
                 </div>
             </div>
-            <div class="note" id="115660">  <div class="votes">
-                <div id="Vu115660">
-                    <a href="/manual/vote-note.php?id=115660&amp;page=function.str-replace&amp;vote=up" title="Vote up!" class="usernotes-voteu">up</a>
-                </div>
-                <div id="Vd115660">
-                    <a href="/manual/vote-note.php?id=115660&amp;page=function.str-replace&amp;vote=down" title="Vote down!" class="usernotes-voted">down</a>
-                </div>
-                <div class="tally" id="V115660" title="55% like this...">
-                    4
-                </div>
-            </div>
-                <a href="#115660" class="name">
-                    <strong class="user"><em>Ing. Mirko Plazotta</em></strong></a><a class="genanchor" href="#115660"> &para;</a><div class="date" title="2014-09-04 09:27"><strong>6 years ago</strong></div>
-                <div class="text" id="Hcom115660">
-                    <div class="phpcode"><code><span class="html">
-<span class="default">&lt;?php<br /></span><span class="comment">// a very beatiful way to do multiple replacements is this one, using just one array<br /></span><span class="default">$replaceThis </span><span class="keyword">= Array(<br /></span><span class="string">'old word' </span><span class="keyword">=&gt; </span><span class="string">'new word'</span><span class="keyword">,<br /></span><span class="string">'was' </span><span class="keyword">=&gt; </span><span class="string">'it'</span><span class="keyword">,<br /></span><span class="string">'past' </span><span class="keyword">=&gt; </span><span class="string">'future'</span><span class="keyword">,<br />);<br /><br /></span><span class="default">$originalText </span><span class="keyword">= </span><span class="string">"every old word was a thing of the past..."</span><span class="keyword">;<br /></span><span class="default">$replacedText </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">(</span><span class="default">array_keys</span><span class="keyword">(</span><span class="default">$replaceThis</span><span class="keyword">), </span><span class="default">$replaceThis</span><span class="keyword">, </span><span class="default">$originalText</span><span class="keyword">);<br />echo </span><span class="default">$replacedText</span><span class="keyword">;<br /></span><span class="default">?&gt;</span>
-</span>
-                    </code></div>
-                </div>
-            </div>
-            <div class="note" id="117026">  <div class="votes">
-                <div id="Vu117026">
-                    <a href="/manual/vote-note.php?id=117026&amp;page=function.str-replace&amp;vote=up" title="Vote up!" class="usernotes-voteu">up</a>
-                </div>
-                <div id="Vd117026">
-                    <a href="/manual/vote-note.php?id=117026&amp;page=function.str-replace&amp;vote=down" title="Vote down!" class="usernotes-voted">down</a>
-                </div>
-                <div class="tally" id="V117026" title="55% like this...">
-                    5
-                </div>
-            </div>
-                <a href="#117026" class="name">
-                    <strong class="user"><em>mrrehbein at gmail dot com</em></strong></a><a class="genanchor" href="#117026"> &para;</a><div class="date" title="2015-04-03 01:25"><strong>6 years ago</strong></div>
-                <div class="text" id="Hcom117026">
-                    <div class="phpcode"><code><span class="html">
-nikolaz dot tang at hotmail dot com's solution of using json_encode/decode is interesting, but a couple of issues to be aware of with it.<br /><br /><span class="default">&lt;?php<br /></span><span class="comment">// From: nikolaz dot tang at hotmail dot com's post<br /></span><span class="keyword">function </span><span class="default">str_replace_json</span><span class="keyword">(</span><span class="default">$search</span><span class="keyword">, </span><span class="default">$replace</span><span class="keyword">, </span><span class="default">$subject</span><span class="keyword">){<br />&nbsp; &nbsp;&nbsp; return </span><span class="default">json_decode</span><span class="keyword">(</span><span class="default">str_replace</span><span class="keyword">(</span><span class="default">$search</span><span class="keyword">, </span><span class="default">$replace</span><span class="keyword">,&nbsp; </span><span class="default">json_encode</span><span class="keyword">(</span><span class="default">$subject</span><span class="keyword">)));<br />}<br /></span><span class="default">?&gt;</span> <br /><br />json_decode will return objects, where arrays are probably expected.&nbsp; This is easily remedied by adding 2nd parameter 'true' to json_decode.<br /><br />$search and $replace could contain strings that match json encoding, which will either change the structure returned by this method, or break the json.<br /><br />ie:<br /><span class="default">&lt;?php<br />var_dump</span><span class="keyword">(</span><span class="default">str_replace_json</span><span class="keyword">(</span><span class="string">'":"'</span><span class="keyword">, </span><span class="string">'","'</span><span class="keyword">, [</span><span class="string">'this' </span><span class="keyword">=&gt; </span><span class="string">'stuff'</span><span class="keyword">]));<br /></span><span class="default">var_dump</span><span class="keyword">(</span><span class="default">str_replace_json</span><span class="keyword">(</span><span class="string">'this":"'</span><span class="keyword">, </span><span class="string">'this" : "thing", "with":"'</span><span class="keyword">, [</span><span class="string">'this' </span><span class="keyword">=&gt; </span><span class="string">'stuff'</span><span class="keyword">]));<br /></span><span class="default">?&gt;</span>
-</span>
-                    </code></div>
-                </div>
-            </div>
-            <div class="note" id="97574">  <div class="votes">
-                <div id="Vu97574">
-                    <a href="/manual/vote-note.php?id=97574&amp;page=function.str-replace&amp;vote=up" title="Vote up!" class="usernotes-voteu">up</a>
-                </div>
-                <div id="Vd97574">
-                    <a href="/manual/vote-note.php?id=97574&amp;page=function.str-replace&amp;vote=down" title="Vote down!" class="usernotes-voted">down</a>
-                </div>
-                <div class="tally" id="V97574" title="55% like this...">
-                    6
-                </div>
-            </div>
-                <a href="#97574" class="name">
-                    <strong class="user"><em>jbarnett at jmbelite dot com</em></strong></a><a class="genanchor" href="#97574"> &para;</a><div class="date" title="2010-04-26 01:23"><strong>11 years ago</strong></div>
-            </div>
-            <div class="note" id="119793">  <div class="votes">
-                <div id="Vu119793">
-                    <a href="/manual/vote-note.php?id=119793&amp;page=function.str-replace&amp;vote=up" title="Vote up!" class="usernotes-voteu">up</a>
-                </div>
-                <div id="Vd119793">
-                    <a href="/manual/vote-note.php?id=119793&amp;page=function.str-replace&amp;vote=down" title="Vote down!" class="usernotes-voted">down</a>
-                </div>
-                <div class="tally" id="V119793" title="54% like this...">
-                    1
-                </div>
-            </div>
-                <a href="#119793" class="name">
-                    <strong class="user"><em>viundan at gmail dot com</em></strong></a><a class="genanchor" href="#119793"> &para;</a><div class="date" title="2016-08-26 04:08"><strong>4 years ago</strong></div>
-                <div class="text" id="Hcom119793">
-                    <div class="phpcode"><code><span class="html">
-Decision to avoid problem "it might replace a previously inserted value when doing multiple replacements. See also the examples in this document." <br /><br />$urls - array of urls i want to replace with tag &lt;a&gt; and urls could be similar<br /><a href="http://abc.com/parameter/" rel="nofollow" target="_blank">http://abc.com/parameter/</a><br /><a href="http://abc.com/" rel="nofollow" target="_blank">http://abc.com/</a><br /><br />// at first sort by length to have longest firstly<br />usort($urls,'sortByLen');<br /><br />$replaces=[];<br /><br />// replace all urls with unique<br />foreach($urls as $url){<br />&nbsp; &nbsp; $replace = '__REPLACE' . uniqid() . '__';&nbsp; &nbsp;&nbsp; <br />&nbsp; &nbsp; $text = str_replace($url,$replace, $text);<br />&nbsp; &nbsp; $replaces[$replace] = '&lt;a href="' . $url . '"&gt;' . $url . '&lt;/a&gt;';<br />}<br /><br />foreach($replaces as $key =&gt; $replace){<br />&nbsp; &nbsp; $text = str_replace($key,$replace, $text);<br />}<br /><br />--------------<br /><br />function sortByLen($a,$b){<br />&nbsp; &nbsp; return strlen($b)-strlen($a);<br />}<br /><br />Hope it will help others like me</span>
-                    </code></div>
-                </div>
-            </div>
-            <div class="note" id="109487">  <div class="votes">
-                <div id="Vu109487">
-                    <a href="/manual/vote-note.php?id=109487&amp;page=function.str-replace&amp;vote=up" title="Vote up!" class="usernotes-voteu">up</a>
-                </div>
-                <div id="Vd109487">
-                    <a href="/manual/vote-note.php?id=109487&amp;page=function.str-replace&amp;vote=down" title="Vote down!" class="usernotes-voted">down</a>
-                </div>
-                <div class="tally" id="V109487" title="54% like this...">
-                    4
-                </div>
-            </div>
-                <a href="#109487" class="name">
-                    <strong class="user"><em>kriscraig at php dot net</em></strong></a><a class="genanchor" href="#109487"> &para;</a><div class="date" title="2012-07-20 11:03"><strong>9 years ago</strong></div>
-                <div class="text" id="Hcom109487">
-                    <div class="phpcode"><code><span class="html">
-<span class="default">&lt;?php
-<br />
-<br /></span><span class="comment">/**
-<br /> * Convert foreign 8859-1 characters into HTML entities.
-<br /> *
-<br /> * @param string $str
-<br /> *&nbsp;&nbsp; The string being parsed.
-<br /> *
-<br /> * @return string
-<br /> *&nbsp;&nbsp; The converted string.
-<br /> */
-<br /></span><span class="keyword">public static function </span><span class="default">convert_chars_to_entities</span><span class="keyword">( </span><span class="default">$str </span><span class="keyword">)
-<br />{
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'À'</span><span class="keyword">, </span><span class="string">'&amp;#192;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'Á'</span><span class="keyword">, </span><span class="string">'&amp;#193;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'Â'</span><span class="keyword">, </span><span class="string">'&amp;#194;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'Ã'</span><span class="keyword">, </span><span class="string">'&amp;#195;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'Ä'</span><span class="keyword">, </span><span class="string">'&amp;#196;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'Å'</span><span class="keyword">, </span><span class="string">'&amp;#197;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'Æ'</span><span class="keyword">, </span><span class="string">'&amp;#198;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'Ç'</span><span class="keyword">, </span><span class="string">'&amp;#199;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'È'</span><span class="keyword">, </span><span class="string">'&amp;#200;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'É'</span><span class="keyword">, </span><span class="string">'&amp;#201;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'Ê'</span><span class="keyword">, </span><span class="string">'&amp;#202;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'Ë'</span><span class="keyword">, </span><span class="string">'&amp;#203;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'Ì'</span><span class="keyword">, </span><span class="string">'&amp;#204;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'Í'</span><span class="keyword">, </span><span class="string">'&amp;#205;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'Î'</span><span class="keyword">, </span><span class="string">'&amp;#206;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'Ï'</span><span class="keyword">, </span><span class="string">'&amp;#207;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'Ð'</span><span class="keyword">, </span><span class="string">'&amp;#208;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'Ñ'</span><span class="keyword">, </span><span class="string">'&amp;#209;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'Ò'</span><span class="keyword">, </span><span class="string">'&amp;#210;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'Ó'</span><span class="keyword">, </span><span class="string">'&amp;#211;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'Ô'</span><span class="keyword">, </span><span class="string">'&amp;#212;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'Õ'</span><span class="keyword">, </span><span class="string">'&amp;#213;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'Ö'</span><span class="keyword">, </span><span class="string">'&amp;#214;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'×'</span><span class="keyword">, </span><span class="string">'&amp;#215;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);&nbsp; </span><span class="comment">// Yeah, I know.&nbsp; But otherwise the gap is confusing.&nbsp; --Kris
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'Ø'</span><span class="keyword">, </span><span class="string">'&amp;#216;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'Ù'</span><span class="keyword">, </span><span class="string">'&amp;#217;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'Ú'</span><span class="keyword">, </span><span class="string">'&amp;#218;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'ï'</span><span class="keyword">, </span><span class="string">'&amp;#239;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'ð'</span><span class="keyword">, </span><span class="string">'&amp;#240;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'ñ'</span><span class="keyword">, </span><span class="string">'&amp;#241;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'ò'</span><span class="keyword">, </span><span class="string">'&amp;#242;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'ó'</span><span class="keyword">, </span><span class="string">'&amp;#243;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'ô'</span><span class="keyword">, </span><span class="string">'&amp;#244;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'õ'</span><span class="keyword">, </span><span class="string">'&amp;#245;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'ö'</span><span class="keyword">, </span><span class="string">'&amp;#246;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'÷'</span><span class="keyword">, </span><span class="string">'&amp;#247;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);&nbsp; </span><span class="comment">// Yeah, I know.&nbsp; But otherwise the gap is confusing.&nbsp; --Kris
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'ø'</span><span class="keyword">, </span><span class="string">'&amp;#248;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'ù'</span><span class="keyword">, </span><span class="string">'&amp;#249;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'ú'</span><span class="keyword">, </span><span class="string">'&amp;#250;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'û'</span><span class="keyword">, </span><span class="string">'&amp;#251;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'ü'</span><span class="keyword">, </span><span class="string">'&amp;#252;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'ý'</span><span class="keyword">, </span><span class="string">'&amp;#253;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'þ'</span><span class="keyword">, </span><span class="string">'&amp;#254;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp; </span><span class="default">$str </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">( </span><span class="string">'ÿ'</span><span class="keyword">, </span><span class="string">'&amp;#255;'</span><span class="keyword">, </span><span class="default">$str </span><span class="keyword">);
-<br />&nbsp; &nbsp;
-<br />&nbsp; &nbsp; return </span><span class="default">$str</span><span class="keyword">;
-<br />}
-<br /></span><span class="default">?&gt;</span>
-</span>
-                    </code></div>
-                </div>
-            </div>
+
             <div class="note" id="115946">  <div class="votes">
                 <div id="Vu115946">
                     <a href="/manual/vote-note.php?id=115946&amp;page=function.str-replace&amp;vote=up" title="Vote up!" class="usernotes-voteu">up</a>
@@ -621,26 +301,6 @@ Decision to avoid problem "it might replace a previously inserted value when doi
                 <div class="text" id="Hcom108196">
                     <div class="phpcode"><code><span class="html">
 Maybe obvious to veteran PHP programmers but less so to novice PHP programmers is the fact that this is invalid:<br /><span class="default">&lt;?php<br />str_replace</span><span class="keyword">(</span><span class="default">$search</span><span class="keyword">, </span><span class="default">$replace</span><span class="keyword">, </span><span class="default">$subject</span><span class="keyword">, </span><span class="default">1</span><span class="keyword">);<br /></span><span class="default">?&gt;<br /></span>At a glance it appears to be a reasonable request, until you realize that the fourth parameter must be a variable in order to be passed as a reference. A replacement:<br /><span class="default">&lt;?php<br />str_replace</span><span class="keyword">(</span><span class="default">$search</span><span class="keyword">, </span><span class="default">$replace</span><span class="keyword">, </span><span class="default">$subject</span><span class="keyword">, </span><span class="default">$temp </span><span class="keyword">= </span><span class="default">1</span><span class="keyword">);<br /></span><span class="comment">// or<br /></span><span class="default">$temp </span><span class="keyword">= </span><span class="default">1</span><span class="keyword">;<br /></span><span class="default">str_replace</span><span class="keyword">(</span><span class="default">$search</span><span class="keyword">, </span><span class="default">$replace</span><span class="keyword">, </span><span class="default">$subject</span><span class="keyword">, </span><span class="default">$temp</span><span class="keyword">);<br /></span><span class="default">?&gt;</span>
-</span>
-                    </code></div>
-                </div>
-            </div>
-            <div class="note" id="98511">  <div class="votes">
-                <div id="Vu98511">
-                    <a href="/manual/vote-note.php?id=98511&amp;page=function.str-replace&amp;vote=up" title="Vote up!" class="usernotes-voteu">up</a>
-                </div>
-                <div id="Vd98511">
-                    <a href="/manual/vote-note.php?id=98511&amp;page=function.str-replace&amp;vote=down" title="Vote down!" class="usernotes-voted">down</a>
-                </div>
-                <div class="tally" id="V98511" title="52% like this...">
-                    1
-                </div>
-            </div>
-                <a href="#98511" class="name">
-                    <strong class="user"><em>apmuthu at usa dot net</em></strong></a><a class="genanchor" href="#98511"> &para;</a><div class="date" title="2010-06-19 12:31"><strong>11 years ago</strong></div>
-                <div class="text" id="Hcom98511">
-                    <div class="phpcode"><code><span class="html">
-If we have a html template that contains placeholders in curly braces that need to be replaced in runtime, the following function will do it using str_replace:<br /><br /><span class="default">&lt;?php<br /><br /></span><span class="keyword">function </span><span class="default">parse_template</span><span class="keyword">(</span><span class="default">$filename</span><span class="keyword">, </span><span class="default">$data</span><span class="keyword">) {<br /></span><span class="comment">// example template variables {a} and {bc}<br />// example $data array<br />// $data = Array("a" =&gt; 'one', "bc" =&gt; 'two');<br />&nbsp; &nbsp; </span><span class="default">$q </span><span class="keyword">= </span><span class="default">file_get_contents</span><span class="keyword">(</span><span class="default">$filename</span><span class="keyword">);<br />&nbsp; &nbsp; foreach (</span><span class="default">$data </span><span class="keyword">as </span><span class="default">$key </span><span class="keyword">=&gt; </span><span class="default">$value</span><span class="keyword">) {<br />&nbsp; &nbsp; &nbsp; &nbsp; </span><span class="default">$q </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">(</span><span class="string">'{'</span><span class="keyword">.</span><span class="default">$key</span><span class="keyword">.</span><span class="string">'}'</span><span class="keyword">, </span><span class="default">$value</span><span class="keyword">, </span><span class="default">$q</span><span class="keyword">);<br />&nbsp; &nbsp; }<br />&nbsp; &nbsp; return </span><span class="default">$q</span><span class="keyword">;<br />}<br /><br /></span><span class="default">?&gt;</span>
 </span>
                     </code></div>
                 </div>
@@ -683,44 +343,7 @@ bracesChecker($str) {<br />&nbsp; &nbsp; while($str) {<br />&nbsp; &nbsp; &nbsp;
                     </code></div>
                 </div>
             </div>
-            <div class="note" id="119293">  <div class="votes">
-                <div id="Vu119293">
-                    <a href="/manual/vote-note.php?id=119293&amp;page=function.str-replace&amp;vote=up" title="Vote up!" class="usernotes-voteu">up</a>
-                </div>
-                <div id="Vd119293">
-                    <a href="/manual/vote-note.php?id=119293&amp;page=function.str-replace&amp;vote=down" title="Vote down!" class="usernotes-voted">down</a>
-                </div>
-                <div class="tally" id="V119293" title="50% like this...">
-                    0
-                </div>
-            </div>
-                <a href="#119293" class="name">
-                    <strong class="user"><em>Mohsin Ali (puregenius02 at gmail dot com)</em></strong></a><a class="genanchor" href="#119293"> &para;</a><div class="date" title="2016-05-06 10:28"><strong>5 years ago</strong></div>
-                <div class="text" id="Hcom119293">
-                    <div class="phpcode"><code><span class="html">
-$myString = “It was the best of mine it was the worst of mine,”;<br />// Displays “It was the best of bananas, it was the worst of bananas,”<br />echo str_replace( “mine”, “bananas”, $myString );<br />If you want to know how many times the search string was replaced, pass in a variable as an optional<br />fourth argument. After the function runs, this variable holds the number of replacements:<br />$myString = “It was the best of mine, it was the worst of mine,”;<br />// Displays “It was the best of bananas, it was the worst of bananas,”<br />echo str_replace( “mine”, “bananas”, $myString, $num ) . “ &lt; br/ &gt; ”;<br />// Displays “The text was replaced 2 times.”<br />echo “The text was replaced $num times. &lt; br/ &gt; ”;</span>
-                    </code></div>
-                </div>
-            </div>
-            <div class="note" id="115625">  <div class="votes">
-                <div id="Vu115625">
-                    <a href="/manual/vote-note.php?id=115625&amp;page=function.str-replace&amp;vote=up" title="Vote up!" class="usernotes-voteu">up</a>
-                </div>
-                <div id="Vd115625">
-                    <a href="/manual/vote-note.php?id=115625&amp;page=function.str-replace&amp;vote=down" title="Vote down!" class="usernotes-voted">down</a>
-                </div>
-                <div class="tally" id="V115625" title="50% like this...">
-                    0
-                </div>
-            </div>
-                <a href="#115625" class="name">
-                    <strong class="user"><em>markem at sim1 dot us</em></strong></a><a class="genanchor" href="#115625"> &para;</a><div class="date" title="2014-08-27 08:04"><strong>6 years ago</strong></div>
-                <div class="text" id="Hcom115625">
-                    <div class="phpcode"><code><span class="html">
-I was working with MySQL and displaying the title to things on the web page.&nbsp; I'd written a script to ensure single and double quotes were removed from the title.&nbsp; I used<br /><br />&nbsp; &nbsp; $title = str_replace( "'", "", $title );<br /><br />and<br /><br />&nbsp; &nbsp;&nbsp; $title = str_replace( '"', "", $title );<br /><br />But still the single and double quotes continued.&nbsp; So I wrote a bit of code to print out each character separated by a dash.&nbsp; Like so:<br /><br />&nbsp; &nbsp;&nbsp; for( $i=0; $i&lt;strlen($title); $i++ ){<br />&nbsp; &nbsp; &nbsp; &nbsp;&nbsp; echo "$i-";<br />&nbsp; &nbsp; &nbsp; &nbsp;&nbsp; }<br /><br />&nbsp; &nbsp;&nbsp; echo "&lt;br&gt;\n";<br /><br />This displayed:<br /><br />&nbsp; &nbsp;&nbsp; m-y-c-o-m-p-a-n-y- b-b-&amp;-#-3-9-;-s<br /><br />Which made me go "Oh!&nbsp; I get it."<br /><br />The MySQL function real_escape_string modifies the single quotes to be &amp;#39; and double quotes as &amp;#34;&nbsp; These still show up as single and double quotes under HTML and most importantly - <br /><br />&nbsp; &nbsp;&nbsp; JAVASCRIPT sees the &amp;#34; and &amp;#39; as actual single or double<br />&nbsp; &nbsp;&nbsp; quotes.&nbsp; So if you are passing arguments to a function you have<br />&nbsp; &nbsp;&nbsp; to get rid of them or else you will get an error on trying to call<br />&nbsp; &nbsp;&nbsp; a given function.&nbsp; Example:<br /><br />&nbsp; &nbsp;&nbsp; &lt;a href="javascript:func1('mycompany bbs&amp;#39;s")'"&gt;<br /><br />&nbsp; &nbsp;&nbsp; becomes<br /><br />&nbsp; &nbsp;&nbsp; &lt;a href="javascript:func1('mycompany bbs's');"&gt;<br /><br />Which then will give you an error because there is a single quote inside of the single quoted string.&nbsp; HOWEVER, the<br /><br />&nbsp; &nbsp;&nbsp; $title = str_replace( "'", "", $title );<br /><br />WILL NOT FIND a single quote.&nbsp; Instead, you have to do this:<br /><br />&nbsp; &nbsp;&nbsp; $title = str_replace( "&amp;#39;", "'", $title );<br />and<br />&nbsp; &nbsp;&nbsp; $title = str_relace( "&amp;#34;", '"', $title );<br /><br />(Or you could just get rid of them.)<br /><br />So remember!&nbsp; If you are trying to remove single and double quotes and are using MySQL and MySQL's real_escape_string() function that you might be having single and double quotes hanging around which are defined as &amp;#39; and &amp;#34; but which show up as single and double quotes as well as causing problems in your Javascripts.</span>
-                    </code></div>
-                </div>
-            </div>
+
             <div class="note" id="104890">  <div class="votes">
                 <div id="Vu104890">
                     <a href="/manual/vote-note.php?id=104890&amp;page=function.str-replace&amp;vote=up" title="Vote up!" class="usernotes-voteu">up</a>
@@ -780,25 +403,6 @@ Replace chars in multi-byte string.<br />In example, replacing 'f'=&gt;'b', 'o'=
                     </code></div>
                 </div>
             </div>
-            <div class="note" id="122751">  <div class="votes">
-                <div id="Vu122751">
-                    <a href="/manual/vote-note.php?id=122751&amp;page=function.str-replace&amp;vote=up" title="Vote up!" class="usernotes-voteu">up</a>
-                </div>
-                <div id="Vd122751">
-                    <a href="/manual/vote-note.php?id=122751&amp;page=function.str-replace&amp;vote=down" title="Vote down!" class="usernotes-voted">down</a>
-                </div>
-                <div class="tally" id="V122751" title="45% like this...">
-                    -1
-                </div>
-            </div>
-                <a href="#122751" class="name">
-                    <strong class="user"><em>ASchmidt at Anamera dot net</em></strong></a><a class="genanchor" href="#122751"> &para;</a><div class="date" title="2018-05-20 04:22"><strong>3 years ago</strong></div>
-                <div class="text" id="Hcom122751">
-                    <div class="phpcode"><code><span class="html">
-Escaping strings with control characters, quotes and backslashes for subsequent use in MySQL commands.<br /><br />MySQL has documented a number of backslash escape sequences that need to be used to pass certain values in SQL commands: <a href="https://dev.mysql.com/doc/refman/5.7/en/string-literals.html" rel="nofollow" target="_blank">https://dev.mysql.com/doc/refman/5.7/en/string-literals.html</a><br /><br />It's crucial to escape existing backslashes first to prevent double-escaping, before escaping the various control sequences:<br /><br /><span class="default">&lt;?php<br />$result </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">(<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; array( </span><span class="string">'\\'</span><span class="keyword">,&nbsp; &nbsp; </span><span class="string">"\0"</span><span class="keyword">,&nbsp;&nbsp; </span><span class="string">"'"</span><span class="keyword">,&nbsp; &nbsp; </span><span class="string">"\x8" </span><span class="comment">/* BS */</span><span class="keyword">, </span><span class="string">"\n"</span><span class="keyword">,&nbsp;&nbsp; </span><span class="string">"\r"</span><span class="keyword">,&nbsp;&nbsp; </span><span class="string">"\t"</span><span class="keyword">,&nbsp;&nbsp; </span><span class="string">"\x1A" </span><span class="comment">/* Ctrl+Z */ </span><span class="keyword">),<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; array( </span><span class="string">'\\\\'</span><span class="keyword">,&nbsp; </span><span class="string">'\\0'</span><span class="keyword">,&nbsp; </span><span class="string">'\\\''</span><span class="keyword">, </span><span class="string">'\\b'</span><span class="keyword">,&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; </span><span class="string">'\\n'</span><span class="keyword">,&nbsp; </span><span class="string">'\\r'</span><span class="keyword">,&nbsp; </span><span class="string">'\\t'</span><span class="keyword">,&nbsp; </span><span class="string">'\\Z' </span><span class="keyword">),<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; </span><span class="default">$value </span><span class="keyword">);<br /></span><span class="default">?&gt;<br /></span><br />This code is NOT intended to protect against SQL insertions, it's intended to PRESERVE string content correctly, if it contains control characters.</span>
-                    </code></div>
-                </div>
-            </div>
             <div class="note" id="108430">  <div class="votes">
                 <div id="Vu108430">
                     <a href="/manual/vote-note.php?id=108430&amp;page=function.str-replace&amp;vote=up" title="Vote up!" class="usernotes-voteu">up</a>
@@ -837,25 +441,6 @@ I found a pretty low tech solution to avoid the "gotcha" without worrying about 
                     </code></div>
                 </div>
             </div>
-            <div class="note" id="121739">  <div class="votes">
-                <div id="Vu121739">
-                    <a href="/manual/vote-note.php?id=121739&amp;page=function.str-replace&amp;vote=up" title="Vote up!" class="usernotes-voteu">up</a>
-                </div>
-                <div id="Vd121739">
-                    <a href="/manual/vote-note.php?id=121739&amp;page=function.str-replace&amp;vote=down" title="Vote down!" class="usernotes-voted">down</a>
-                </div>
-                <div class="tally" id="V121739" title="42% like this...">
-                    -1
-                </div>
-            </div>
-                <a href="#121739" class="name">
-                    <strong class="user"><em>Oyedele Hammed Horlah - itz dot harmid at gmail dot com</em></strong></a><a class="genanchor" href="#121739"> &para;</a><div class="date" title="2017-10-08 08:05"><strong>3 years ago</strong></div>
-                <div class="text" id="Hcom121739">
-                    <div class="phpcode"><code><span class="html">
-this is a simple function to replace all newlines to &lt;br&gt; tags.<br /><br />\r\n - windows line break<br />\n - linux line break<br />\r - mac line break<br /><br /><span class="default">&lt;?php<br /></span><span class="keyword">function </span><span class="default">nl_to_br</span><span class="keyword">(</span><span class="default">$str</span><span class="keyword">) {<br />return </span><span class="default">str_replace</span><span class="keyword">(array(</span><span class="string">"\r\n"</span><span class="keyword">,</span><span class="string">"\n"</span><span class="keyword">,</span><span class="string">"\r"</span><span class="keyword">), </span><span class="string">"&lt;br/&gt;"</span><span class="keyword">, </span><span class="default">$str</span><span class="keyword">);<br />}<br />echo </span><span class="default">nl_to_br</span><span class="keyword">(</span><span class="string">'Hello world\n I am Oyedele Hammed Horlah'</span><span class="keyword">); </span><span class="comment">// =&gt; Hello World &lt;br&gt; I am Oyedele Hammed Horlah<br /></span><span class="default">?&gt;<br /></span><br />Enjoy</span>
-                    </code></div>
-                </div>
-            </div>
             <div class="note" id="122463">  <div class="votes">
                 <div id="Vu122463">
                     <a href="/manual/vote-note.php?id=122463&amp;page=function.str-replace&amp;vote=up" title="Vote up!" class="usernotes-voteu">up</a>
@@ -872,45 +457,6 @@ this is a simple function to replace all newlines to &lt;br&gt; tags.<br /><br /
                 <div class="text" id="Hcom122463">
                     <div class="phpcode"><code><span class="html">
 NEVER USE this function to protect against SQL Injection.<br /><br />It may sound ridiculous but I've seen a couple of developers doing so.<br /><br />It's interesting that these developers use str_replace (let's ignore the fact that they don't even use the str_ireplace which is case-insensitive) to remove common SQL commands such as "SELECT" or "DROP" from user-entered inputs.<br /><br />A funny thing to note is that:<br /><br /><span class="default">&lt;?php<br />$input </span><span class="keyword">= </span><span class="string">"SELSELECTECT"</span><span class="keyword">;<br />echo </span><span class="default">str_replace</span><span class="keyword">(</span><span class="string">"SELECT"</span><span class="keyword">, </span><span class="default">null</span><span class="keyword">, </span><span class="default">$input</span><span class="keyword">); </span><span class="comment">// = SELECT<br /></span><span class="default">?&gt;<br /></span><br />Yeah you could loop it, but str_replace was never meant to be used this way. There are proper ways to protect against SQL Injections, such as using prepared statements (placeholders).</span>
-                    </code></div>
-                </div>
-            </div>
-            <div class="note" id="121612">  <div class="votes">
-                <div id="Vu121612">
-                    <a href="/manual/vote-note.php?id=121612&amp;page=function.str-replace&amp;vote=up" title="Vote up!" class="usernotes-voteu">up</a>
-                </div>
-                <div id="Vd121612">
-                    <a href="/manual/vote-note.php?id=121612&amp;page=function.str-replace&amp;vote=down" title="Vote down!" class="usernotes-voted">down</a>
-                </div>
-                <div class="tally" id="V121612" title="41% like this...">
-                    -2
-                </div>
-            </div>
-                <a href="#121612" class="name">
-                    <strong class="user"><em>vuabid at hotmail dot com</em></strong></a><a class="genanchor" href="#121612"> &para;</a><div class="date" title="2017-09-06 08:44"><strong>3 years ago</strong></div>
-                <div class="text" id="Hcom121612">
-                    <div class="phpcode"><code><span class="html">
-Consider this while using str_replace function when $search and $replace are arrays.<br /><br />$search = array( 'login_reactivate', 'login_reactivate_date' );<br />$replace = array( 'login reactivate status', 'login reactivate date' );<br />$subject = "fname, email, login_reactivate, login_reactivate_date";<br /><br />$returnValue = str_replace( $search, $replace, $subject );<br /><br />$returnValue will be:<br />fname, email, login reactivate status, login reactivate status_date<br /><br />You can see we are expecting "login_reactivate_date" to be replaced with "login reactivate date" but it will replace to "login reactivate status_date"</span>
-                    </code></div>
-                </div>
-            </div>
-            <div class="note" id="125165">  <div class="votes">
-                <div id="Vu125165">
-                    <a href="/manual/vote-note.php?id=125165&amp;page=function.str-replace&amp;vote=up" title="Vote up!" class="usernotes-voteu">up</a>
-                </div>
-                <div id="Vd125165">
-                    <a href="/manual/vote-note.php?id=125165&amp;page=function.str-replace&amp;vote=down" title="Vote down!" class="usernotes-voted">down</a>
-                </div>
-                <div class="tally" id="V125165" title="40% like this...">
-                    -1
-                </div>
-            </div>
-                <a href="#125165" class="name">
-                    <strong class="user"><em>hyperzlib at outlook dot com</em></strong></a><a class="genanchor" href="#125165"> &para;</a><div class="date" title="2020-07-04 12:33"><strong>1 year ago</strong></div>
-                <div class="text" id="Hcom125165">
-                    <div class="phpcode"><code><span class="html">
-Use str_replace to remove all dashes but one from the string '-aaa----b-c-----d--e---f' (resulting is: '-aaa-b-c-d-e-f')<br /><br /><span class="default">&lt;?php<br />$challenge </span><span class="keyword">= </span><span class="string">'-aaa----b-c-----d--e---f'</span><span class="keyword">;<br />do </span><span class="default">$challenge </span><span class="keyword">= </span><span class="default">str_replace</span><span class="keyword">(</span><span class="string">'--'</span><span class="keyword">, </span><span class="string">'-'</span><span class="keyword">, </span><span class="default">$challenge</span><span class="keyword">, </span><span class="default">$count</span><span class="keyword">); while(</span><span class="default">$count</span><span class="keyword">);<br />echo </span><span class="default">$challenge</span><span class="keyword">;<br /></span><span class="default">?&gt;</span>
-</span>
                     </code></div>
                 </div>
             </div>
