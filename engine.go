@@ -180,6 +180,15 @@ func (e *engine) insert(ent *entry) error {
 	return nil
 }
 
+func (e *engine) exists(key string) bool {
+	found := e.pks.Get(&entry{key: newPK(key)})
+	if found == nil {
+		return false
+	}
+
+	return true
+}
+
 func (e *engine) findByKey(key string) (*entry, error) {
 	found := e.pks.Get(&entry{key: newPK(key)})
 	if found == nil {

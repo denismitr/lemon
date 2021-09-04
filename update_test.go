@@ -47,7 +47,7 @@ func Test_TruncateExistingDatabase(t *testing.T) {
 			_ = os.Remove(path)
 		}()
 
-		require.NoError(t, db.Insert(context.Background(), "product:2", lemon.M{
+		require.NoError(t, db.Insert("product:2", lemon.M{
 			"100": "foobar2",
 			"baz": 2,
 			"foo": "bar",
@@ -117,14 +117,14 @@ func TestTx_FlushAll(t *testing.T) {
 		t.Logf("\t\tRecoord count did not change")
 
 		t.Logf("Checking that update was rolled back")
-		p100, err := db.Get(context.Background(), "person:100")
+		p100, err := db.Get("person:100")
 		require.NoError(t, err)
 		assert.Equal(t, "person:100", p100.Key())
 		assert.Equal(t, 100, p100.JSON().IntOrDefault("id", 0))
 		t.Logf("\t\tUpdate was rolled back")
 
 		t.Logf("Checking that insert was rolled back")
-		fbz, err := db.Get(context.Background(), "foo:bar:baz")
+		fbz, err := db.Get("foo:bar:baz")
 		require.Error(t, err)
 		require.Nil(t, fbz)
 		t.Logf("\t\tInsert was rolled back")
@@ -448,9 +448,9 @@ func (wts *writeTestSuite) Test_RollbackReplaceOfInsertedDocs() {
 
 	// Confirm that those keys are accessible after previous transaction has rolled back
 	// and results should be as after the first insert
-	readResult1, err := db.Get(context.Background(), "item:567")
+	readResult1, err := db.Get("item:567")
 	wts.Require().NoError(err)
-	readResult2, err := db.Get(context.Background(), "item:2233")
+	readResult2, err := db.Get("item:2233")
 	wts.Require().NoError(err)
 
 	readJson1 := readResult1.RawString()

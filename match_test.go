@@ -245,7 +245,7 @@ func (mts *matchTestSuite) TestMatchSingleUrlKey() {
 		}
 	}()
 
-	doc, err := db.Get(context.Background(), "https://www.php.net/manual/en/function.str-replace")
+	doc, err := db.Get("https://www.php.net/manual/en/function.str-replace")
 	mts.Require().NoError(err)
 
 	mts.Assert().Equal("https://www.php.net/manual/en/function.str-replace", doc.Key())

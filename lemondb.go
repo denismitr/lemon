@@ -72,6 +72,15 @@ func (db *DB) Count() int {
 	return db.e.count()
 }
 
+func (db *DB) Has(key string) bool {
+	var result bool
+	_ = db.View(context.Background(), func(tx *Tx) error {
+		result = tx.Has(key)
+		return nil
+	})
+	return result
+}
+
 func (db *DB) Vacuum() error {
 	db.e.mu.Lock()
 	defer db.e.mu.Unlock()
@@ -83,9 +92,9 @@ func (db *DB) Vacuum() error {
 	return nil
 }
 
-func (db *DB) Get(ctx context.Context, key string) (*Document, error) {
+func (db *DB) Get(key string) (*Document, error) {
 	var doc *Document
-	err := db.View(ctx, func(tx *Tx) error {
+	err := db.View(context.Background(), func(tx *Tx) error {
 		d, err := tx.Get(key)
 		if err != nil {
 			return err
@@ -97,14 +106,14 @@ func (db *DB) Get(ctx context.Context, key string) (*Document, error) {
 	return doc, err
 }
 
-func (db *DB) Insert(ctx context.Context, key string, data interface{}, metaAppliers ...MetaApplier) error {
-	return db.Update(ctx, func(tx *Tx) error {
+func (db *DB) Insert(key string, data interface{}, metaAppliers ...MetaApplier) error {
+	return db.Update(context.Background(), func(tx *Tx) error {
 		return tx.Insert(key, data, metaAppliers...)
 	})
 }
 
-func (db *DB) InsertOrReplace(ctx context.Context, key string, data interface{}, metaAppliers ...MetaApplier) error {
-	return db.Update(ctx, func(tx *Tx) error {
+func (db *DB) InsertOrReplace(key string, data interface{}, metaAppliers ...MetaApplier) error {
+	return db.Update(context.Background(), func(tx *Tx) error {
 		return tx.InsertOrReplace(key, data, metaAppliers...)
 	})
 }

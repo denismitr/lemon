@@ -50,6 +50,9 @@ func TestLemonDB_Read(t *testing.T) {
 		}
 	}()
 
+	assert.True(t, db.Has("product:88"))
+	assert.True(t, db.Has("product:100"))
+
 	t.Run("get existing keys", func(t *testing.T) {
 		var result1 *lemon.Document
 		var result2 *lemon.Document
@@ -505,8 +508,7 @@ func (sts *structsTestSuite) TestCheckTagsAsync() {
 
 			id := sts.totalPersons - index
 			key := personKey(id)
-			ctx := context.Background()
-			doc, err := db.Get(ctx, key)
+			doc, err := db.Get(key)
 			sts.Require().NoError(err)
 
 			sts.Assert().Equal(id % sts.modAddress == 0, doc.Tags().Bool("has-address"))

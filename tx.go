@@ -107,6 +107,10 @@ func (x *Tx) FlushAll() error {
 	})
 }
 
+func (x *Tx) Has(key string) bool {
+	return x.e.exists(key)
+}
+
 func (x *Tx) Get(key string) (*Document, error) { // fixme: decide on ref or value
 	ent, err := x.e.findByKey(key)
 	if err != nil {
