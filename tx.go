@@ -120,9 +120,9 @@ func (x *Tx) Get(key string) (*Document, error) { // fixme: decide on ref or val
 	return newDocumentFromEntry(ent), nil
 }
 
-func (x *Tx) MGet(key ...string) (map[string]*Document, error) {
-	docs := make(map[string]*Document)
-	if err := x.e.iterateByKeys(key, func(ent *entry) bool {
+func (x *Tx) MGet(keys ...string) (map[string]*Document, error) {
+	docs := make(map[string]*Document, len(keys))
+	if err := x.e.iterateByKeys(keys, func(ent *entry) bool {
 		docs[ent.key.String()] = newDocumentFromEntry(ent)
 		return true
 	}); err != nil {
@@ -257,7 +257,7 @@ func (x *Tx) RemoveTags(key string, names ...string) error {
 	return nil
 }
 
-func (x *Tx) Scan(ctx context.Context, opts *queryOptions, cb func(d *Document) bool) error {
+func (x *Tx) Scan(ctx context.Context, opts *QueryOptions, cb func(d *Document) bool) error {
 	ir := func(ent *entry) bool {
 		d := newDocumentFromEntry(ent)
 		return cb(d)
@@ -270,7 +270,22 @@ func (x *Tx) Scan(ctx context.Context, opts *queryOptions, cb func(d *Document) 
 	return nil
 }
 
-func (x *Tx) Find(ctx context.Context, q *queryOptions, dest *[]Document) error {
+func (x *Tx) CountByQuery(ctx context.Context, opts *QueryOptions) (int, error) {
+	var counter int
+
+	ir := func(_ *entry) bool {
+		counter++
+		return true
+	}
+
+	if err := x.applyScanner(ctx, opts, ir); err != nil {
+		return counter, err
+	}
+
+	return counter, nil
+}
+
+func (x *Tx) Find(ctx context.Context, q *QueryOptions, dest *[]Document) error {
 	ir := func(ent *entry) bool {
 		*dest = append(*dest, *newDocumentFromEntry(ent))
 		return true
@@ -283,7 +298,7 @@ func (x *Tx) Find(ctx context.Context, q *queryOptions, dest *[]Document) error 
 	return nil
 }
 
-func (x *Tx) applyScanner(ctx context.Context, q *queryOptions, it entryIterator) error {
+func (x *Tx) applyScanner(ctx context.Context, q *QueryOptions, it entryIterator) error {
 	if q == nil {
 		q = Q()
 	}

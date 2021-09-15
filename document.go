@@ -123,6 +123,22 @@ func (js *JSONValue) Int(path string) (int, error) {
 	return int(get.Int()), nil
 }
 
+func (js *JSONValue) Bool(path string) (bool, error) {
+	get := gjson.GetBytes(js.b, path)
+	if !get.Exists() {
+		return false, ErrJSONPathInvalid
+	}
+	return get.Bool(), nil
+}
+
+func (js *JSONValue) BoolOrDefault(path string, def bool) bool {
+	get := gjson.GetBytes(js.b, path)
+	if !get.Exists() {
+		return def
+	}
+	return get.Bool()
+}
+
 func (js *JSONValue) IntOrDefault(path string, def int) int {
 	v, err := js.Int(path)
 	if err != nil {

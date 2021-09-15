@@ -36,10 +36,10 @@ func TestTx_Structs(t *testing.T) {
 }
 
 func TestLemonDB_Read(t *testing.T) {
-	readDb1 := "./__fixtures__/read_db1.ldb"
-	seedSomeProducts(t, readDb1, true)
+	fixture := "./__fixtures__/read_db1.ldb"
+	seedSomeProducts(t, fixture, true)
 
-	db, closer, err := lemon.Open(readDb1)
+	db, closer, err := lemon.Open(fixture)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,6 +52,20 @@ func TestLemonDB_Read(t *testing.T) {
 
 	assert.True(t, db.Has("product:88"))
 	assert.True(t, db.Has("product:100"))
+
+	t.Run("count existing products", func(t *testing.T) {
+		assert.Equal(t, 4, db.Count())
+
+		q1 := lemon.Q().KeyRange("product:88", "product:100")
+		count1, err := db.CountByQuery(context.Background(), q1)
+		require.NoError(t, err)
+		assert.Equal(t, 2, count1)
+
+		q2 := lemon.Q().KeyOrder(lemon.DescOrder).KeyRange("product:88", "product:100")
+		count2, err := db.CountByQuery(context.Background(), q2)
+		require.NoError(t, err)
+		assert.Equal(t, 2, count2)
+	})
 
 	t.Run("get existing keys", func(t *testing.T) {
 		var result1 *lemon.Document
@@ -93,23 +107,16 @@ func TestLemonDB_Read(t *testing.T) {
 	t.Run("get many existing keys ignoring non existent", func(t *testing.T) {
 		var result1 *lemon.Document
 		var result2 *lemon.Document
-		if err := db.View(context.Background(), func(tx *lemon.Tx) error {
-			docs, err := tx.MGet("product:88", "product:100", "non:existing:key")
-			if err != nil {
-				return err
-			}
 
-			require.Len(t, docs, 2)
+		docs, err := db.MGet("product:88", "product:100", "non:existing:key")
+		require.NoError(t, err)
 
-			result1 = docs["product:88"]
-			require.NotNil(t, result1)
-			result2 = docs["product:100"]
-			require.NotNil(t, result2)
+		require.Len(t, docs, 2)
 
-			return nil
-		}); err != nil {
-			t.Fatal(err)
-		}
+		result1 = docs["product:88"]
+		require.NotNil(t, result1)
+		result2 = docs["product:100"]
+		require.NotNil(t, result2)
 
 		rs1 := result1.RawString()
 		assert.Equal(t, `{"100":"foobar-88","baz":88,"foo":"bar/88"}`, rs1)
@@ -245,12 +252,12 @@ func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Descend() {
 		fts.Require().NoError(err)
 	}
 
-	expectedDocs := 9
+	expectedDocs := 10
 	fts.Assert().Len(docs, expectedDocs)
 
-	for i := 0; i < 9; i++ {
-		fts.Require().Equal(fmt.Sprintf("user:10%d", expectedDocs-i), docs[i].Key())
-		fts.Require().Equal(fmt.Sprintf("username_10%d", expectedDocs-i), docs[i].JSON().StringOrDefault("username", ""))
+	for i := 0; i <= 9; i++ {
+		fts.Require().Equal(fmt.Sprintf("user:10%d", 9-i), docs[i].Key())
+		fts.Require().Equal(fmt.Sprintf("username_10%d", 9-i), docs[i].JSON().StringOrDefault("username", ""))
 	}
 }
 
@@ -279,9 +286,9 @@ func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Ascend() {
 		fts.Require().NoError(err, "should be no error")
 	}
 
-	fts.Assert().Len(docs, 250)
+	fts.Assert().Len(docs, 251)
 
-	for i := 500; i < 750; i++ {
+	for i := 500; i <= 750; i++ {
 		idx := i - 500
 		fts.Assert().Equal(fmt.Sprintf("product_%d", i), docs[idx].JSON().StringOrDefault("Name", ""))
 		fts.Assert().Equal(i, docs[idx].JSON().IntOrDefault("id", 0))
@@ -456,7 +463,7 @@ func (sts *structsTestSuite) SetupSuite() {
 	sts.fixture = "./__fixtures__/structs_db1.ldb"
 	sts.hasTags = true
 	sts.modAddress = 4
-	sts.totalPersons = 10_000
+	sts.totalPersons = 1_000
 
 	db, closer, err := lemon.Open(sts.fixture, &lemon.Config{
 		DisableAutoVacuum: true,

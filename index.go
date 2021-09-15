@@ -388,7 +388,9 @@ func (ti *tagIndex) filterEntities(tf *tagFilter, fes *filterEntriesSink) {
 }
 
 func lt(tr *btree.BTree, a, b interface{}) bool { return tr.Less(a, b) }
+func eq(a, b interface{}) bool { return a.(*entry).key.Equal(&b.(*entry).key) }
 func gt(tr *btree.BTree, a, b interface{}) bool { return tr.Less(b, a) }
+func gte(tr *btree.BTree, a, b interface{}) bool { return tr.Less(b, a) || a.(*entry).key.Equal(&b.(*entry).key) }
 
 func ascendRange(
 	btr *btree.BTree,
@@ -397,7 +399,7 @@ func ascendRange(
 	iter func(item interface{}) bool,
 ) {
 	btr.Ascend(greaterOrEqual, func(item interface{}) bool {
-		return lt(btr, item, lessThan) && iter(item)
+		return (lt(btr, item, lessThan) || eq(item, lessThan)) && iter(item)
 	})
 }
 
@@ -408,7 +410,7 @@ func descendRange(
 	iter func(item interface{}) bool,
 ) {
 	btr.Descend(lessThan, func(item interface{}) bool {
-		return gt(btr, item, greaterOrEqual) && iter(item)
+		return gte(btr, item, greaterOrEqual) && iter(item)
 	})
 }
 
@@ -418,7 +420,7 @@ func descendGreaterThan(
 	iter func(item interface{}) bool,
 ) {
 	btr.Descend(nil, func(item interface{}) bool {
-		return gt(btr, item, greaterOrEqual) && iter(item)
+		return gte(btr, item, greaterOrEqual) && iter(item)
 	})
 }
 

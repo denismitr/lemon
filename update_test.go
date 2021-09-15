@@ -218,6 +218,7 @@ func (wts *writeTestSuite) Test_WriteAndRead_InTwoTransactions() {
 			"foo": "bar",
 			"baz": 8989764,
 			"100": "username",
+			"abc": true,
 		}); err != nil {
 			return err
 		}
@@ -279,8 +280,10 @@ func (wts *writeTestSuite) Test_WriteAndRead_InTwoTransactions() {
 	}
 
 	readJson1 := readResult1.RawString()
-	wts.Assert().Equal(`{"100":"username","baz":8989764,"foo":"bar"}`, readJson1)
+	wts.Assert().Equal(`{"100":"username","abc":true,"baz":8989764,"foo":"bar"}`, readJson1)
 	wts.Assert().Equal(result1.RawString(), readJson1)
+	wts.Assert().Equal(true, result1.JSON().BoolOrDefault("abc", false))
+	wts.Assert().Equal("username", result1.JSON().StringOrDefault("100", ""))
 
 	readJson2 := readResult2.RawString()
 	wts.Assert().Equal(`{"999":null,"baz12":123.879,"foo":"bar5674"}`, readJson2)

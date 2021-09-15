@@ -188,7 +188,7 @@ const (
 	DescOrder Order = "DESC"
 )
 
-type queryOptions struct {
+type QueryOptions struct {
 	order    Order
 	keyRange *KeyRange
 	prefix   string
@@ -196,33 +196,33 @@ type queryOptions struct {
 	allTags  *QueryTags
 }
 
-func (fo *queryOptions) Match(patten string) *queryOptions {
-	fo.patterns = strings.Split(patten, ":")
-	return fo
+func (qo *QueryOptions) Match(patten string) *QueryOptions {
+	qo.patterns = strings.Split(patten, ":")
+	return qo
 }
 
-func (fo *queryOptions) KeyOrder(o Order) *queryOptions {
-	fo.order = o
-	return fo
+func (qo *QueryOptions) KeyOrder(o Order) *QueryOptions {
+	qo.order = o
+	return qo
 }
 
-func (fo *queryOptions) KeyRange(from, to string) *queryOptions {
-	fo.keyRange = &KeyRange{From: from, To: to}
-	return fo
+func (qo *QueryOptions) KeyRange(from, to string) *QueryOptions {
+	qo.keyRange = &KeyRange{From: from, To: to}
+	return qo
 }
 
-func (fo *queryOptions) Prefix(p string) *queryOptions {
-	fo.prefix = p
-	return fo
+func (qo *QueryOptions) Prefix(p string) *QueryOptions {
+	qo.prefix = p
+	return qo
 }
 
-func (fo *queryOptions) HasAllTags(qt *QueryTags) *queryOptions {
-	fo.allTags = qt
-	return fo
+func (qo *QueryOptions) HasAllTags(qt *QueryTags) *QueryOptions {
+	qo.allTags = qt
+	return qo
 }
 
-func (fo *queryOptions) matchTags(e *entry) bool {
-	if fo.allTags == nil {
+func (qo *QueryOptions) matchTags(e *entry) bool {
+	if qo.allTags == nil {
 		return true
 	}
 
@@ -232,7 +232,7 @@ func (fo *queryOptions) matchTags(e *entry) bool {
 
 	matchesExpected := 0
 	actualMatches := 0
-	for k, v := range fo.allTags.booleans {
+	for k, v := range qo.allTags.booleans {
 		matchesExpected++
 		switch k.comp {
 		case equal:
@@ -242,7 +242,7 @@ func (fo *queryOptions) matchTags(e *entry) bool {
 		}
 	}
 
-	for k, v := range fo.allTags.strings {
+	for k, v := range qo.allTags.strings {
 		matchesExpected++
 		switch k.comp {
 		case equal:
@@ -252,7 +252,7 @@ func (fo *queryOptions) matchTags(e *entry) bool {
 		}
 	}
 
-	for k, v := range fo.allTags.integers {
+	for k, v := range qo.allTags.integers {
 		matchesExpected++
 		switch k.comp {
 		case equal:
@@ -266,7 +266,7 @@ func (fo *queryOptions) matchTags(e *entry) bool {
 		}
 	}
 
-	for k, v := range fo.allTags.floats {
+	for k, v := range qo.allTags.floats {
 		matchesExpected++
 		switch k.comp {
 		case equal:
@@ -283,8 +283,8 @@ func (fo *queryOptions) matchTags(e *entry) bool {
 	return matchesExpected == actualMatches
 }
 
-func Q() *queryOptions {
-	return &queryOptions{order: AscOrder}
+func Q() *QueryOptions {
+	return &QueryOptions{order: AscOrder}
 }
 
 type filterEntriesSink struct {

@@ -69,7 +69,37 @@ func (db *DB) Begin(ctx context.Context, readOnly bool) (*Tx, error) {
 }
 
 func (db *DB) Count() int {
-	return db.e.count()
+	tx, err := db.Begin(context.Background(), true)
+	if err != nil {
+		return 0
+	}
+
+	count := tx.Count()
+
+	if err := tx.Commit(); err != nil {
+		return 0
+	}
+
+	return count
+}
+
+func (db *DB) CountByQuery(ctx context.Context, opts *QueryOptions) (int, error) {
+	tx, err := db.Begin(ctx, true)
+	if err != nil {
+		return 0, err
+	}
+
+	count, err := tx.CountByQuery(ctx, opts)
+	if err != nil {
+		_ = tx.Rollback()
+		return 0, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+
+	return count, nil
 }
 
 func (db *DB) Has(key string) bool {
@@ -104,6 +134,26 @@ func (db *DB) Get(key string) (*Document, error) {
 	})
 
 	return doc, err
+}
+
+func (db *DB) MGet(keys ...string) (map[string]*Document, error) {
+	var docs map[string]*Document
+	if err := db.View(context.Background(), func(tx *Tx) error {
+		result, err := tx.MGet(keys...)
+		if err != nil {
+			return err
+		}
+		docs = result
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	if docs == nil {
+		panic("how can result be nil?")
+	}
+
+	return docs, nil
 }
 
 func (db *DB) Insert(key string, data interface{}, metaAppliers ...MetaApplier) error {

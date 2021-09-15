@@ -20,7 +20,7 @@ const castPanic = "how could primary keys item not be of type *entry"
 
 type (
 	entryIterator func(ent *entry) bool
-	scanner func(ctx context.Context, q *queryOptions, ir entryIterator) error
+	scanner func(ctx context.Context, q *QueryOptions, ir entryIterator) error
 )
 
 type engine struct {
@@ -288,7 +288,7 @@ func (e *engine) count() int {
 
 func (e *engine) scanBetweenDescend(
 	ctx context.Context,
-	q *queryOptions,
+	q *QueryOptions,
 	ir entryIterator,
 ) (err error) {
 	// Descend required a reverse order of `from` and `to`
@@ -304,7 +304,7 @@ func (e *engine) scanBetweenDescend(
 
 func (e *engine) scanBetweenAscend(
 	ctx context.Context,
-	q *queryOptions,
+	q *QueryOptions,
 	ir entryIterator,
 ) (err error) {
 	ascendRange(
@@ -319,7 +319,7 @@ func (e *engine) scanBetweenAscend(
 
 func (e *engine) scanPrefixAscend(
 	ctx context.Context,
-	q *queryOptions,
+	q *QueryOptions,
 	ir entryIterator,
 ) (err error) {
 	e.pks.Ascend(&entry{key: newPK(q.prefix)}, filteringBTreeIterator(ctx, q, ir))
@@ -329,7 +329,7 @@ func (e *engine) scanPrefixAscend(
 
 func (e *engine) scanPrefixDescend(
 	ctx context.Context,
-	q *queryOptions,
+	q *QueryOptions,
 	ir entryIterator,
 ) (err error) {
 	descendGreaterThan(e.pks, &entry{key: newPK(q.prefix)}, filteringBTreeIterator(ctx, q, ir))
@@ -338,7 +338,7 @@ func (e *engine) scanPrefixDescend(
 
 func (e *engine) scanAscend(
 	ctx context.Context,
-	q *queryOptions,
+	q *QueryOptions,
 	ir entryIterator,
 ) (err error) {
 	e.pks.Ascend(nil, filteringBTreeIterator(ctx, q, ir))
@@ -347,7 +347,7 @@ func (e *engine) scanAscend(
 
 func (e *engine) scanDescend(
 	ctx context.Context,
-	q *queryOptions,
+	q *QueryOptions,
 	ir entryIterator,
 ) (err error) {
 	e.pks.Descend(nil, filteringBTreeIterator(ctx, q, ir))
@@ -356,7 +356,7 @@ func (e *engine) scanDescend(
 
 // filterEntriesByTags - uses secondary indexes (tags) to filter entries
 // and puts them to sink, which it creates to store all the matched entries
-func (e *engine) filterEntriesByTags(q *queryOptions) (*filterEntriesSink, error) {
+func (e *engine) filterEntriesByTags(q *QueryOptions) (*filterEntriesSink, error) {
 	if q == nil || q.allTags == nil {
 		return nil, nil
 	}
@@ -562,7 +562,7 @@ func (e *engine) flushAll(ff func(ent *entry)) error {
 
 func filteringBTreeIterator(
 	ctx context.Context,
-	q *queryOptions,
+	q *QueryOptions,
 	ir entryIterator,
 ) func(item interface{}) bool {
 	return func(item interface{}) bool {
