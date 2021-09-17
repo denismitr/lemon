@@ -64,26 +64,30 @@ func (ta *TagApplier) Map(m M) *TagApplier {
 
 type Tagger func(t *tags)
 
-func BoolTag(name string, value bool) Tagger {
+func boolTagger(name string, value bool) Tagger {
 	return func(t *tags) {
+		t.names[name] = boolDataType
 		t.booleans[name] = value
 	}
 }
 
-func StrTag(name string, value string) Tagger {
+func strTagger(name string, value string) Tagger {
 	return func(t *tags) {
+		t.names[name] = strDataType
 		t.strings[name] = value
 	}
 }
 
-func IntTag(name string, value int) Tagger {
+func intTagger(name string, value int) Tagger {
 	return func(t *tags) {
+		t.names[name] = intDataType
 		t.integers[name] = value
 	}
 }
 
-func FloatTag(name string, value float64) Tagger {
+func floatTagger(name string, value float64) Tagger {
 	return func(t *tags) {
+		t.names[name] = floatDataType
 		t.floats[name] = value
 	}
 }

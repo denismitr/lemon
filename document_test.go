@@ -107,3 +107,28 @@ func Test_SimpleJsonDocument(t *testing.T) {
 		assert.Equal(t, true, def)
 	})
 }
+
+func BenchmarkDocument_JSON(b *testing.B) {
+	d := &Document{
+		key: "user:123",
+		value: []byte(`{"str":"foo bar baz","emptyStr":null,"null":null,"float":345.54,"zeroFloat":0,"int":452,"zeroInt":0,"trueBool":true,"falseBool":false}`),
+	}
+
+	js := d.JSON()
+
+	for i := 0; i < b.N; i++ {
+		js.Float("float")
+		js.Float("zeroFloat")
+		js.Float("nonExistent")
+		js.FloatOrDefault("float", 44)
+		js.FloatOrDefault("zeroFloat", 77)
+		js.FloatOrDefault("nonExistent", 44.9)
+
+		js.Int("int")
+		js.Int("zeroInt")
+		js.Int("nonExistent")
+		js.IntOrDefault("int", 44)
+		js.IntOrDefault("zeroInt", 77)
+		js.IntOrDefault("nonExistent", 44)
+	}
+}

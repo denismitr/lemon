@@ -5,11 +5,79 @@ import (
 	"github.com/denismitr/lemon"
 	"github.com/stretchr/testify/suite"
 	"os"
+	"sync"
 	"testing"
 )
 
 func TestTx_Match(t *testing.T) {
+	t.Parallel()
 	suite.Run(t, &matchTestSuite{})
+}
+
+func TestTx_Untag(t *testing.T) {
+	t.Parallel()
+	suite.Run(t, &untagTestSuite{})
+}
+
+type untagTestSuite struct {
+	suite.Suite
+	fixture string
+}
+
+func (uts *untagTestSuite) SetupSuite() {
+	uts.fixture = "./__fixtures__/untag_db1.ldb"
+	db, closer, err := lemon.Open(uts.fixture, &lemon.Config{
+		AutoVacuumOnlyOnClose: true,
+	})
+
+	uts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			uts.T().Errorf("ERROR: %v", err)
+		}
+	}()
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go seedGranularAnimals(uts.T(), db, &wg)
+	go seedGranularTvProducts(uts.T(), db, &wg)
+	wg.Wait()
+}
+
+func (uts *untagTestSuite) TearDownSuite() {
+	if err := os.Remove(uts.fixture); err != nil {
+		uts.Require().NoError(err)
+	}
+}
+
+func (uts *untagTestSuite) TestUntagSingleProduct() {
+	db, closer, err := lemon.Open(uts.fixture)
+	uts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			uts.T().Errorf("DB CLOSE ERROR: %v", err)
+		}
+	}()
+
+	productBeforeUntag, err := db.Get("product:34")
+	uts.Require().NoError(err)
+	uts.Require().NotNil(productBeforeUntag)
+
+	tagsBeforeUntag := productBeforeUntag.Tags()
+	uts.Assert().Equal(23.45, tagsBeforeUntag["price"])
+	uts.Assert().Equal("tv", tagsBeforeUntag["type"])
+
+	uts.Require().NoError(db.Untag(context.Background(), "product:34", "price", "type"))
+
+	productAfterUntag, err := db.Get("product:34")
+	uts.Require().NoError(err)
+	uts.Require().NotNil(productAfterUntag)
+
+	tagsAfterUntag := productAfterUntag.Tags()
+	uts.Assert().Nil(tagsAfterUntag["price"])
+	uts.Assert().Nil(tagsAfterUntag["type"])
 }
 
 type matchTestSuite struct {
@@ -19,7 +87,10 @@ type matchTestSuite struct {
 
 func (mts *matchTestSuite) SetupSuite() {
 	mts.fixture = "./__fixtures__/match_db1.ldb"
-	db, closer, err := lemon.Open(mts.fixture)
+	db, closer, err := lemon.Open(mts.fixture, &lemon.Config{
+		AutoVacuumOnlyOnClose: true,
+	})
+
 	mts.Require().NoError(err)
 
 	defer func() {
@@ -28,10 +99,13 @@ func (mts *matchTestSuite) SetupSuite() {
 		}
 	}()
 
-	seedGranularUsers(mts.T(), db)
-	seedGranularAnimals(mts.T(), db)
-	seedGranularTvProducts(mts.T(), db)
-	seedWebPages(mts.T(), db)
+	var wg sync.WaitGroup
+	wg.Add(4)
+	seedGranularUsers(mts.T(), db, &wg)
+	seedGranularAnimals(mts.T(), db, &wg)
+	seedGranularTvProducts(mts.T(), db, &wg)
+	seedWebPages(mts.T(), db, &wg)
+	wg.Wait()
 }
 
 func (mts *matchTestSuite) TearDownSuite() {
@@ -41,7 +115,6 @@ func (mts *matchTestSuite) TearDownSuite() {
 }
 
 func (mts *matchTestSuite) TestMatchSingleUserByPatternAndTag() {
-	mts.fixture = "./__fixtures__/match_db1.ldb"
 	db, closer, err := lemon.Open(mts.fixture)
 	mts.Require().NoError(err)
 
@@ -70,7 +143,6 @@ func (mts *matchTestSuite) TestMatchSingleUserByPatternAndTag() {
 }
 
 func (mts *matchTestSuite) TestMatchMultipleUsersByPatternAndGtIntTag() {
-	mts.fixture = "./__fixtures__/match_db1.ldb"
 	db, closer, err := lemon.Open(mts.fixture)
 	mts.Require().NoError(err)
 
@@ -106,7 +178,6 @@ func (mts *matchTestSuite) TestMatchMultipleUsersByPatternAndGtIntTag() {
 }
 
 func (mts *matchTestSuite) TestMatchMultipleUsersByPatternAndTagWithDescSorting() {
-	mts.fixture = "./__fixtures__/match_db1.ldb"
 	db, closer, err := lemon.Open(mts.fixture)
 	mts.Require().NoError(err)
 
@@ -158,7 +229,6 @@ func (mts *matchTestSuite) TestMatchMultipleUsersByPatternAndTagWithDescSorting(
 }
 
 func (mts *matchTestSuite) TestMatchMultipleUsersByPatternAndTagWithAscSorting() {
-	mts.fixture = "./__fixtures__/match_db1.ldb"
 	db, closer, err := lemon.Open(mts.fixture)
 	mts.Require().NoError(err)
 
@@ -292,7 +362,9 @@ func (mts *matchTestSuite) TestMatchMultipleTvsByGtFloatTag() {
 	mts.Assert().Equal(`{"model":"XDF897","vendor":"Samsung","version":1.2}`, docs[4].RawString())
 }
 
-func seedGranularUsers(t *testing.T, db *lemon.DB) {
+func seedGranularUsers(t *testing.T, db *lemon.DB, wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	err := db.Update(context.Background(), func(tx *lemon.Tx) error {
 		if err := tx.Insert("user:12", lemon.M{
 				"id": 12,
@@ -388,7 +460,9 @@ func seedGranularUsers(t *testing.T, db *lemon.DB) {
 	}
 }
 
-func seedGranularAnimals(t *testing.T, db *lemon.DB) {
+func seedGranularAnimals(t *testing.T, db *lemon.DB, wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	err := db.Update(context.Background(), func(tx *lemon.Tx) error {
 		if err := tx.Insert("user:12:animals", `[123, 987, 6789]`, lemon.WithTags().Str("content", "list")); err != nil {
 			return err
@@ -425,7 +499,9 @@ func seedGranularAnimals(t *testing.T, db *lemon.DB) {
 	}
 }
 
-func seedGranularTvProducts(t *testing.T, db *lemon.DB) {
+func seedGranularTvProducts(t *testing.T, db *lemon.DB, wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	err := db.Update(context.Background(), func(tx *lemon.Tx) error {
 		if err := tx.Insert(
 			"product:4",
@@ -513,7 +589,9 @@ func seedGranularTvProducts(t *testing.T, db *lemon.DB) {
 	}
 }
 
-func seedWebPages(t *testing.T, db *lemon.DB) {
+func seedWebPages(t *testing.T, db *lemon.DB, wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	err := db.Update(context.Background(), func(tx *lemon.Tx) error {
 		if err := tx.Insert(
 			"https://www.php.net/manual/en/function.str-replace",

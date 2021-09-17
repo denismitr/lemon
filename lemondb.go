@@ -217,3 +217,9 @@ func (db *DB) FlushAll(ctx context.Context) error {
 		return tx.FlushAll()
 	})
 }
+
+func (db *DB) Untag(ctx context.Context, key string, tagNames ...string) error {
+	return db.Update(ctx, func(tx *Tx) error {
+		return tx.Untag(key, tagNames...)
+	})
+}

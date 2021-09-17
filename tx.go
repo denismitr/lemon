@@ -232,7 +232,7 @@ func (x *Tx) Tag(key string, m M) error {
 	return nil
 }
 
-func (x *Tx) RemoveTags(key string, names ...string) error {
+func (x *Tx) Untag(key string, tagNames ...string) error {
 	if x.readOnly {
 		return ErrTxIsReadOnly
 	}
@@ -244,15 +244,16 @@ func (x *Tx) RemoveTags(key string, names ...string) error {
 
 	// save a copy of the updated entry in case of rollback
 	x.replaced = append(x.replaced, ent.clone())
+	x.updates = append(x.updates, ent)
 
-	for _, name := range names {
+	for _, name := range tagNames {
 		if err := x.e.removeTag(name, ent); err != nil {
 			return err
 		}
 	}
 
 	// on commit commands should be persisted in order
-	x.persistCommands = append(x.persistCommands, &untagCmd{newPK(key), names})
+	x.persistCommands = append(x.persistCommands, &untagCmd{newPK(key), tagNames})
 
 	return nil
 }

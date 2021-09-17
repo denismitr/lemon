@@ -102,9 +102,9 @@ func (p *parser) resolveTagger(r *bufio.Reader) (Tagger, error) {
 
 	switch prefix {
 	case boolTagFn:
-		return BoolTag(args[0], args[1] == "true"), nil
+		return boolTagger(args[0], args[1] == "true"), nil
 	case strTagFn:
-		return StrTag(args[0], args[1]), nil
+		return strTagger(args[0], args[1]), nil
 	case intTagFn:
 		v, err := strconv.Atoi(args[1])
 		if err != nil {
@@ -113,7 +113,7 @@ func (p *parser) resolveTagger(r *bufio.Reader) (Tagger, error) {
 				args[1], p.currentLine, line,
 			)
 		}
-		return IntTag(args[0], v), nil
+		return intTagger(args[0], v), nil
 	case floatTagFn:
 		v, err := strconv.ParseFloat(args[1], 64)
 		if err != nil {
@@ -121,7 +121,7 @@ func (p *parser) resolveTagger(r *bufio.Reader) (Tagger, error) {
 				"tag function ftg contains invalid float %s in line #%d - %s",
 				args[1], p.currentLine, line)
 		}
-		return FloatTag(args[0], v), nil
+		return floatTagger(args[0], v), nil
 	default:
 		panic(fmt.Sprintf("at line #%d tag function %s not supported", p.currentLine, prefix))
 	}
