@@ -9,7 +9,7 @@ import (
 func Test_SimpleJsonDocument(t *testing.T) {
 	d := &Document{
 		key: "user:123",
-		value: []byte(`{"str":"bar","emptyStr":null,"null":null,"float":345.54,"zeroFloat":0,"int":452,"zeroInt":0,"trueBool":true,"falseBool":false}`),
+		value: []byte(`{"str":"foo bar baz","emptyStr":null,"null":null,"float":345.54,"zeroFloat":0,"int":452,"zeroInt":0,"trueBool":true,"falseBool":false}`),
 	}
 
 	js := d.JSON()
@@ -59,5 +59,51 @@ func Test_SimpleJsonDocument(t *testing.T) {
 
 		def := js.IntOrDefault("nonExistent", 44)
 		assert.Equal(t, 44, def)
+	})
+
+	t.Run("str", func(t *testing.T) {
+		s, err := js.String("str")
+		require.NoError(t, err)
+		assert.Equal(t, "foo bar baz", s)
+
+		sz, err := js.String("emptyStr")
+		require.NoError(t, err)
+		assert.Equal(t, "", sz)
+
+		emp, err := js.String("nonExistent")
+		require.Error(t, err)
+		assert.Equal(t, "", emp)
+
+		sOrD := js.StringOrDefault("str", "abc")
+		assert.Equal(t, "foo bar baz", sOrD)
+
+		szOrD := js.StringOrDefault("emptyStr", "abc")
+		assert.Equal(t, "", szOrD)
+
+		def := js.StringOrDefault("nonExistent", "abc")
+		assert.Equal(t, "abc", def)
+	})
+
+	t.Run("bool", func(t *testing.T) {
+		b, err := js.Bool("trueBool")
+		require.NoError(t, err)
+		assert.Equal(t, true, b)
+
+		fb, err := js.Bool("falseBool")
+		require.NoError(t, err)
+		assert.Equal(t, false, fb)
+
+		emp, err := js.Bool("nonExistent")
+		require.Error(t, err)
+		assert.Equal(t, false, emp)
+
+		trueOrFalse := js.BoolOrDefault("trueBool", false)
+		assert.Equal(t, true, trueOrFalse)
+
+		fbOrD := js.BoolOrDefault("falseBool", true)
+		assert.Equal(t, false, fbOrD)
+
+		def := js.BoolOrDefault("nonExistent", true)
+		assert.Equal(t, true, def)
 	})
 }
