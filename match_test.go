@@ -80,6 +80,61 @@ func (uts *untagTestSuite) TestUntagSingleProduct() {
 	uts.Assert().Nil(tagsAfterUntag["type"])
 }
 
+func (uts *untagTestSuite) TestUntagMultipleProduct() {
+	db, closer, err := lemon.Open(uts.fixture)
+	uts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			uts.T().Errorf("DB CLOSE ERROR: %v", err)
+		}
+	}()
+
+	productBeforeUntag, err := db.Get("product:34")
+	uts.Require().NoError(err)
+	uts.Require().NotNil(productBeforeUntag)
+
+	tagsBeforeUntag := productBeforeUntag.Tags()
+	uts.Assert().Equal(23.45, tagsBeforeUntag["price"])
+	uts.Assert().Equal("tv", tagsBeforeUntag["type"])
+
+	var p11TagsBeforeCommit lemon.M
+	var p10TagsBeforeCommit lemon.M
+	if err := db.Update(context.Background(), func(tx *lemon.Tx) error {
+		if err := tx.Untag("product:11", "inStock", "price", "type"); err != nil {
+			return err
+		}
+
+		if err := tx.Untag("product:10", "price"); err != nil {
+			return err
+		}
+
+		p11, _ := tx.Get("product:11")
+		p11TagsBeforeCommit = p11.Tags()
+
+		p10, _ := tx.Get("product:10")
+		p10TagsBeforeCommit = p10.Tags()
+
+		return nil
+	}); err != nil {
+		uts.Require().NoError(err)
+	}
+
+	// expect tags before commit and after commit be equal
+	uts.Assert().Equal(lemon.M{}, p11TagsBeforeCommit)
+	uts.Assert().Equal(lemon.M{"inStock":2, "type":"tv"}, p10TagsBeforeCommit)
+
+	p10, err := db.Get("product:10")
+	uts.Require().NoError(err)
+	uts.Require().NotNil(p10)
+	uts.Assert().Equal(lemon.M{"inStock":2, "type":"tv"}, p10.Tags())
+
+	p11, err := db.Get("product:11")
+	uts.Require().NoError(err)
+	uts.Require().NotNil(p11)
+	uts.Assert().Equal(lemon.M{}, p11.Tags())
+}
+
 type matchTestSuite struct {
 	suite.Suite
 	fixture string
