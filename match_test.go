@@ -41,8 +41,8 @@ func (uts *untagTestSuite) SetupSuite() {
 
 	var wg sync.WaitGroup
 	wg.Add(2)
-	go seedGranularAnimals(uts.T(), db, &wg)
-	go seedGranularTvProducts(uts.T(), db, &wg)
+	go seedAnimals(uts.T(), db, &wg)
+	go seedTvProducts(uts.T(), db, &wg)
 	wg.Wait()
 }
 
@@ -231,8 +231,8 @@ func (mts *matchTestSuite) SetupSuite() {
 	var wg sync.WaitGroup
 	wg.Add(4)
 	seedGranularUsers(mts.T(), db, &wg)
-	seedGranularAnimals(mts.T(), db, &wg)
-	seedGranularTvProducts(mts.T(), db, &wg)
+	seedAnimals(mts.T(), db, &wg)
+	seedTvProducts(mts.T(), db, &wg)
 	seedWebPages(mts.T(), db, &wg)
 	wg.Wait()
 }
@@ -589,7 +589,7 @@ func seedGranularUsers(t *testing.T, db *lemon.DB, wg *sync.WaitGroup) {
 	}
 }
 
-func seedGranularAnimals(t *testing.T, db *lemon.DB, wg *sync.WaitGroup) {
+func seedAnimals(t *testing.T, db *lemon.DB, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	err := db.Update(context.Background(), func(tx *lemon.Tx) error {
@@ -635,7 +635,7 @@ func seedGranularAnimals(t *testing.T, db *lemon.DB, wg *sync.WaitGroup) {
 	}
 }
 
-func seedGranularTvProducts(t *testing.T, db *lemon.DB, wg *sync.WaitGroup) {
+func seedTvProducts(t *testing.T, db *lemon.DB, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	err := db.Update(context.Background(), func(tx *lemon.Tx) error {
