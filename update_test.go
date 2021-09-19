@@ -70,12 +70,12 @@ func TestTx_FlushAll(t *testing.T) {
 
 		assert.Equal(t, 10000, db.Count())
 
-		if err := db.FlushAll(context.Background()); err != nil {
+		if err := db.FlushAll(); err != nil {
 			t.Fatal(err)
 		}
 
 		assert.Equal(t, 0, db.Count())
-		assert.NoError(t, db.Vacuum())
+		assert.NoError(t, db.Vacuum(context.Background()))
 
 		assertFileContentsEquals(t, fixture, []byte(""))
 	})

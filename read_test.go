@@ -57,12 +57,12 @@ func TestLemonDB_Read(t *testing.T) {
 		assert.Equal(t, 4, db.Count())
 
 		q1 := lemon.Q().KeyRange("product:88", "product:100")
-		count1, err := db.CountByQuery(context.Background(), q1)
+		count1, err := db.CountByQuery(q1)
 		require.NoError(t, err)
 		assert.Equal(t, 2, count1)
 
 		q2 := lemon.Q().KeyOrder(lemon.DescOrder).KeyRange("product:88", "product:100")
-		count2, err := db.CountByQuery(context.Background(), q2)
+		count2, err := db.CountByQuery(q2)
 		require.NoError(t, err)
 		assert.Equal(t, 2, count2)
 	})

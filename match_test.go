@@ -70,7 +70,7 @@ func (uts *untagTestSuite) TestUntagSingleProduct() {
 	uts.Assert().Equal(23.45, tagsBeforeUntag["price"])
 	uts.Assert().Equal("tv", tagsBeforeUntag["type"])
 
-	uts.Require().NoError(db.Untag(context.Background(), "product:34", "price", "type"))
+	uts.Require().NoError(db.Untag("product:34", "price", "type"))
 
 	productAfterUntag, err := db.Get("product:34")
 	uts.Require().NoError(err)
@@ -91,7 +91,7 @@ func (uts *untagTestSuite) Test_Attempt_Untag_NonExistingKey() {
 		}
 	}()
 
-	utErr := db.Untag(context.Background(), "non:existing:key", "foo", "bar", "baz")
+	utErr := db.Untag("non:existing:key", "foo", "bar", "baz")
 	uts.Require().Error(utErr)
 	uts.Require().True(errors.Is(utErr, lemon.ErrKeyDoesNotExist))
 }
@@ -166,7 +166,7 @@ func (uts *untagTestSuite) Test_Untag_TagAndUntagInOneTx() {
 	u2aBeforeUntag, err := db.Get("user:2:animals")
 	uts.Require().NoError(err)
 	uts.Require().NotNil(u2aBeforeUntag)
-	uts.Require().Equal(lemon.M{"content": "json", "count": 2}, u2aBeforeUntag.Tags())
+	uts.Require().Equal(lemon.M{"content": "json", "count": 2, "dailyExpenses":45.6}, u2aBeforeUntag.Tags())
 
 	var u2aTagsBeforeCommit lemon.M
 	if err := db.Update(context.Background(), func(tx *lemon.Tx) error {
@@ -194,6 +194,7 @@ func (uts *untagTestSuite) Test_Untag_TagAndUntagInOneTx() {
 	uts.Assert().Equal(lemon.M{
 		"foo": "bar",
 		"continents": 3,
+		"dailyExpenses":45.6,
 		"extinct": false,
 	}, u2aTagsBeforeCommit)
 
@@ -203,6 +204,7 @@ func (uts *untagTestSuite) Test_Untag_TagAndUntagInOneTx() {
 	uts.Assert().Equal(lemon.M{
 		"foo": "bar",
 		"continents": 3,
+		"dailyExpenses":45.6,
 		"extinct": false,
 	}, u2aAfterCommit.Tags())
 }
@@ -614,7 +616,10 @@ func seedGranularAnimals(t *testing.T, db *lemon.DB, wg *sync.WaitGroup) {
 		}
 
 		if err := tx.Insert("animal:3", `{"species": "penguin"}`,
-			lemon.WithTags().Str("content", "json").Int("age", 22)); err != nil {
+			lemon.WithTags().
+			Str("content", "json").
+			Int("age", 22),
+		); err != nil {
 			return err
 		}
 
@@ -622,6 +627,10 @@ func seedGranularAnimals(t *testing.T, db *lemon.DB, wg *sync.WaitGroup) {
 	})
 
 	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := db.Tag("user:2:animals", lemon.M{"dailyExpenses": 45.6}); err != nil {
 		t.Fatal(err)
 	}
 }

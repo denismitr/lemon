@@ -83,13 +83,13 @@ func (db *DB) Count() int {
 	return count
 }
 
-func (db *DB) CountByQuery(ctx context.Context, opts *QueryOptions) (int, error) {
-	tx, err := db.Begin(ctx, true)
+func (db *DB) CountByQuery(opts *QueryOptions) (int, error) {
+	tx, err := db.Begin(context.Background(), true)
 	if err != nil {
 		return 0, err
 	}
 
-	count, err := tx.CountByQuery(ctx, opts)
+	count, err := tx.CountByQuery(opts)
 	if err != nil {
 		_ = tx.Rollback()
 		return 0, err
@@ -111,7 +111,7 @@ func (db *DB) Has(key string) bool {
 	return result
 }
 
-func (db *DB) Vacuum() error {
+func (db *DB) Vacuum(ctx context.Context) error {
 	db.e.mu.Lock()
 	defer db.e.mu.Unlock()
 
@@ -212,14 +212,20 @@ func (db *DB) Update(ctx context.Context, cb UserCallback) error {
 	return nil
 }
 
-func (db *DB) FlushAll(ctx context.Context) error {
-	return db.Update(ctx, func(tx *Tx) error {
+func (db *DB) FlushAll() error {
+	return db.Update(context.Background(), func(tx *Tx) error {
 		return tx.FlushAll()
 	})
 }
 
-func (db *DB) Untag(ctx context.Context, key string, tagNames ...string) error {
-	return db.Update(ctx, func(tx *Tx) error {
+func (db *DB) Untag(key string, tagNames ...string) error {
+	return db.Update(context.Background(), func(tx *Tx) error {
 		return tx.Untag(key, tagNames...)
+	})
+}
+
+func (db *DB) Tag(key string, m M) error {
+	return db.Update(context.Background(), func(tx *Tx) error {
+		return tx.Tag(key, m)
 	})
 }
