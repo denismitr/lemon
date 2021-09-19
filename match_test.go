@@ -153,6 +153,60 @@ func (uts *untagTestSuite) Test_Untag_MultipleProduct() {
 	uts.Assert().Equal(lemon.M{}, p11AfterUntag.Tags())
 }
 
+func (uts *untagTestSuite) Test_Untag_TagAndUntagInOneTx() {
+	db, closer, err := lemon.Open(uts.fixture)
+	uts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			uts.T().Errorf("DB CLOSE ERROR: %v", err)
+		}
+	}()
+
+	u2aBeforeUntag, err := db.Get("user:2:animals")
+	uts.Require().NoError(err)
+	uts.Require().NotNil(u2aBeforeUntag)
+	uts.Require().Equal(lemon.M{"content": "json", "count": 2}, u2aBeforeUntag.Tags())
+
+	var u2aTagsBeforeCommit lemon.M
+	if err := db.Update(context.Background(), func(tx *lemon.Tx) error {
+		if err := tx.Untag("user:2:animals", "count", "content"); err != nil {
+			return err
+		}
+
+		if err := tx.Tag("user:2:animals", lemon.M{
+			"foo": "bar",
+			"continents": 3,
+			"extinct": false,
+		}); err != nil {
+			return err
+		}
+
+		u2a, _ := tx.Get("user:2:animals")
+		u2aTagsBeforeCommit = u2a.Tags()
+
+		return nil
+	}); err != nil {
+		uts.Require().NoError(err)
+	}
+
+	// expect tags before commit and after commit be equal
+	uts.Assert().Equal(lemon.M{
+		"foo": "bar",
+		"continents": 3,
+		"extinct": false,
+	}, u2aTagsBeforeCommit)
+
+	u2aAfterCommit, err := db.Get("user:2:animals")
+	uts.Require().NoError(err)
+	uts.Require().NotNil(u2aAfterCommit)
+	uts.Assert().Equal(lemon.M{
+		"foo": "bar",
+		"continents": 3,
+		"extinct": false,
+	}, u2aAfterCommit.Tags())
+}
+
 type matchTestSuite struct {
 	suite.Suite
 	fixture string
