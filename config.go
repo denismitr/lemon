@@ -36,7 +36,7 @@ func (cfg *Config) applyTo(e engine) error {
 		cfg.AutoVacuumMinSize = defaultAutoVacuumMinSize
 	}
 
-	e.setCfg(cfg)
+	e.SetCfg(cfg)
 
 	return nil
 }

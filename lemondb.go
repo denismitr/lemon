@@ -46,7 +46,7 @@ func Open(path string, engineOptions ...EngineOptions) (*DB, Closer, error) {
 }
 
 func (db *DB) close() error {
-	if err := db.e.close(context.Background()); err != nil {
+	if err := db.e.Close(context.Background()); err != nil {
 		return err
 	}
 
@@ -110,7 +110,7 @@ func (db *DB) Has(key string) bool {
 }
 
 func (db *DB) Vacuum(ctx context.Context) error {
-	return db.e.vacuum(ctx)
+	return db.e.Vacuum(ctx)
 }
 
 func (db *DB) Get(key string) (*Document, error) {

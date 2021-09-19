@@ -49,7 +49,7 @@ func (x *Tx) Commit() error {
 		x.added = nil
 	}()
 
-	if err := x.e.persist(x.persistCommands); err != nil {
+	if err := x.e.Persist(x.persistCommands); err != nil {
 		return err
 	}
 
@@ -71,13 +71,13 @@ func (x *Tx) Rollback() error {
 	}()
 
 	for _, ent := range x.replaced {
-		if err := x.e.put(ent, true); err != nil {
+		if err := x.e.Put(ent, true); err != nil {
 			return err
 		}
 	}
 
 	for _, ent := range x.added {
-		if err := x.e.remove(ent.key); err != nil {
+		if err := x.e.Remove(ent.key); err != nil {
 			return err
 		}
 	}
@@ -92,7 +92,7 @@ func (x *Tx) FlushAll() error {
 
 	x.persistCommands = append(x.persistCommands, &flushAllCmd{})
 
-	return x.e.flushAll(func(ent *entry) {
+	return x.e.FlushAll(func(ent *entry) {
 		if ent.committed {
 			x.replaced = append(x.replaced, ent)
 		}
@@ -100,11 +100,11 @@ func (x *Tx) FlushAll() error {
 }
 
 func (x *Tx) Has(key string) bool {
-	return x.e.exists(key)
+	return x.e.Exists(key)
 }
 
 func (x *Tx) Get(key string) (*Document, error) { // fixme: decide on ref or value
-	ent, err := x.e.findByKey(key)
+	ent, err := x.e.FindByKey(key)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +114,7 @@ func (x *Tx) Get(key string) (*Document, error) { // fixme: decide on ref or val
 
 func (x *Tx) MGet(keys ...string) (map[string]*Document, error) {
 	docs := make(map[string]*Document, len(keys))
-	if err := x.e.iterateByKeys(keys, func(ent *entry) bool {
+	if err := x.e.IterateByKeys(keys, func(ent *entry) bool {
 		docs[ent.key.String()] = newDocumentFromEntry(ent)
 		return true
 	}); err != nil {
@@ -139,7 +139,7 @@ func (x *Tx) Insert(key string, data interface{}, metaAppliers ...MetaApplier) e
 		applier.applyTo(ent)
 	}
 
-	if err := x.e.insert(ent); err != nil {
+	if err := x.e.Insert(ent); err != nil {
 		return err
 	}
 
@@ -164,13 +164,13 @@ func (x *Tx) InsertOrReplace(key string, data interface{}, metaAppliers ...MetaA
 		applier.applyTo(ent)
 	}
 
-	existing, err := x.e.findByKey(key)
+	existing, err := x.e.FindByKey(key)
 	if err != nil && !errors.Is(err, ErrKeyDoesNotExist) {
 		return err
 	}
 
 	if existing != nil {
-		if updateErr := x.e.put(ent, true); updateErr != nil {
+		if updateErr := x.e.Put(ent, true); updateErr != nil {
 			return updateErr
 		}
 
@@ -180,7 +180,7 @@ func (x *Tx) InsertOrReplace(key string, data interface{}, metaAppliers ...MetaA
 			x.replaced = append(x.replaced, existing)
 		}
 	} else {
-		if insertErr := x.e.put(ent, false); insertErr != nil {
+		if insertErr := x.e.Put(ent, false); insertErr != nil {
 			return insertErr
 		}
 
@@ -199,7 +199,7 @@ func (x *Tx) Tag(key string, m M) error {
 		return ErrTxIsReadOnly
 	}
 
-	ent, err := x.e.findByKey(key)
+	ent, err := x.e.FindByKey(key)
 	if err != nil {
 		return err
 	}
@@ -208,7 +208,7 @@ func (x *Tx) Tag(key string, m M) error {
 	x.replaced = append(x.replaced, ent.clone())
 
 	for name, v := range m {
-		if err := x.e.upsertTag(name, v, ent); err != nil {
+		if err := x.e.UpsertTag(name, v, ent); err != nil {
 			return err
 		}
 	}
@@ -229,7 +229,7 @@ func (x *Tx) Untag(key string, tagNames ...string) error {
 		return ErrTxIsReadOnly
 	}
 
-	ent, err := x.e.findByKey(key)
+	ent, err := x.e.FindByKey(key)
 	if err != nil {
 		return err
 	}
@@ -239,7 +239,7 @@ func (x *Tx) Untag(key string, tagNames ...string) error {
 	x.updates = append(x.updates, ent)
 
 	for _, name := range tagNames {
-		if err := x.e.removeTag(name, ent); err != nil {
+		if err := x.e.RemoveTag(name, ent); err != nil {
 			return err
 		}
 	}
@@ -300,7 +300,7 @@ func (x *Tx) applyScanner(ctx context.Context, q *QueryOptions, it entryIterator
 		q.order = AscOrder
 	}
 
-	fe, err := x.e.filterEntriesByTags(q)
+	fe, err := x.e.FilterEntriesByTags(q)
 	if err != nil {
 		panic(err)
 	}
@@ -315,7 +315,7 @@ func (x *Tx) applyScanner(ctx context.Context, q *QueryOptions, it entryIterator
 
 	// scanner is a function that is chosen dynamically depending
 	// on the query options
-	sc, err := x.e.chooseBestScanner(q)
+	sc, err := x.e.ChooseBestScanner(q)
 	if err != nil {
 		return err
 	}
@@ -333,12 +333,12 @@ func (x *Tx) Remove(keys ...string) error {
 	}
 
 	for _, k := range keys {
-		found, err := x.e.findByKey(k)
+		found, err := x.e.FindByKey(k)
 		if err != nil {
 			return err
 		}
 
-		if err := x.e.remove(found.key); err != nil {
+		if err := x.e.Remove(found.key); err != nil {
 			return err
 		}
 
@@ -350,5 +350,5 @@ func (x *Tx) Remove(keys ...string) error {
 }
 
 func (x *Tx) Count() int {
-	return x.e.count()
+	return x.e.Count()
 }
