@@ -1,7 +1,7 @@
 package lemon
 
 import (
-	"bytes"
+
 	"context"
 	"github.com/pkg/errors"
 )
@@ -11,10 +11,9 @@ var ErrTxIsReadOnly = errors.New("transaction is read only")
 var ErrTxAlreadyClosed = errors.New("transaction already closed")
 
 type Tx struct {
-	readOnly        bool
-	buf             *bytes.Buffer
-	e               *engine
-	ctx             context.Context
+	readOnly bool
+	e        engine
+	ctx      context.Context
 	persistCommands []serializer
 	updates         []*entry
 	replaced        []*entry
@@ -23,17 +22,17 @@ type Tx struct {
 
 func (x *Tx) lock() {
 	if x.readOnly {
-		x.e.mu.RLock()
+		x.e.RLock()
 	} else {
-		x.e.mu.Lock()
+		x.e.Lock()
 	}
 }
 
 func (x *Tx) unlock() {
 	if x.readOnly {
-		x.e.mu.RUnlock()
+		x.e.RUnlock()
 	} else {
-		x.e.mu.Unlock()
+		x.e.Unlock()
 	}
 }
 
@@ -48,17 +47,10 @@ func (x *Tx) Commit() error {
 		x.persistCommands = nil
 		x.replaced = nil
 		x.added = nil
-		x.buf = nil
 	}()
 
-	if x.e.persistence != nil && x.persistCommands != nil {
-		for _, cmd := range x.persistCommands {
-			cmd.serialize(x.buf)
-		}
-
-		if err := x.e.persistence.write(x.buf); err != nil {
-			return err
-		}
+	if err := x.e.persist(x.persistCommands); err != nil {
+		return err
 	}
 
 	for i := range x.updates {
@@ -321,26 +313,11 @@ func (x *Tx) applyScanner(ctx context.Context, q *QueryOptions, it entryIterator
 		return nil
 	}
 
-	var sc scanner
-
-	if q.keyRange != nil {
-		if q.order == AscOrder {
-			sc = x.e.scanBetweenAscend
-		} else {
-			sc = x.e.scanBetweenDescend
-		}
-	} else if q.prefix != "" {
-		if q.order == AscOrder {
-			sc = x.e.scanPrefixAscend
-		} else {
-			sc = x.e.scanPrefixDescend
-		}
-	} else {
-		if q.order == AscOrder {
-			sc = x.e.scanAscend
-		} else {
-			sc = x.e.scanDescend
-		}
+	// scanner is a function that is chosen dynamically depending
+	// on the query options
+	sc, err := x.e.chooseBestScanner(q)
+	if err != nil {
+		return err
 	}
 
 	if err := sc(ctx, q, it); err != nil {

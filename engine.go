@@ -23,8 +23,40 @@ type (
 	scanner func(ctx context.Context, q *QueryOptions, ir entryIterator) error
 )
 
-type engine struct {
-	mu            sync.RWMutex
+type rwLocker interface {
+	sync.Locker
+	RLock()
+	RUnlock()
+}
+
+type engine interface {
+	rwLocker
+
+	persist(commands []serializer) error
+	removeTag(name string, ent *entry) error
+	close(ctx context.Context) error
+	insert(ent *entry) error
+	exists(key string) bool
+	findByKey(key string) (*entry, error)
+	iterateByKeys(pks []string, ir entryIterator) error
+	remove(key PK) error
+	removeEntryFromTagsByNameAndType(name string, dt indexType, ent *entry)
+	addTag(name string, value interface{}, ent *entry) error
+	clearEntityTags(ent *entry)
+	count() int
+	put(ent *entry, replace bool) error
+	flushAll(ff func(ent *entry)) error
+	vacuum(ctx context.Context) error
+	upsertTag(name string, v interface{}, ent *entry) error
+	filterEntriesByTags(q *QueryOptions) (*filterEntriesSink, error)
+	chooseBestScanner(q *QueryOptions) (scanner, error)
+	removeEntry(ent *entry)
+	setCfg(cfg *Config)
+}
+
+type defaultEngine struct {
+	sync.RWMutex
+
 	dbFile        string
 	cfg           *Config
 	persistence   *persistence
@@ -36,8 +68,17 @@ type engine struct {
 	closed        bool
 }
 
-func newEngine(dbFile string, cfg *Config) (*engine, error) {
-	e := &engine{
+func (e *defaultEngine) setCfg(cfg *Config) {
+	e.cfg = cfg
+}
+
+func (e *defaultEngine) removeEntry(ent *entry) {
+	e.tags.removeEntry(ent)
+	e.pks.Delete(ent)
+}
+
+func newDefaultEngine(dbFile string, cfg *Config) (*defaultEngine, error) {
+	e := &defaultEngine{
 		dbFile: dbFile,
 		pks:    btree.NewNonConcurrent(byPrimaryKeys),
 		tags:   newTagIndex(),
@@ -48,7 +89,7 @@ func newEngine(dbFile string, cfg *Config) (*engine, error) {
 	return e, nil
 }
 
-func (e *engine) asyncFlush(d time.Duration) {
+func (e *defaultEngine) asyncFlush(d time.Duration) {
 	t := time.NewTicker(d)
 
 	for {
@@ -57,16 +98,16 @@ func (e *engine) asyncFlush(d time.Duration) {
 			t.Stop()
 			return
 		case <-t.C:
-			e.mu.Lock()
+			e.Lock()
 			if err := e.persistence.sync(); err != nil {
 				panic(err)
 			}
-			e.mu.Unlock()
+			e.Unlock()
 		}
 	}
 }
 
-func (e *engine) scheduleVacuum(d time.Duration) {
+func (e *defaultEngine) scheduleVacuum(d time.Duration) {
 	t := time.NewTicker(d)
 
 	for {
@@ -75,29 +116,38 @@ func (e *engine) scheduleVacuum(d time.Duration) {
 			t.Stop()
 			return
 		case <-t.C:
-			e.mu.Lock()
+			e.Lock()
 			if e.runningVacuum && e.totalDeletes < e.cfg.AutoVacuumMinSize {
-				e.mu.Unlock()
+				e.Unlock()
 				continue
 			}
 
 			e.runningVacuum = true
-			if err := e.runVacuumUnderLock(); err != nil {
+			// todo: maybe limit run vacuum with context timeout equal to d
+			if err := e.runVacuumUnderLock(context.Background()); err != nil {
 				panic(err)
 			}
 			e.runningVacuum = false
-			e.mu.Unlock()
+			e.Unlock()
 		}
 	}
 }
 
-func (e *engine) runVacuumUnderLock() error {
+func (e *defaultEngine) runVacuumUnderLock(ctx context.Context) error {
 	buf := &bytes.Buffer{}
 
 	e.pks.Ascend(nil, func(i interface{}) bool {
+		if err := ctx.Err(); err != nil {
+			return false
+		}
+
 		i.(*entry).serialize(buf)
 		return true
 	})
+
+	if err := ctx.Err(); err != nil {
+		return errors.Wrap(err, "could not finish vacuum")
+	}
 
 	if err := e.persistence.writeAndSwap(buf); err != nil {
 		return err
@@ -106,15 +156,15 @@ func (e *engine) runVacuumUnderLock() error {
 	return nil
 }
 
-func (e *engine) close() error {
-	e.mu.Lock()
+func (e *defaultEngine) close(ctx context.Context) error {
+	e.Lock()
 
 	if e.closed {
 		return ErrDatabaseAlreadyClosed
 	}
 
 	if !e.cfg.DisableAutoVacuum {
-		if err := e.runVacuumUnderLock(); err != nil {
+		if err := e.runVacuumUnderLock(ctx); err != nil {
 			return err
 		}
 	}
@@ -124,7 +174,7 @@ func (e *engine) close() error {
 		e.tags = nil
 		e.closed = true
 		e.persistence = nil
-		e.mu.Unlock()
+		e.Unlock()
 	}()
 
 	close(e.stopCh)
@@ -136,9 +186,9 @@ func (e *engine) close() error {
 	return nil
 }
 
-func (e *engine) init() error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
+func (e *defaultEngine) init() error {
+	e.Lock()
+	defer e.Unlock()
 
 	if e.dbFile != ":memory:" {
 		p, err := newPersistence(e.dbFile, e.cfg.PersistenceStrategy, e.cfg.TruncateFileWhenOpen)
@@ -165,7 +215,32 @@ func (e *engine) init() error {
 	return nil
 }
 
-func (e *engine) insert(ent *entry) error {
+func (e *defaultEngine) persist(commands []serializer) error {
+	if e.persistence == nil {
+		return nil
+	}
+
+	var buf bytes.Buffer
+	for _, cmd := range commands {
+		cmd.serialize(&buf)
+	}
+
+	if err := e.persistence.write(&buf); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (e *defaultEngine) removeEntryFromTagsByNameAndType(name string, dt indexType, ent *entry) {
+	e.tags.removeEntryByNameAndType(name, dt, ent)
+}
+
+func (e *defaultEngine) addTag(name string, value interface{}, ent *entry) error {
+	return e.tags.add(name, value, ent)
+}
+
+func (e *defaultEngine) insert(ent *entry) error {
 	existing := e.pks.Set(ent)
 	if existing != nil {
 		return errors.Wrapf(ErrKeyAlreadyExists, "key: %s", ent.key.String())
@@ -180,7 +255,7 @@ func (e *engine) insert(ent *entry) error {
 	return nil
 }
 
-func (e *engine) exists(key string) bool {
+func (e *defaultEngine) exists(key string) bool {
 	found := e.pks.Get(&entry{key: newPK(key)})
 	if found == nil {
 		return false
@@ -189,7 +264,7 @@ func (e *engine) exists(key string) bool {
 	return true
 }
 
-func (e *engine) findByKey(key string) (*entry, error) {
+func (e *defaultEngine) findByKey(key string) (*entry, error) {
 	found := e.pks.Get(&entry{key: newPK(key)})
 	if found == nil {
 		return nil, errors.Wrapf(ErrKeyDoesNotExist, "key %s does not exist in database", key)
@@ -204,7 +279,7 @@ func (e *engine) findByKey(key string) (*entry, error) {
 }
 
 // iterateByKeys - takes a slice of primary keys and iterates over matched entries
-func (e *engine) iterateByKeys(pks []string, ir entryIterator) error {
+func (e *defaultEngine) iterateByKeys(pks []string, ir entryIterator) error {
 	resultCh := make(chan *entry)
 	var wg sync.WaitGroup
 
@@ -238,7 +313,7 @@ func (e *engine) iterateByKeys(pks []string, ir entryIterator) error {
 }
 
 // remove entry by primary key
-func (e *engine) remove(key PK) error {
+func (e *defaultEngine) remove(key PK) error {
 	ent := e.pks.Get(&entry{key: key})
 	if ent == nil {
 		return errors.Wrapf(ErrKeyDoesNotExist, "key %s does not exist in DB", key.String())
@@ -250,7 +325,7 @@ func (e *engine) remove(key PK) error {
 	return nil
 }
 
-func (e *engine) setEntityTags(ent *entry) error {
+func (e *defaultEngine) setEntityTags(ent *entry) error {
 	for n, v := range ent.tags.booleans {
 		if err := e.tags.add(n, v, ent); err != nil {
 			return err
@@ -278,15 +353,15 @@ func (e *engine) setEntityTags(ent *entry) error {
 	return nil
 }
 
-func (e *engine) clearEntityTags(ent *entry) {
+func (e *defaultEngine) clearEntityTags(ent *entry) {
 	e.tags.removeEntry(ent)
 }
 
-func (e *engine) count() int {
+func (e *defaultEngine) count() int {
 	return e.pks.Len()
 }
 
-func (e *engine) scanBetweenDescend(
+func (e *defaultEngine) scanBetweenDescend(
 	ctx context.Context,
 	q *QueryOptions,
 	ir entryIterator,
@@ -302,7 +377,7 @@ func (e *engine) scanBetweenDescend(
 	return
 }
 
-func (e *engine) scanBetweenAscend(
+func (e *defaultEngine) scanBetweenAscend(
 	ctx context.Context,
 	q *QueryOptions,
 	ir entryIterator,
@@ -317,7 +392,7 @@ func (e *engine) scanBetweenAscend(
 	return
 }
 
-func (e *engine) scanPrefixAscend(
+func (e *defaultEngine) scanPrefixAscend(
 	ctx context.Context,
 	q *QueryOptions,
 	ir entryIterator,
@@ -327,7 +402,7 @@ func (e *engine) scanPrefixAscend(
 	return
 }
 
-func (e *engine) scanPrefixDescend(
+func (e *defaultEngine) scanPrefixDescend(
 	ctx context.Context,
 	q *QueryOptions,
 	ir entryIterator,
@@ -336,7 +411,7 @@ func (e *engine) scanPrefixDescend(
 	return
 }
 
-func (e *engine) scanAscend(
+func (e *defaultEngine) scanAscend(
 	ctx context.Context,
 	q *QueryOptions,
 	ir entryIterator,
@@ -345,7 +420,7 @@ func (e *engine) scanAscend(
 	return
 }
 
-func (e *engine) scanDescend(
+func (e *defaultEngine) scanDescend(
 	ctx context.Context,
 	q *QueryOptions,
 	ir entryIterator,
@@ -354,9 +429,33 @@ func (e *engine) scanDescend(
 	return
 }
 
+func (e *defaultEngine) chooseBestScanner(q *QueryOptions) (scanner, error) {
+	if q.keyRange != nil {
+		if q.order == AscOrder {
+			return e.scanBetweenAscend, nil
+		} else {
+			 return e.scanBetweenDescend, nil
+		}
+	}
+
+	if q.prefix != "" {
+		if q.order == AscOrder {
+			 return e.scanPrefixAscend, nil
+		} else {
+			 return e.scanPrefixDescend, nil
+		}
+	}
+
+	if q.order == AscOrder {
+		 return e.scanAscend, nil
+	} else {
+		 return e.scanDescend, nil
+	}
+}
+
 // filterEntriesByTags - uses secondary indexes (tags) to filter entries
 // and puts them to sink, which it creates to store all the matched entries
-func (e *engine) filterEntriesByTags(q *QueryOptions) (*filterEntriesSink, error) {
+func (e *defaultEngine) filterEntriesByTags(q *QueryOptions) (*filterEntriesSink, error) {
 	if q == nil || q.allTags == nil {
 		return nil, nil
 	}
@@ -451,7 +550,7 @@ func (e *engine) filterEntriesByTags(q *QueryOptions) (*filterEntriesSink, error
 
 // upsertTag - updates or inserts a new tag, adding it to the entity
 // and corresponding secondary index
-func (e *engine) upsertTag(name string, v interface{}, ent *entry) error {
+func (e *defaultEngine) upsertTag(name string, v interface{}, ent *entry) error {
 	// just a precaution
 	if ent.tags == nil {
 		ent.tags = newTags()
@@ -496,7 +595,7 @@ func (e *engine) upsertTag(name string, v interface{}, ent *entry) error {
 }
 
 // removeTag - removes a tag from entity and secondary index
-func (e *engine) removeTag(name string, ent *entry) error {
+func (e *defaultEngine) removeTag(name string, ent *entry) error {
 	// if tag name exists in entity, remove it from secondary index
 	// and remove it from entity itself
 	existingTagType, ok := ent.tags.names[name]
@@ -520,7 +619,7 @@ func (e *engine) removeTag(name string, ent *entry) error {
 	return nil
 }
 
-func (e *engine) put(ent *entry, replace bool) error {
+func (e *defaultEngine) put(ent *entry, replace bool) error {
 	existing := e.pks.Set(ent)
 	if existing != nil {
 		if !replace {
@@ -547,7 +646,7 @@ func (e *engine) put(ent *entry, replace bool) error {
 	return nil
 }
 
-func (e *engine) flushAll(ff func(ent *entry)) error {
+func (e *defaultEngine) flushAll(ff func(ent *entry)) error {
 	e.pks.Ascend(nil, func(i interface{}) bool {
 		ent := i.(*entry)
 		ff(ent)
@@ -556,6 +655,17 @@ func (e *engine) flushAll(ff func(ent *entry)) error {
 
 	e.pks = btree.NewNonConcurrent(byPrimaryKeys)
 	e.tags = newTagIndex()
+
+	return nil
+}
+
+func (e *defaultEngine) vacuum(ctx context.Context) error {
+	e.Lock()
+	defer e.Unlock()
+
+	if err := e.runVacuumUnderLock(ctx); err != nil {
+		return err
+	}
 
 	return nil
 }

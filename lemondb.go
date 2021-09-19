@@ -1,13 +1,12 @@
 package lemon
 
 import (
-	"bytes"
 	"context"
 	"github.com/pkg/errors"
 )
 
 type DB struct {
-	e *engine
+	e engine
 }
 
 type UserCallback func(tx *Tx) error
@@ -26,7 +25,7 @@ func Open(path string, engineOptions ...EngineOptions) (*DB, Closer, error) {
 		AutoVacuumOnlyOnClose: true,
 	}
 
-	e, err := newEngine(path, defaultCfg)
+	e, err := newDefaultEngine(path, defaultCfg)
 	if err != nil {
 		return nil, NullCloser, err
 	}
@@ -47,7 +46,7 @@ func Open(path string, engineOptions ...EngineOptions) (*DB, Closer, error) {
 }
 
 func (db *DB) close() error {
-	if err := db.e.close(); err != nil {
+	if err := db.e.close(context.Background()); err != nil {
 		return err
 	}
 
@@ -60,7 +59,6 @@ func (db *DB) Begin(ctx context.Context, readOnly bool) (*Tx, error) {
 		e:        db.e,
 		ctx:      ctx,
 		readOnly: readOnly,
-		buf:      &bytes.Buffer{},
 	}
 
 	tx.lock()
@@ -112,14 +110,7 @@ func (db *DB) Has(key string) bool {
 }
 
 func (db *DB) Vacuum(ctx context.Context) error {
-	db.e.mu.Lock()
-	defer db.e.mu.Unlock()
-
-	if err := db.e.runVacuumUnderLock(); err != nil {
-		return err
-	}
-
-	return nil
+	return db.e.vacuum(ctx)
 }
 
 func (db *DB) Get(key string) (*Document, error) {

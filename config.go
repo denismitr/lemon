@@ -18,10 +18,10 @@ type Config struct {
 }
 
 type EngineOptions interface {
-	applyTo(e *engine) error
+	applyTo(e engine) error
 }
 
-func (cfg *Config) applyTo(e *engine) error {
+func (cfg *Config) applyTo(e engine) error {
 	if cfg.PersistenceStrategy == "" {
 		cfg.PersistenceStrategy = Sync
 	} else if cfg.PersistenceStrategy == Async && cfg.AsyncPersistenceIntervals == 0 {
@@ -36,7 +36,7 @@ func (cfg *Config) applyTo(e *engine) error {
 		cfg.AutoVacuumMinSize = defaultAutoVacuumMinSize
 	}
 
-	e.cfg = cfg
+	e.setCfg(cfg)
 
 	return nil
 }
