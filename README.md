@@ -95,11 +95,10 @@ err := db.Update(context.Background(), func(tx *lemon.Tx) error {
 		return nil
 	})
 ```
-alternatively, like with regular inserts, you can do a single operation, without manually opening a transaction, instead
-a single operation will be wrapped in a transaction automatically, the only difference is that you have to
-pass a context as the first argument.
+alternatively, like with regular inserts, you can do a single operation, without manually opening a transaction, 
+instead  a single operation will be wrapped in a transaction automatically and background context will be used. 
 ```go
-err := db.InsertOrReplace(context.Background(), "item:1145", lemon.M{
+err := db.InsertOrReplace("item:1145", lemon.M{
         "foo1":   "0",
         "baz": 123.879,
         "999":   "bar",
@@ -134,6 +133,69 @@ len(docs) // 2 - since 2 keys were found
 docs["product:88"] // *lemon.Document with product:88 key
 docs["product:100"] // *lemon.Document with product:100 key
 docs["non:existing:key"] // nil
+```
+
+### Tags
+Tags are a crucial piece of functionality in `LemonDB` they allow to take any data of any type and
+assign one or many tags to it. Those tags will act as secondary indexes for your data. Allowing you to make 
+queries by tags, from simple equality to less than and greater than queries. Sorting by tags may be supported in the 
+future, but right now it is not. 
+
+You can assign a single or multiple tags on an entry on `Insert`/`InsertOrReplace` operation or at any time 
+by using `Tag` method on `lemon.Tx` object. Also `Untag` method is available to remove one or more tags at once. 
+
+Example with tagging on insertion
+```go
+err := db.Update(ctx, func(tx *lemon.Tx) error {
+    tagsForProject := lemon.WithTags().Map(lemon.M{
+        "tag1": true,
+        "tag2": 567.3,
+        "tag3": "foobar",
+        "tag4": 45,
+    })
+
+    if err := tx.Insert("project:3456", lemon.M{
+        "foo": "bar",
+        "baz": 123,
+    }, tagsForProject); err != nil {
+        return err
+    }
+
+    tagsForUser := lemon.WithTags().Bool("someTag", true).Float("someFloat", 887.2)
+
+    if err := tx.InsertOrReplace(
+        "user:9876",
+        `<someXml><userId>123</userId><someXml>`,
+        tagsForUser,
+    ); err != nil {
+        return err
+    }
+
+    return nil
+})
+```
+
+Example with tagging and untagging
+```go
+err := db.Update(ctx, func(tx *lemon.Tx) error {
+    if err := tx.Tag("user:9876", lemon.M{
+        "newTag1": 5667,
+        "newTag2": false,
+        "newTag3": "foo-bar-baz",
+    }); err != nil {
+        return err
+    }
+    
+    if err := tx.Untag("project:3456", "tag1", "tag3"); err != nil {
+        return err
+    }
+    
+    return nil
+})
+
+if err != nil {
+    panic(err)
+}
 ```
 
 ### Contributing
