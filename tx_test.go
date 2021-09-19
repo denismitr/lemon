@@ -274,7 +274,7 @@ func (vts *manualVacuumTestSuite) Test_ManualVacuum() {
 		}
 	}()
 
-	vts.Require().NoError(db.Vacuum())
+	vts.Require().NoError(db.Vacuum(context.Background()))
 	assertTwoFilesHaveEqualContents(vts.T(), vts.fixture, "./__fixtures__/correct/after_manual_vacuum_db2.ldb")
 }
 

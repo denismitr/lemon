@@ -271,7 +271,7 @@ func (x *Tx) Scan(ctx context.Context, opts *QueryOptions, cb func(d *Document) 
 	return nil
 }
 
-func (x *Tx) CountByQuery(ctx context.Context, opts *QueryOptions) (int, error) {
+func (x *Tx) CountByQuery(opts *QueryOptions) (int, error) {
 	var counter int
 
 	ir := func(_ *entry) bool {
@@ -279,7 +279,7 @@ func (x *Tx) CountByQuery(ctx context.Context, opts *QueryOptions) (int, error) 
 		return true
 	}
 
-	if err := x.applyScanner(ctx, opts, ir); err != nil {
+	if err := x.applyScanner(x.ctx, opts, ir); err != nil {
 		return counter, err
 	}
 
