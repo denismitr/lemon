@@ -27,9 +27,9 @@ func (ent *entry) clone() *entry {
 	return &cpEnt
 }
 
-func (ent *entry) deserialize(e *engine) error {
+func (ent *entry) deserialize(e engine) error {
 	ent.committed = true
-	return e.put(ent, true)
+	return e.Put(ent, true)
 }
 
 func newEntryWithTags(key string, value []byte, tags *tags) *entry {
@@ -90,15 +90,13 @@ func (cmd *deleteCmd) serialize(buf *bytes.Buffer) {
 	writeRespKeyString(cmd.key.String(), buf)
 }
 
-func (cmd *deleteCmd) deserialize(e *engine) error {
-	ent, err := e.findByKey(cmd.key.String())
+func (cmd *deleteCmd) deserialize(e engine) error {
+	ent, err := e.FindByKey(cmd.key.String())
 	if err != nil {
 		return errors.Wrapf(err, "could not deserialize delete key %s command", cmd.key.String())
 	}
 
-	e.tags.removeEntry(ent)
-
-	e.pks.Delete(&entry{key: cmd.key})
+	e.RemoveEntry(ent)
 
 	return nil
 }

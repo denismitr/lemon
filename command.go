@@ -10,7 +10,7 @@ type serializer interface {
 }
 
 type deserializer interface {
-	deserialize(e *engine) error
+	deserialize(e engine) error
 }
 
 type untagCmd struct {
@@ -28,8 +28,8 @@ func (cmd *untagCmd) serialize(buf *bytes.Buffer) {
 	}
 }
 
-func (cmd *untagCmd) deserialize(e *engine) error {
-	ent, err := e.findByKey(cmd.key.String())
+func (cmd *untagCmd) deserialize(e engine) error {
+	ent, err := e.FindByKey(cmd.key.String())
 	if err != nil {
 		return errors.Wrapf(err, "could not deserialize tag command for key %s command", cmd.key.String())
 	}
@@ -37,7 +37,7 @@ func (cmd *untagCmd) deserialize(e *engine) error {
 	for _, name := range cmd.names {
 		dt, ok := ent.tags.getTypeByName(name)
 		if ok {
-			e.tags.removeEntryByNameAndType(name, dt, ent)
+			e.RemoveEntryFromTagsByNameAndType(name, dt, ent)
 			ent.tags.removeByNameAndType(name, dt)
 		}
 	}
@@ -69,40 +69,40 @@ func (cmd *tagCmd) serialize(buf *bytes.Buffer) {
 	}
 }
 
-func (cmd *tagCmd) deserialize(e *engine) error {
-	ent, err := e.findByKey(cmd.key.String())
+func (cmd *tagCmd) deserialize(e engine) error {
+	ent, err := e.FindByKey(cmd.key.String())
 	if err != nil {
 		return errors.Wrapf(err, "could not deserialize tag command for key %s command", cmd.key.String())
 	}
 
 	for n, v := range cmd.tags.integers {
-		e.tags.removeEntryByNameAndType(n, intDataType, ent)
+		e.RemoveEntryFromTagsByNameAndType(n, intDataType, ent)
 		ent.tags.set(n, v)
-		if err := e.tags.add(n, v, ent); err != nil {
+		if err := e.AddTag(n, v, ent); err != nil {
 			return err
 		}
 	}
 
 	for n, v := range cmd.tags.strings {
-		e.tags.removeEntryByNameAndType(n, strDataType, ent)
+		e.RemoveEntryFromTagsByNameAndType(n, strDataType, ent)
 		ent.tags.set(n, v)
-		if err := e.tags.add(n, v, ent); err != nil {
+		if err := e.AddTag(n, v, ent); err != nil {
 			return err
 		}
 	}
 
 	for n, v := range cmd.tags.booleans {
-		e.tags.removeEntryByNameAndType(n, boolDataType, ent)
+		e.RemoveEntryFromTagsByNameAndType(n, boolDataType, ent)
 		ent.tags.set(n, v)
-		if err := e.tags.add(n, v, ent); err != nil {
+		if err := e.AddTag(n, v, ent); err != nil {
 			return err
 		}
 	}
 
 	for n, v := range cmd.tags.floats {
-		e.tags.removeEntryByNameAndType(n, floatDataType, ent)
+		e.RemoveEntryFromTagsByNameAndType(n, floatDataType, ent)
 		ent.tags.set(n, v)
-		if err := e.tags.add(n, v, ent); err != nil {
+		if err := e.AddTag(n, v, ent); err != nil {
 			return err
 		}
 	}
@@ -117,7 +117,7 @@ func (c flushAllCmd) serialize(buf *bytes.Buffer) {
 	writeRespSimpleString("flushall", buf)
 }
 
-func (flushAllCmd) deserialize(e *engine) error {
-	return e.flushAll(func (*entry) {})
+func (flushAllCmd) deserialize(e engine) error {
+	return e.FlushAll(func (*entry) {})
 }
 
