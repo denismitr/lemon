@@ -14,8 +14,6 @@ import (
 var ErrKeyAlreadyExists = errors.New("key already exists")
 var ErrDatabaseAlreadyClosed = errors.New("database already closed")
 
-//var ErrConflictingTagType = errors.New("conflicting tag type")
-
 const castPanic = "how could primary keys item not be of type *entry"
 
 type (
@@ -133,6 +131,10 @@ func (e *defaultEngine) scheduleVacuum(d time.Duration) {
 }
 
 func (e *defaultEngine) runVacuumUnderLock(ctx context.Context) error {
+	if e.persistence == nil {
+		return nil
+	}
+
 	buf := &bytes.Buffer{}
 
 	e.pks.Ascend(nil, func(i interface{}) bool {
@@ -189,7 +191,7 @@ func (e *defaultEngine) init() error {
 	e.Lock()
 	defer e.Unlock()
 
-	if e.dbFile != ":memory:" {
+	if e.dbFile != InMemory {
 		p, err := newPersistence(e.dbFile, e.cfg.PersistenceStrategy, e.cfg.TruncateFileWhenOpen)
 		if err != nil {
 			return err
@@ -277,7 +279,7 @@ func (e *defaultEngine) FindByKey(key string) (*entry, error) {
 	return ent, nil
 }
 
-// iterateByKeys - takes a slice of primary keys and iterates over matched entries
+// IterateByKeys - takes a slice of primary keys and iterates over matched entries
 func (e *defaultEngine) IterateByKeys(pks []string, ir entryIterator) error {
 	resultCh := make(chan *entry)
 	var wg sync.WaitGroup
@@ -311,7 +313,7 @@ func (e *defaultEngine) IterateByKeys(pks []string, ir entryIterator) error {
 	return nil
 }
 
-// remove entry by primary key
+// Remove entry by primary key
 func (e *defaultEngine) Remove(key PK) error {
 	ent := e.pks.Get(&entry{key: key})
 	if ent == nil {
@@ -452,7 +454,7 @@ func (e *defaultEngine) ChooseBestScanner(q *QueryOptions) (scanner, error) {
 	}
 }
 
-// filterEntriesByTags - uses secondary indexes (tags) to filter entries
+// FilterEntriesByTags - uses secondary indexes (tags) to filter entries
 // and puts them to sink, which it creates to store all the matched entries
 func (e *defaultEngine) FilterEntriesByTags(q *QueryOptions) (*filterEntriesSink, error) {
 	if q == nil || q.allTags == nil {
@@ -547,7 +549,7 @@ func (e *defaultEngine) FilterEntriesByTags(q *QueryOptions) (*filterEntriesSink
 	}
 }
 
-// upsertTag - updates or inserts a new tag, adding it to the entity
+// UpsertTag - updates or inserts a new tag, adding it to the entity
 // and corresponding secondary index
 func (e *defaultEngine) UpsertTag(name string, v interface{}, ent *entry) error {
 	// just a precaution
@@ -593,7 +595,7 @@ func (e *defaultEngine) UpsertTag(name string, v interface{}, ent *entry) error 
 	return e.tags.add(name, v, ent)
 }
 
-// removeTag - removes a tag from entity and secondary index
+// RemoveTag - removes a tag from entity and secondary index
 func (e *defaultEngine) RemoveTag(name string, ent *entry) error {
 	// if tag name exists in entity, remove it from secondary index
 	// and remove it from entity itself
@@ -659,6 +661,10 @@ func (e *defaultEngine) FlushAll(ff func(ent *entry)) error {
 }
 
 func (e *defaultEngine) Vacuum(ctx context.Context) error {
+	if e.persistence == nil {
+		return nil
+	}
+
 	e.Lock()
 	defer e.Unlock()
 

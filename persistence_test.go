@@ -3,7 +3,6 @@ package lemon
 import (
 	"bufio"
 	"bytes"
-	"errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"strings"
@@ -33,57 +32,6 @@ func Test_resolveRespArrayFromLine(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tc.segments, segments)
 			assert.Equal(t, tc.bytesExpected, p.currentCmdSize)
-		})
-	}
-}
-
-func Test_resolveRespSimpleString(t *testing.T) {
-	validInputs := []struct{
-		in string
-		bytesExpected int
-		expected string
-	}{
-		{in: "+foo123\r\n", bytesExpected: 8, expected: "foo123"},
-		{in: "+ab\r\n", bytesExpected: 8, expected: "ab"},
-		{in: "+123\r\n", bytesExpected: 8, expected: "123"},
-	}
-
-	for _, tc := range validInputs {
-		t.Run(tc.in, func(t *testing.T) {
-			p := parser{}
-			b := &bytes.Buffer{}
-			b.WriteString(tc.in)
-			r := bufio.NewReader(b)
-
-			result, err := p.resolveRespSimpleString(r)
-			require.NoError(t, err)
-			assert.Equal(t, tc.expected, result)
-			assert.Equal(t, len([]byte(tc.in)), p.currentCmdSize)
-		})
-	}
-
-	invalidInputs := []struct{
-		in string
-		bytesExpected int
-		expectedErr error
-	}{
-		{in: "+\r\n", bytesExpected: 3, expectedErr: ErrCommandInvalid},
-		{in: "\r\n", bytesExpected: 2, expectedErr: ErrCommandInvalid},
-	}
-
-	for _, tc := range invalidInputs {
-		t.Run(tc.in, func(t *testing.T) {
-			p := parser{}
-
-			b := &bytes.Buffer{}
-			b.WriteString(tc.in)
-			r := bufio.NewReader(b)
-
-			result, err := p.resolveRespSimpleString(r)
-			require.Error(t, err)
-			require.Equal(t, "", result)
-			require.Equal(t, tc.bytesExpected, p.currentCmdSize)
-			assert.True(t, errors.Is(err, tc.expectedErr))
 		})
 	}
 }

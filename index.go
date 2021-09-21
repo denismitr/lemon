@@ -10,8 +10,6 @@ var ErrInvalidIndexType = errors.New("invalid index type")
 
 type indexType uint8
 
-const invalidTagTypeConversion = "invalid tag type conversion"
-
 const (
 	nilDataType indexType = iota
 	floatDataType
@@ -33,46 +31,6 @@ func newTagIndex() *tagIndex {
 	return &tagIndex{
 		data: make(map[string]*index),
 	}
-}
-
-func (ti *tagIndex) keys() int {
-	return len(ti.data)
-}
-
-func (ti *tagIndex) getEntriesFor(name string, v interface{}) map[string]*entry {
-	idx := ti.data[name]
-	if idx == nil {
-		return nil
-	}
-
-	switch typedValue := v.(type) {
-	case float64:
-		item := idx.btr.Get(&floatTag{value: typedValue})
-		if item == nil {
-			return nil
-		}
-		return item.(entryContainer).getEntries()
-	case int:
-		item := idx.btr.Get(&intTag{value: typedValue})
-		if item == nil {
-			return nil
-		}
-		return item.(entryContainer).getEntries()
-	case bool:
-		item := idx.btr.Get(&boolTag{value: typedValue})
-		if item == nil {
-			return nil
-		}
-		return item.(entryContainer).getEntries()
-	case string:
-		item := idx.btr.Get(&strTag{value: typedValue})
-		if item == nil {
-			return nil
-		}
-		return item.(entryContainer).getEntries()
-	}
-
-	return nil
 }
 
 func (ti *tagIndex) removeEntry(ent *entry) {
@@ -242,20 +200,6 @@ func (ti *tagIndex) add(name string, value interface{}, ent *entry) error {
 	}
 
 	return nil
-}
-
-func (ti *tagIndex) getEqualTagEntities(idx *index, tagEntry interface{}) map[string]*entry {
-	found := idx.btr.Get(tagEntry)
-	if found == nil {
-		return nil
-	}
-
-	tag, ok := found.(entryContainer)
-	if !ok {
-		panic("not an entity container") // fixme
-	}
-
-	return tag.getEntries()
 }
 
 type tagFilter struct {

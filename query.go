@@ -221,68 +221,6 @@ func (qo *QueryOptions) HasAllTags(qt *QueryTags) *QueryOptions {
 	return qo
 }
 
-func (qo *QueryOptions) matchTags(e *entry) bool {
-	if qo.allTags == nil {
-		return true
-	}
-
-	if e.tags == nil {
-		return false
-	}
-
-	matchesExpected := 0
-	actualMatches := 0
-	for k, v := range qo.allTags.booleans {
-		matchesExpected++
-		switch k.comp {
-		case equal:
-			if e.tags.booleans[k.name] == v {
-				actualMatches++
-			}
-		}
-	}
-
-	for k, v := range qo.allTags.strings {
-		matchesExpected++
-		switch k.comp {
-		case equal:
-			if e.tags.strings[k.name] == v {
-				actualMatches++
-			}
-		}
-	}
-
-	for k, v := range qo.allTags.integers {
-		matchesExpected++
-		switch k.comp {
-		case equal:
-			if e.tags.integers[k.name] == v {
-				actualMatches++
-			}
-		case greaterThan:
-			if e.tags.integers[k.name] > v {
-				actualMatches++
-			}
-		}
-	}
-
-	for k, v := range qo.allTags.floats {
-		matchesExpected++
-		switch k.comp {
-		case equal:
-			if e.tags.floats[k.name] == v {
-				actualMatches++
-			}
-		case greaterThan:
-			if e.tags.floats[k.name] > v {
-				actualMatches++
-			}
-		}
-	}
-
-	return matchesExpected == actualMatches
-}
-
 func Q() *QueryOptions {
 	return &QueryOptions{order: AscOrder}
 }
@@ -337,11 +275,11 @@ func (fe *filterEntriesSink) add(ent *entry) {
 	}
 }
 
-func (fe *filterEntriesSink) exists(ent *entry) bool {
-	fe.RLock()
-	defer fe.RUnlock()
-	return fe.entries[ent.key.String()] != nil
-}
+//func (fe *filterEntriesSink) exists(ent *entry) bool {
+//	fe.RLock()
+//	defer fe.RUnlock()
+//	return fe.entries[ent.key.String()] != nil
+//}
 
 func (fe *filterEntriesSink) empty() bool {
 	fe.RLock()

@@ -74,6 +74,14 @@ func (d *Document) Tags() M {
 	return d.tags
 }
 
+func (d *Document) M() (M, error) {
+	var m M
+	if err := d.JSON().Unmarshal(&m); err != nil {
+		return nil, errors.Wrap(err, "could not unmarshal to lemon.M")
+	}
+	return m, nil
+}
+
 func (js *JSONValue) Unmarshal(dest interface{}) error {
 	err := json.Unmarshal(js.b, &dest)
 	if err != nil {

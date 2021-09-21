@@ -287,7 +287,6 @@ func (p *parser) parseFlushAllCommand(cb func(d deserializer) error) error {
 	return cb(&flushAllCmd{})
 }
 
-
 func (p *parser) resolveRespArrayFromLine(r *bufio.Reader) (int, error) {
 	// read a command
 	p.currentLine++
@@ -372,7 +371,6 @@ func (p *parser) resolveRespCommandCode(r *bufio.Reader) (commandCode, error) {
 	return invalidCode, errors.Wrapf(ErrCommandInvalid, "at line #%d command [%s] is unknown", p.currentLine, string(line))
 }
 
-
 func (p *parser) resolveRespKey(r *bufio.Reader) ([]byte, error) {
 	p.currentLine++
 	strInfoLine, err := r.ReadBytes('\n')
@@ -421,27 +419,5 @@ func (p *parser) resolveRespKey(r *bufio.Reader) ([]byte, error) {
 	}
 
 	return key[:keyLen], nil
-}
-
-func (p *parser) resolveRespSimpleString(r *bufio.Reader) (string, error) {
-	p.currentLine++
-	strLine, err := r.ReadBytes('\n')
-	if err != nil {
-		if errors.Is(err, io.EOF) {
-			return "", io.ErrUnexpectedEOF
-		}
-
-		return "", errors.Wrap(ErrCommandInvalid, err.Error())
-	}
-
-	p.currentCmdSize += len(strLine)
-
-	if len(strLine) < 4 || strLine[0] != '+' {
-		return "", errors.Wrapf(ErrCommandInvalid, "line #%d - %s is invalid", p.currentLine, string(strLine))
-	}
-
-	token := string(strLine[1:len(strLine) - 2])
-
-	return token, nil
 }
 

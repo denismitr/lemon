@@ -5,6 +5,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+const InMemory = ":memory:"
+
 type DB struct {
 	e engine
 }
