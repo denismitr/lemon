@@ -137,7 +137,11 @@ func (ti *tagIndex) removeEntryByNameAndType(name string, dt indexType, ent *ent
 	}
 }
 
-func resolveIndexIfNotExists(idx *index, dataType indexType, less func(a, b interface{}) bool) (*index, error) {
+func resolveIndexIfNotExists(
+	idx *index,
+	dataType indexType,
+	less func(a, b interface{}) bool,
+) (*index, error) {
 	if idx == nil {
 		idx = &index{
 			dt:  dataType,
@@ -204,7 +208,7 @@ func (ti *tagIndex) add(name string, value interface{}, ent *entry) error {
 
 type tagFilter struct {
 	key tagKey
-	m matcher
+	m   matcher
 	idx *index
 	tag interface{}
 }
@@ -332,9 +336,12 @@ func (ti *tagIndex) filterEntities(tf *tagFilter, fes *filterEntriesSink) {
 }
 
 func lt(tr *btree.BTree, a, b interface{}) bool { return tr.Less(a, b) }
-func eq(a, b interface{}) bool { return a.(*entry).key.Equal(&b.(*entry).key) }
-func gt(tr *btree.BTree, a, b interface{}) bool { return tr.Less(b, a) }
-func gte(tr *btree.BTree, a, b interface{}) bool { return tr.Less(b, a) || a.(*entry).key.Equal(&b.(*entry).key) }
+func eq(a, b interface{}) bool                  { return a.(*entry).key.Equal(&b.(*entry).key) }
+
+//func gt(tr *btree.BTree, a, b interface{}) bool { return tr.Less(b, a) }
+func gte(tr *btree.BTree, a, b interface{}) bool {
+	return tr.Less(b, a) || a.(*entry).key.Equal(&b.(*entry).key)
+}
 
 func ascendRange(
 	btr *btree.BTree,

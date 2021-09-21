@@ -14,7 +14,7 @@ type deserializer interface {
 }
 
 type untagCmd struct {
-	key PK
+	key   PK
 	names []string
 }
 
@@ -46,7 +46,7 @@ func (cmd *untagCmd) deserialize(e engine) error {
 }
 
 type tagCmd struct {
-	key PK
+	key  PK
 	tags *tags
 }
 
@@ -110,7 +110,7 @@ func (cmd *tagCmd) deserialize(e engine) error {
 	return nil
 }
 
-type flushAllCmd struct {}
+type flushAllCmd struct{}
 
 func (c flushAllCmd) serialize(buf *bytes.Buffer) {
 	writeRespArray(1, buf)
@@ -118,6 +118,5 @@ func (c flushAllCmd) serialize(buf *bytes.Buffer) {
 }
 
 func (flushAllCmd) deserialize(e engine) error {
-	return e.FlushAll(func (*entry) {})
+	return e.FlushAll(func(*entry) {})
 }
-

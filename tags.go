@@ -71,7 +71,7 @@ func boolTagger(name string, value bool) Tagger {
 	}
 }
 
-func strTagger(name string, value string) Tagger {
+func strTagger(name, value string) Tagger {
 	return func(t *tags) {
 		t.names[name] = strDataType
 		t.strings[name] = value

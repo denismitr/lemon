@@ -18,7 +18,7 @@ const castPanic = "how could primary keys item not be of type *entry"
 
 type (
 	entryIterator func(ent *entry) bool
-	scanner func(ctx context.Context, q *QueryOptions, ir entryIterator) error
+	scanner       func(ctx context.Context, q *QueryOptions, ir entryIterator) error
 )
 
 type rwLocker interface {
@@ -258,11 +258,7 @@ func (e *defaultEngine) Insert(ent *entry) error {
 
 func (e *defaultEngine) Exists(key string) bool {
 	found := e.pks.Get(&entry{key: newPK(key)})
-	if found == nil {
-		return false
-	}
-
-	return true
+	return found != nil
 }
 
 func (e *defaultEngine) FindByKey(key string) (*entry, error) {
@@ -435,22 +431,22 @@ func (e *defaultEngine) ChooseBestScanner(q *QueryOptions) (scanner, error) {
 		if q.order == AscOrder {
 			return e.scanBetweenAscend, nil
 		} else {
-			 return e.scanBetweenDescend, nil
+			return e.scanBetweenDescend, nil
 		}
 	}
 
 	if q.prefix != "" {
 		if q.order == AscOrder {
-			 return e.scanPrefixAscend, nil
+			return e.scanPrefixAscend, nil
 		} else {
-			 return e.scanPrefixDescend, nil
+			return e.scanPrefixDescend, nil
 		}
 	}
 
 	if q.order == AscOrder {
-		 return e.scanAscend, nil
+		return e.scanAscend, nil
 	} else {
-		 return e.scanDescend, nil
+		return e.scanDescend, nil
 	}
 }
 

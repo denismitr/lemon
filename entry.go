@@ -40,7 +40,7 @@ func newEntry(key string, value []byte) *entry {
 }
 
 func (ent *entry) serialize(buf *bytes.Buffer) {
-	writeRespArray(3 + ent.tagCount(), buf)
+	writeRespArray(3+ent.tagCount(), buf)
 	writeRespSimpleString("set", buf)
 	writeRespKeyString(ent.key.String(), buf)
 	writeRespBlob(ent.value, buf)
@@ -76,8 +76,6 @@ func (ent *entry) tagCount() int {
 	count += len(ent.tags.integers)
 	return count
 }
-
-
 
 type deleteCmd struct {
 	key PK

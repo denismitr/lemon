@@ -104,11 +104,12 @@ func (tk *tagKey) getIntMatcher(v int) matcher {
 			return false
 		}
 
-		if tk.comp == equal {
+		switch tk.comp {
+		case equal:
 			return sv == v
-		} else if tk.comp == greaterThan {
+		case greaterThan:
 			return sv > v
-		} else if tk.comp == lessThan {
+		case lessThan:
 			return sv < v
 		}
 
@@ -126,9 +127,9 @@ func (tk *tagKey) getBoolMatcher(v bool) matcher {
 		if tk.comp == equal {
 			return bv == v
 		} else if tk.comp == greaterThan {
-			return bv == true && v == false
+			return bv && !v
 		} else if tk.comp == lessThan {
-			return bv == false && v == true
+			return !bv && v
 		}
 
 		return false
@@ -156,7 +157,7 @@ func (qt *QueryTags) BoolTagEq(name string, value bool) *QueryTags {
 	return qt
 }
 
-func (qt *QueryTags) StrTagEq(name string, value string) *QueryTags {
+func (qt *QueryTags) StrTagEq(name, value string) *QueryTags {
 	qt.strings[tagKey{name: name, comp: equal}] = value
 	return qt
 }

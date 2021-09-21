@@ -23,9 +23,9 @@ type PersistenceStrategy string
 type commandCode int8
 
 const (
-	boolTagFn = "btg"
-	strTagFn = "stg"
-	intTagFn = "itg"
+	boolTagFn  = "btg"
+	strTagFn   = "stg"
+	intTagFn   = "itg"
 	floatTagFn = "ftg"
 )
 
@@ -41,7 +41,6 @@ const (
 const (
 	Async PersistenceStrategy = "async"
 	Sync  PersistenceStrategy = "sync"
-
 )
 
 type persistence struct {
@@ -58,7 +57,7 @@ func newPersistence(
 	strategy PersistenceStrategy,
 	truncateFileOnOpen bool,
 ) (*persistence, error) {
-	flags := os.O_CREATE|os.O_RDWR
+	flags := os.O_CREATE | os.O_RDWR
 	if truncateFileOnOpen {
 		flags |= os.O_TRUNC
 	}
@@ -69,7 +68,7 @@ func newPersistence(
 	}
 
 	p := &persistence{
-		f: f,
+		f:        f,
 		strategy: strategy,
 	}
 
@@ -236,7 +235,7 @@ func resolveTagFnTypeAndArguments(expression string) (prefix string, args []stri
 		return
 	}
 
-	argsExp := strings.TrimPrefix(expression, prefix + "(")
+	argsExp := strings.TrimPrefix(expression, prefix+"(")
 	argsExp = strings.TrimSuffix(argsExp, ")")
 	args = strings.Split(argsExp, ",")
 

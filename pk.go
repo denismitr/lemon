@@ -6,13 +6,13 @@ import (
 )
 
 type PK struct {
-	key string
+	key      string
 	segments []string
 }
 
 func newPK(k string) PK {
-	return PK {
-		key: k,
+	return PK{
+		key:      k,
 		segments: strings.Split(k, ":"),
 	}
 }
@@ -23,7 +23,7 @@ func (pk *PK) Match(patterns []string) bool {
 	}
 
 	for i := 0; i < len(patterns); i++ {
-		if i > len(pk.segments) - 1 {
+		if i > len(pk.segments)-1 {
 			return patterns[i] == "*"
 		}
 
@@ -60,7 +60,7 @@ func (pk *PK) Less(other PK) bool {
 		}
 
 		// try to compare as strings
-		if pk.segments[i] != other.segments[i]  {
+		if pk.segments[i] != other.segments[i] {
 			return pk.segments[i] < other.segments[i]
 		}
 
