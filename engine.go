@@ -13,6 +13,7 @@ import (
 
 var ErrKeyAlreadyExists = errors.New("key already exists")
 var ErrDatabaseAlreadyClosed = errors.New("database already closed")
+var ErrTagKeyNotFound = errors.New("tag key not found")
 
 const castPanic = "how could primary keys item not be of type *entry"
 
@@ -453,87 +454,123 @@ func (e *defaultEngine) ChooseBestScanner(q *QueryOptions) (scanner, error) {
 // FilterEntriesByTags - uses secondary indexes (tags) to filter entries
 // and puts them to sink, which it creates to store all the matched entries
 func (e *defaultEngine) FilterEntriesByTags(q *QueryOptions) (*filterEntriesSink, error) {
-	if q == nil || q.allTags == nil {
+	if q == nil || (q.allTags == nil && q.byTagName == "") {
 		return nil, nil
 	}
 
 	fes := newFilteredEntriesSink(q.patterns)
 
+	// one tag name scan
+	if q.byTagName != "" {
+		idx, ok := e.tags.data[q.byTagName]
+		if !ok {
+			return nil, errors.Wrapf(ErrTagKeyNotFound, "%s", q.byTagName)
+		}
+
+		switch q.order {
+		case DescOrder:
+			idx.btr.Descend(nil, func(item interface{}) bool {
+				ents := item.(entryContainer).getEntries()
+				fes.addMap(ents)
+				return true
+			})
+		default:
+			idx.btr.Ascend(nil, func(item interface{}) bool {
+				ents := item.(entryContainer).getEntries()
+				fes.addMap(ents)
+				return true
+			})
+		}
+
+		return fes, nil
+	}
+
 	errCh := make(chan error, 4)
 	var wg sync.WaitGroup
-	wg.Add(4)
 
-	go func() {
-		defer wg.Done()
+	if len(q.allTags.booleans) > 0 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 
-		for tk, v := range q.allTags.booleans {
-			if e.tags.data[tk.name] == nil {
-				continue
+			for tk, v := range q.allTags.booleans {
+				if e.tags.data[tk.name] == nil {
+					continue
+				}
+
+				btf, err := createBoolTagFilter(e.tags, tk, v)
+				if err != nil {
+					errCh <- err
+					return
+				}
+
+				e.tags.filterEntities(btf, fes)
 			}
+		}()
+	}
 
-			btf, err := createBoolTagFilter(e.tags, tk, v)
-			if err != nil {
-				errCh <- err
-				return
+	if len(q.allTags.strings) > 0 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			for tk, v := range q.allTags.strings {
+				if e.tags.data[tk.name] == nil {
+					continue
+				}
+
+				stf, err := createStringTagFilter(e.tags, tk, v)
+				if err != nil {
+					errCh <- err
+					return
+				}
+
+				e.tags.filterEntities(stf, fes)
 			}
+		}()
+	}
 
-			e.tags.filterEntities(btf, fes)
-		}
-	}()
+	if len(q.allTags.integers) > 0 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 
-	go func() {
-		defer wg.Done()
+			for tk, v := range q.allTags.integers {
+				if e.tags.data[tk.name] == nil {
+					continue
+				}
 
-		for tk, v := range q.allTags.strings {
-			if e.tags.data[tk.name] == nil {
-				continue
+				itf, err := createIntegerTagFilter(e.tags, tk, v)
+				if err != nil {
+					errCh <- err
+					return
+				}
+
+				e.tags.filterEntities(itf, fes)
 			}
+		}()
+	}
 
-			stf, err := createStringTagFilter(e.tags, tk, v)
-			if err != nil {
-				errCh <- err
-				return
+	if len(q.allTags.floats) > 0 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			for tk, v := range q.allTags.floats {
+				if e.tags.data[tk.name] == nil {
+					continue
+				}
+
+				ftf, err := createFloatTagFilter(e.tags, tk, v)
+				if err != nil {
+					errCh <- err
+					return
+				}
+
+				e.tags.filterEntities(ftf, fes)
 			}
-
-			e.tags.filterEntities(stf, fes)
-		}
-	}()
-
-	go func() {
-		defer wg.Done()
-
-		for tk, v := range q.allTags.integers {
-			if e.tags.data[tk.name] == nil {
-				continue
-			}
-
-			itf, err := createIntegerTagFilter(e.tags, tk, v)
-			if err != nil {
-				errCh <- err
-				return
-			}
-
-			e.tags.filterEntities(itf, fes)
-		}
-	}()
-
-	go func() {
-		defer wg.Done()
-
-		for tk, v := range q.allTags.floats {
-			if e.tags.data[tk.name] == nil {
-				continue
-			}
-
-			ftf, err := createFloatTagFilter(e.tags, tk, v)
-			if err != nil {
-				errCh <- err
-				return
-			}
-
-			e.tags.filterEntities(ftf, fes)
-		}
-	}()
+		}()
+	}
 
 	wg.Wait()
 

@@ -202,4 +202,4 @@ if err != nil {
 ```
 
 ### Contributing
-Make sure to use ac=nc compare benchmarks with `go get golang.org/x/tools/cmd/benchcmp`
+Make sure to use ac=nc compare benchmarks with `go install golang.org/x/tools/cmd/benchcmp@latest`
