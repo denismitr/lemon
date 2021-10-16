@@ -37,6 +37,8 @@ defer func() {
 if you pass `lemon.InMemory` as the first argument to `lemon.Open` database will
 work purely as in memory database and will not persist anything to disk.
 
+[Iterating and searching](/docs/iterations.md)
+
 ### Insert several entries in a transaction
 tags can be provided as a third argument and will service as secondary index
 ```go

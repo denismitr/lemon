@@ -253,13 +253,13 @@ func (x *Tx) Untag(key string, tagNames ...string) error {
 	return nil
 }
 
-func (x *Tx) Scan(ctx context.Context, opts *QueryOptions, cb func(d *Document) bool) error {
+func (x *Tx) Scan(opts *QueryOptions, cb func(d *Document) bool) error {
 	ir := func(ent *entry) bool {
 		d := newDocumentFromEntry(ent)
 		return cb(d)
 	}
 
-	if err := x.applyScanner(ctx, opts, ir); err != nil {
+	if err := x.applyScanner(x.ctx, opts, ir); err != nil {
 		return err
 	}
 
@@ -281,17 +281,19 @@ func (x *Tx) CountByQuery(opts *QueryOptions) (int, error) {
 	return counter, nil
 }
 
-func (x *Tx) Find(ctx context.Context, q *QueryOptions, dest *[]Document) error {
+// Find documents by query options
+func (x *Tx) Find(q *QueryOptions) ([]Document, error) {
+	var result []Document
 	ir := func(ent *entry) bool {
-		*dest = append(*dest, *newDocumentFromEntry(ent))
+		result = append(result, *newDocumentFromEntry(ent))
 		return true
 	}
 
-	if err := x.applyScanner(ctx, q, ir); err != nil {
-		return err
+	if err := x.applyScanner(x.ctx, q, ir); err != nil {
+		return nil, err
 	}
 
-	return nil
+	return result, nil
 }
 
 func (x *Tx) applyScanner(ctx context.Context, qo *QueryOptions, it entryIterator) error {

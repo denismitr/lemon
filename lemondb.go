@@ -223,9 +223,23 @@ func (db *DB) Tag(key string, m M) error {
 	})
 }
 
-// Scan documents with query options and document iterator callback
+// Scan iterates documents with query options and receives iterator callback
+// to go through filtered documents one by one
 func (db *DB) Scan(ctx context.Context, qo *QueryOptions, cb func(d *Document) bool) error {
 	return db.View(ctx, func(tx *Tx) error {
-		return tx.Scan(ctx, qo, cb)
+		return tx.Scan(qo, cb)
 	})
+}
+
+func (db *DB) Find(ctx context.Context, qo *QueryOptions) ([]Document, error) {
+	var docs []Document
+	if err := db.View(ctx, func(tx *Tx) error {
+		var err error
+		docs, err = tx.Find(qo)
+		return err
+	}); err != nil {
+		return nil, err
+	}
+
+	return docs, nil
 }
