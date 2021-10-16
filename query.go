@@ -1,9 +1,14 @@
 package lemon
 
 import (
+	"github.com/pkg/errors"
 	"sort"
 	"strings"
 	"sync"
+)
+
+var (
+	ErrInvalidQueryOptions = errors.New("invalid query options")
 )
 
 type M map[string]interface{}
@@ -190,11 +195,16 @@ const (
 )
 
 type QueryOptions struct {
-	order    Order
-	keyRange *KeyRange
-	prefix   string
-	patterns []string
-	allTags  *QueryTags
+	order     Order
+	keyRange  *KeyRange
+	prefix    string
+	patterns  []string
+	allTags   *QueryTags
+	byTagName string
+}
+
+func (qo *QueryOptions) needSortingByKeys() bool {
+	return qo.byTagName == ""
 }
 
 func (qo *QueryOptions) Match(patten string) *QueryOptions {
@@ -217,9 +227,26 @@ func (qo *QueryOptions) Prefix(p string) *QueryOptions {
 	return qo
 }
 
+func (qo *QueryOptions) ByTagName(key string) *QueryOptions {
+	qo.byTagName = key
+	return qo
+}
+
 func (qo *QueryOptions) HasAllTags(qt *QueryTags) *QueryOptions {
 	qo.allTags = qt
 	return qo
+}
+
+func (qo *QueryOptions) Validate() error {
+	if qo.byTagName != "" && qo.keyRange != nil {
+		return errors.Wrap(ErrInvalidQueryOptions, "cannot combine by tag name and primary key range options")
+	}
+
+	if qo.byTagName != "" && qo.allTags != nil {
+		return errors.Wrap(ErrInvalidQueryOptions, "cannot combine by tag name and all tags options")
+	}
+
+	return nil
 }
 
 func Q() *QueryOptions {
@@ -241,18 +268,20 @@ func newFilteredEntriesSink(patterns []string) *filterEntriesSink {
 	}
 }
 
-func (fe *filterEntriesSink) iterate(order Order, it entryIterator) {
+func (fe *filterEntriesSink) iterate(qo *QueryOptions, it entryIterator) {
 	fe.RLock()
 	defer fe.RUnlock()
 
-	if order == AscOrder {
-		sort.Slice(fe.keys, func(i, j int) bool {
-			return fe.keys[i].Less(fe.keys[j])
-		})
-	} else {
-		sort.Slice(fe.keys, func(i, j int) bool {
-			return fe.keys[j].Less(fe.keys[i])
-		})
+	if qo.needSortingByKeys() {
+		if qo.order == AscOrder {
+			sort.Slice(fe.keys, func(i, j int) bool {
+				return fe.keys[i].Less(fe.keys[j])
+			})
+		} else {
+			sort.Slice(fe.keys, func(i, j int) bool {
+				return fe.keys[j].Less(fe.keys[i])
+			})
+		}
 	}
 
 	for i := range fe.keys {
@@ -262,17 +291,35 @@ func (fe *filterEntriesSink) iterate(order Order, it entryIterator) {
 	}
 }
 
-func (fe *filterEntriesSink) add(ent *entry) {
+func (fe *filterEntriesSink) add(entries ...*entry) {
 	fe.Lock()
 	defer fe.Unlock()
 
-	if !ent.key.Match(fe.patterns) {
-		return
-	}
+	for _, ent := range entries {
+		if !ent.key.Match(fe.patterns) {
+			return
+		}
 
-	if fe.entries[ent.key.String()] == nil {
-		fe.keys = append(fe.keys, ent.key)
-		fe.entries[ent.key.String()] = ent
+		if fe.entries[ent.key.String()] == nil {
+			fe.keys = append(fe.keys, ent.key)
+			fe.entries[ent.key.String()] = ent
+		}
+	}
+}
+
+func (fe *filterEntriesSink) addMap(entries map[string]*entry) {
+	fe.Lock()
+	defer fe.Unlock()
+
+	for strKey, ent := range entries {
+		if !ent.key.Match(fe.patterns) {
+			return
+		}
+
+		if fe.entries[strKey] == nil {
+			fe.keys = append(fe.keys, ent.key)
+			fe.entries[strKey] = ent
+		}
 	}
 }
 

@@ -128,6 +128,10 @@ func (x *Tx) Insert(key string, data interface{}, metaAppliers ...MetaApplier) e
 		return ErrTxIsReadOnly
 	}
 
+	if x.e == nil {
+		return ErrTxAlreadyClosed
+	}
+
 	v, err := serializeToValue(data)
 	if err != nil {
 		return err
@@ -290,36 +294,40 @@ func (x *Tx) Find(ctx context.Context, q *QueryOptions, dest *[]Document) error 
 	return nil
 }
 
-func (x *Tx) applyScanner(ctx context.Context, q *QueryOptions, it entryIterator) error {
-	if q == nil {
-		q = Q()
+func (x *Tx) applyScanner(ctx context.Context, qo *QueryOptions, it entryIterator) error {
+	if qo == nil {
+		qo = Q()
 	}
 
-	if q.order == "" {
-		q.order = AscOrder
+	if err := qo.Validate(); err != nil {
+		return err
 	}
 
-	fe, err := x.e.FilterEntriesByTags(q)
+	if qo.order == "" {
+		qo.order = AscOrder
+	}
+
+	fe, err := x.e.FilterEntriesByTags(qo)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	// if we have entries chosen by secondary indexes
 	// and filtered by primary key patterns
 	// we can just sort by keys, iterate and return
 	if fe != nil && !fe.empty() {
-		fe.iterate(q.order, it)
+		fe.iterate(qo, it)
 		return nil
 	}
 
 	// scanner is a function that is chosen dynamically depending
 	// on the query options
-	sc, err := x.e.ChooseBestScanner(q)
+	sc, err := x.e.ChooseBestScanner(qo)
 	if err != nil {
 		return err
 	}
 
-	if err := sc(ctx, q, it); err != nil {
+	if err := sc(ctx, qo, it); err != nil {
 		return err
 	}
 

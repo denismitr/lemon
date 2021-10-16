@@ -222,3 +222,10 @@ func (db *DB) Tag(key string, m M) error {
 		return tx.Tag(key, m)
 	})
 }
+
+// Scan documents with query options and document iterator callback
+func (db *DB) Scan(ctx context.Context, qo *QueryOptions, cb func(d *Document) bool) error {
+	return db.View(ctx, func(tx *Tx) error {
+		return tx.Scan(ctx, qo, cb)
+	})
+}
