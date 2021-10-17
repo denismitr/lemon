@@ -32,3 +32,11 @@ docs["product:88"] // *lemon.Document with product:88 key
 docs["product:100"] // *lemon.Document with product:100 key
 docs["non:existing:key"] // nil
 ```
+
+### Has - checks if database has a document with given key
+
+```go
+trueOrFalse := db.Has("product:88")
+```
+
+of course the `Has` method exists also on the Tx object.
