@@ -1,4 +1,4 @@
-# Iterating, searching and filtering
+# Iterating, searching, filtering and counting documents in LemonDB
 
 ## Scan iterates over records with or without filter
 ### Example of scanning all entries
@@ -48,4 +48,20 @@ if err != nil {
 }
 ```
 
+## Count documents
+LemonDB offers two methods to count documents - one always count the total and another allows to pass
+query options in order to count documents that match certain criteria.
 
+#### Example of the total count
+```go
+totalCount := db.Count()
+```
+
+#### Example of counting documents within a given range
+```go
+q := lemon.Q().KeyRange("product:88", "product:100")
+rangeCount, err := db.CountByQuery(context.Background(), q)
+if err != nil {
+	panic(err)
+}
+```

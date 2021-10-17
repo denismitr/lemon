@@ -1,4 +1,6 @@
 # LemonDB WIP
+### Attention! The project is under intensive development. The API can still change without backwards compatibility.
+
 A document oriented database which can store strings, BLOBs and JSON documents (as tagged structs or bytes or JSON strings) 
 and is meant for local (non distributed) usage as it stores everything in one file or can work fully in memory. Ideally
 suits cli or desktop applications, non distributed pipelines or testing frameworks.

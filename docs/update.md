@@ -34,10 +34,10 @@ pass a context as the first argument.
 
 ```go
 err := db.Insert(context.Background(), "item:1145", lemon.M{
-        "foo1":   "0",
-        "baz": 123.879,
-        "999":   "bar",
-    }, lemon.WithTags().Bool("valid", true).Str("city", "Budapest"))
+    "foo1":   "0",
+    "baz": 123.879,
+    "999":   "bar",
+}, lemon.WithTags().Bool("valid", true).Str("city", "Budapest"))
 ```
 
 ## Update

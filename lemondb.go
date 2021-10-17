@@ -83,8 +83,8 @@ func (db *DB) Count() int {
 	return count
 }
 
-func (db *DB) CountByQuery(opts *QueryOptions) (int, error) {
-	tx, err := db.Begin(context.Background(), true)
+func (db *DB) CountByQuery(ctx context.Context, opts *QueryOptions) (int, error) {
+	tx, err := db.Begin(ctx, true)
 	if err != nil {
 		return 0, err
 	}
