@@ -132,14 +132,21 @@ func (x *Tx) Insert(key string, data interface{}, metaAppliers ...MetaApplier) e
 		return ErrTxAlreadyClosed
 	}
 
-	v, err := serializeToValue(data)
+	v, isJson, err := serializeToValue(data)
 	if err != nil {
 		return err
 	}
 
+	if isJson {
+		metaAppliers = append(metaAppliers, WithContentType(JSON))
+	}
+
 	ent := newEntry(key, v)
+	ent.tags = newTags()
 	for _, applier := range metaAppliers {
-		applier.applyTo(ent)
+		if err := applier.applyTo(ent); err != nil {
+			return err
+		}
 	}
 
 	if err := x.e.Insert(ent); err != nil {
@@ -157,42 +164,62 @@ func (x *Tx) InsertOrReplace(key string, data interface{}, metaAppliers ...MetaA
 		return ErrTxIsReadOnly
 	}
 
-	v, err := serializeToValue(data)
+	v, isJson, err := serializeToValue(data)
 	if err != nil {
 		return err
 	}
 
-	ent := newEntry(key, v)
-	for _, applier := range metaAppliers {
-		applier.applyTo(ent)
+	if isJson {
+		metaAppliers = append(metaAppliers, WithContentType(JSON))
 	}
 
-	existing, err := x.e.FindByKey(key)
+	newEnt := newEntry(key, v)
+	newEnt.tags = newTags()
+	for _, applier := range metaAppliers {
+		if err := applier.applyTo(newEnt); err != nil {
+			return err
+		}
+	}
+
+	existingEnt, err := x.e.FindByKey(key)
 	if err != nil && !errors.Is(err, ErrKeyDoesNotExist) {
 		return err
 	}
 
-	if existing != nil {
-		if updateErr := x.e.Put(ent, true); updateErr != nil {
+	if existingEnt != nil {
+		preserveCreatedAt(existingEnt, newEnt)
+
+		if updateErr := x.e.Put(newEnt, true); updateErr != nil {
 			return updateErr
 		}
 
-		x.updates = append(x.updates, ent)
-		if existing.committed {
-			x.persistCommands = append(x.persistCommands, &deleteCmd{key: existing.key})
-			x.replaced = append(x.replaced, existing)
+		x.updates = append(x.updates, newEnt)
+		if existingEnt.committed {
+			x.persistCommands = append(x.persistCommands, &deleteCmd{key: existingEnt.key})
+			x.replaced = append(x.replaced, existingEnt)
 		}
 	} else {
-		if insertErr := x.e.Put(ent, false); insertErr != nil {
+		if insertErr := x.e.Put(newEnt, false); insertErr != nil {
 			return insertErr
 		}
 
-		x.added = append(x.added, ent)
+		x.added = append(x.added, newEnt)
 	}
 
-	x.persistCommands = append(x.persistCommands, ent)
+	x.persistCommands = append(x.persistCommands, newEnt)
 
 	return nil
+}
+
+func preserveCreatedAt(existingEnt, newEnt *entry) {
+	if existingEnt.tags == nil {
+		return
+	}
+
+	if createdAt, ok := existingEnt.tags.integers[CreatedAt]; ok {
+		newEnt.tags.names[CreatedAt] = strDataType
+		newEnt.tags.integers[CreatedAt] = createdAt
+	}
 }
 
 // Tag adds new tags or replaces existing tags only those specified in the keys of the given map of tags

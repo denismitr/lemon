@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/suite"
 	"io/ioutil"
 	"os"
+	"path"
 	"strings"
 	"testing"
 )
@@ -709,6 +710,9 @@ func assertTwoFilesHaveEqualContents(t *testing.T, pathA, pathB string) {
 		t.Log("\n================================================================================")
 		t.Errorf("file %s contents\n%s\n\ndoes not match expected file %s contents \n\n%s", pathA, strA, pathB, strB)
 		t.Log("\n================================================================================")
+		ff, _ := os.Create("./__fixtures__/error_" + path.Base(pathA))
+		ff.Write([]byte(strA))
+		ff.Close()
 	} else {
 		t.Log("contents match")
 	}

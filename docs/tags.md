@@ -25,7 +25,7 @@ err := db.Update(ctx, func(tx *lemon.Tx) error {
         return err
     }
 
-    tagsForUser := lemon.WithTags().Bool("someTag", true).Float("someFloat", 887.2)
+    tagsForUser := lemon.WithTags().Bool("someBoolTag", true).Float("someFloatTag", 887.2)
 
     if err := tx.InsertOrReplace(
         "user:9876",
@@ -39,7 +39,7 @@ err := db.Update(ctx, func(tx *lemon.Tx) error {
 })
 ```
 
-Example with tagging and untagging
+Example with tagging one project and untagging another in one transaction
 ```go
 err := db.Update(ctx, func(tx *lemon.Tx) error {
     if err := tx.Tag("user:9876", lemon.M{

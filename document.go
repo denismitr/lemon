@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/pkg/errors"
 	"github.com/tidwall/gjson"
+	"strings"
 )
 
 var ErrJSONCouldNotBeUnmarshalled = errors.New("json contents could not be unmarshalled, probably is invalid")
@@ -52,19 +53,27 @@ func createMapFromTags(t *tags) M {
 	}
 
 	for k, v := range t.integers {
-		result[k] = v
+		if !strings.HasPrefix(k, "_") {
+			result[k] = v
+		}
 	}
 
 	for k, v := range t.strings {
-		result[k] = v
+		if !strings.HasPrefix(k, "_") {
+			result[k] = v
+		}
 	}
 
 	for k, v := range t.floats {
-		result[k] = v
+		if !strings.HasPrefix(k, "_") {
+			result[k] = v
+		}
 	}
 
 	for k, v := range t.booleans {
-		result[k] = v
+		if !strings.HasPrefix(k, "_") {
+			result[k] = v
+		}
 	}
 
 	return result

@@ -13,6 +13,45 @@ var (
 
 type M map[string]interface{}
 
+func (m M) applyTo(e *entry) error {
+	for k, v := range m {
+		switch typedValue := v.(type) {
+		case int:
+			if it, ok := e.tags.names[k]; ok && it != intDataType {
+				return errors.Wrapf(ErrInvalidTagType, "key %s already taken and has another type", k)
+			}
+
+			e.tags.integers[k] = typedValue
+			e.tags.names[k] = intDataType
+		case string:
+			if it, ok := e.tags.names[k]; ok && it != strDataType {
+				return errors.Wrapf(ErrInvalidTagType, "key %s already taken and has another type", k)
+			}
+
+			e.tags.strings[k] = typedValue
+			e.tags.names[k] = strDataType
+		case float64:
+			if it, ok := e.tags.names[k]; ok && it != strDataType {
+				return errors.Wrapf(ErrInvalidTagType, "key %s already taken and has another type", k)
+			}
+
+			e.tags.floats[k] = typedValue
+			e.tags.names[k] = floatDataType
+		case bool:
+			if it, ok := e.tags.names[k]; ok && it != strDataType {
+				return errors.Wrapf(ErrInvalidTagType, "key %s already taken and has another type", k)
+			}
+
+			e.tags.booleans[k] = typedValue
+			e.tags.names[k] = boolDataType
+		default:
+			return errors.Wrapf(ErrInvalidTagType, "key %s has unsupported type for LemonDB tags", k)
+		}
+	}
+
+	return nil
+}
+
 func (m M) String(k string) string {
 	v, ok := m[k].(string)
 	if !ok {

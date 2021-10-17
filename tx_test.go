@@ -155,7 +155,7 @@ func (rts *rollbackTestSuite) TestInsertRollbackWithTags() {
 		rts.Require().NoError(err)
 		rts.Require().Equal("book:4", book4.Key())
 		rts.Require().Equal(`{"author":"Brian","edition":1,"year":2008}`, book4.RawString())
-		rts.Require().Equal(`paper`, book4.Tags().String("type"))
+		rts.Require().Equal(true, book4.Tags().Bool("paper"))
 		rts.Require().Equal(2, book4.Tags().Int("inStock"))
 		rts.Require().Equal(30.45, book4.Tags().Float("price"))
 
@@ -164,7 +164,7 @@ func (rts *rollbackTestSuite) TestInsertRollbackWithTags() {
 		rts.Require().Equal("book:41", book41.Key())
 		rts.Require().Equal(`{"author":"Valeria Pucci","edition":2,"year":2011}`, book41.RawString())
 		rts.Require().Equal(2, book41.JSON().IntOrDefault("edition", 0))
-		rts.Require().Equal(`digital`, book41.Tags().String("type"))
+		rts.Require().Equal(true, book41.Tags().Bool("digital"))
 		rts.Require().Equal(29, book41.Tags().Int("inStock"))
 		rts.Require().Equal(30.33, book41.Tags().Float("price"))
 
@@ -286,7 +286,7 @@ func forceSeedDataForVacuum(t *testing.T, db *lemon.DB) {
 			lemon.WithTags().
 				Float("price", 30.45).
 				Int("inStock", 2).
-				Str("type", "paper"),
+				Bool("paper", true),
 		); err != nil {
 			return err
 		}
@@ -297,7 +297,7 @@ func forceSeedDataForVacuum(t *testing.T, db *lemon.DB) {
 			lemon.WithTags().
 				Float("price", 30.33).
 				Int("inStock", 29).
-				Str("type", "digital"),
+				Bool("digital", true),
 		); err != nil {
 			return err
 		}
@@ -308,7 +308,7 @@ func forceSeedDataForVacuum(t *testing.T, db *lemon.DB) {
 			lemon.WithTags().
 				Float("price", 24.444).
 				Int("inStock", 290).
-				Str("type", "digital"),
+				Bool("digital", true),
 		); err != nil {
 			return err
 		}
@@ -319,7 +319,7 @@ func forceSeedDataForVacuum(t *testing.T, db *lemon.DB) {
 			lemon.WithTags().
 				Float("price", 19.99).
 				Int("inStock", 1).
-				Str("type", "paper"),
+				Bool("paper", false),
 		); err != nil {
 			return err
 		}
@@ -342,8 +342,7 @@ func forceSeedDataForVacuum(t *testing.T, db *lemon.DB) {
 			lemon.WithTags().
 				Float("price", 21.99).
 				Int("inStock", 2).
-				Bool("delivery", true).
-				Str("type", "paper"),
+				Bool("delivery", true),
 		); err != nil {
 			return err
 		}
@@ -364,7 +363,7 @@ func forceSeedBooks(t *testing.T, db *lemon.DB) {
 			lemon.WithTags().
 				Float("price", 30.45).
 				Int("inStock", 2).
-				Str("type", "paper"),
+				Bool("paper", true),
 		); err != nil {
 			return err
 		}
@@ -375,7 +374,7 @@ func forceSeedBooks(t *testing.T, db *lemon.DB) {
 			lemon.WithTags().
 				Float("price", 30.33).
 				Int("inStock", 29).
-				Str("type", "digital"),
+				Bool("digital", true),
 		); err != nil {
 			return err
 		}

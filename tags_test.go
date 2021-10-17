@@ -3,12 +3,61 @@ package lemon_test
 import (
 	"context"
 	"github.com/denismitr/lemon"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"os"
 	"sync"
 	"testing"
+	"time"
 )
+
+func Test_ImplicitTags_WriteRead(t *testing.T) {
+	fixture := "./__fixtures__/implicit_tag_1.ldb"
+
+	db, closer, err := lemon.Open(fixture)
+	require.NoError(t, err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := os.Remove(fixture); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	start := time.Now()
+	assert.NoError(t, db.Insert("key:001", lemon.M{"key": 1}, lemon.WithTimestamps()))
+	time.Sleep(1 * time.Second)
+
+	assert.NoError(t, db.Insert("key:002", lemon.M{"key": 2}, lemon.WithTimestamps()))
+	time.Sleep(1 * time.Second)
+
+	assert.NoError(t,
+		db.Insert("key:003",
+			`key: 003`,
+			lemon.WithTimestamps()))
+	time.Sleep(1 * time.Second)
+
+	assert.NoError(t,
+		db.Insert("key:004",
+			[]byte(`key: 004`),
+			lemon.WithTimestamps()))
+	time.Sleep(1 * time.Second)
+
+	assert.NoError(t, db.Insert("key:005", lemon.M{"key": 5}, lemon.WithTimestamps()))
+	time.Sleep(1 * time.Second)
+
+	require.NoError(t, db.Insert("key:006", lemon.M{"key": 5}, lemon.WithTimestamps()))
+
+	qt := lemon.QT().IntTagGt(lemon.CreatedAt, int(start.Add(2500 * time.Millisecond).Unix()))
+	docs, err := db.Find(context.Background(), lemon.Q().HasAllTags(qt))
+	require.NoError(t, err)
+
+	require.Equal(t, 3, len(docs))
+}
 
 func Test_ScanByTagName(t *testing.T) {
 	suite.Run(t, &scanByTagNameSuite{})

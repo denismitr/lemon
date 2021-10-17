@@ -1,12 +1,35 @@
 package lemon
 
-import "github.com/pkg/errors"
+import (
+	"github.com/pkg/errors"
+	"time"
+)
+
+const (
+	CreatedAt = "_ca"
+	UpdatedAt = "_ua"
+	ContentType = "_ct"
+	JSON = "json"
+)
 
 var ErrTagNameConflict = errors.New("tag name conflict")
 var ErrTagNameNotFound = errors.New("tag name not found")
 
 type MetaApplier interface {
-	applyTo(e *entry)
+	applyTo(e *entry) error
+}
+
+func WithTimestamps() MetaApplier {
+	return M{
+		CreatedAt: int(time.Now().Unix()),
+		UpdatedAt: int(time.Now().Unix()),
+	}
+}
+
+func WithContentType(ct string) MetaApplier {
+	return M{
+		ContentType: ct,
+	}
 }
 
 func WithTags() *TagApplier {
@@ -40,6 +63,20 @@ func (ta *TagApplier) Int(name string, value int) *TagApplier {
 func (ta *TagApplier) Float(name string, value float64) *TagApplier {
 	ta.keys[name] = floatDataType
 	ta.floats[name] = value
+	return ta
+}
+
+func (ta *TagApplier) Timestamps() *TagApplier {
+	ta.keys[CreatedAt] = intDataType
+	ta.keys[UpdatedAt] = intDataType
+	ta.integers[CreatedAt] = int(time.Now().Unix())
+	ta.integers[UpdatedAt] = int(time.Now().Unix())
+	return ta
+}
+
+func (ta *TagApplier) ContentType(ct string) *TagApplier {
+	ta.keys[ContentType] = strDataType
+	ta.strings[ContentType] = ct
 	return ta
 }
 
@@ -101,7 +138,7 @@ type TagApplier struct {
 	strings  map[string]string
 }
 
-func (ta *TagApplier) applyTo(e *entry) {
+func (ta *TagApplier) applyTo(e *entry) error {
 	if e.tags == nil {
 		e.tags = newTags()
 	}
@@ -121,6 +158,8 @@ func (ta *TagApplier) applyTo(e *entry) {
 	for n, v := range ta.floats {
 		e.tags.floats[n] = v
 	}
+
+	return nil
 }
 
 type tags struct {
