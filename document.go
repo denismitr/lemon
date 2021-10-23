@@ -2,8 +2,10 @@ package lemon
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/pkg/errors"
 	"github.com/tidwall/gjson"
+	"strconv"
 	"strings"
 )
 
@@ -122,6 +124,14 @@ func (d *Document) M() (M, error) {
 		return nil, errors.Wrap(err, "could not unmarshal to lemon.M")
 	}
 	return m, nil
+}
+
+func (d *Document) MustInteger() int {
+	n, err := strconv.Atoi(string(d.value))
+	if err != nil {
+		panic(fmt.Errorf("could not convert value %s to integer", string(d.value)))
+	}
+	return n
 }
 
 func (js *JSONValue) Unmarshal(dest interface{}) error {
