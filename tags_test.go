@@ -3,7 +3,6 @@ package lemon_test
 import (
 	"context"
 	"github.com/denismitr/lemon"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"os"
@@ -12,55 +11,115 @@ import (
 	"time"
 )
 
-func Test_ImplicitTags_WriteRead(t *testing.T) {
-	fixture := "./__fixtures__/implicit_tag_1.ldb"
+func Test_ScanByTagName(t *testing.T) {
+	suite.Run(t, &scanByTagNameSuite{})
+}
 
-	db, closer, err := lemon.Open(fixture)
-	require.NoError(t, err)
+func Test_ImplicitTags(t *testing.T) {
+	suite.Run(t, &ImplicitTagsSuite{})
+}
+
+type ImplicitTagsSuite struct {
+	suite.Suite
+	fixture string
+	start   time.Time
+}
+
+func (its *ImplicitTagsSuite) SetupSuite() {
+	its.fixture = "./__fixtures__/implicit_tag_1.ldb"
+
+	db, closer, err := lemon.Open(its.fixture)
+	its.Require().NoError(err)
 
 	defer func() {
 		if err := closer(); err != nil {
-			t.Fatal(err)
-		}
-
-		if err := os.Remove(fixture); err != nil {
-			t.Fatal(err)
+			its.T().Fatal(err)
 		}
 	}()
 
-	start := time.Now()
-	assert.NoError(t, db.Insert("key:001", lemon.M{"key": 1}, lemon.WithTimestamps()))
+	its.start = time.Now()
+	its.Require().NoError(db.Insert("key:0", lemon.M{"key": 0}))
+	its.Require().NoError(db.Insert("key:001", lemon.M{"key": 1}, lemon.WithTimestamps()))
 	time.Sleep(1 * time.Second)
 
-	assert.NoError(t, db.Insert("key:002", lemon.M{"key": 2}, lemon.WithTimestamps()))
+	its.Require().NoError(db.Insert("key:002", lemon.M{"key": 2}, lemon.WithTimestamps()))
 	time.Sleep(1 * time.Second)
 
-	assert.NoError(t,
-		db.Insert("key:003",
-			`key: 003`,
-			lemon.WithTimestamps()))
+	its.Require().NoError(db.Insert("key:003", `key: 003`, lemon.WithTimestamps()))
 	time.Sleep(1 * time.Second)
 
-	assert.NoError(t,
-		db.Insert("key:004",
-			[]byte(`key: 004`),
-			lemon.WithTimestamps()))
+	its.Require().NoError(db.Insert("key:004", []byte(`key: 004`), lemon.WithTimestamps()))
 	time.Sleep(1 * time.Second)
 
-	assert.NoError(t, db.Insert("key:005", lemon.M{"key": 5}, lemon.WithTimestamps()))
+	its.Require().NoError(db.Insert("key:005", lemon.M{"key": 5}, lemon.WithTimestamps()))
 	time.Sleep(1 * time.Second)
 
-	require.NoError(t, db.Insert("key:006", lemon.M{"key": 5}, lemon.WithTimestamps()))
+	its.Require().NoError(db.Insert("key:006", lemon.M{"key": 6}, lemon.WithTimestamps()))
+	its.Require().NoError(db.Insert("key:007", lemon.M{"key": 7}))
 
-	qt := lemon.QT().IntTagGt(lemon.CreatedAt, int(start.Add(2500 * time.Millisecond).Unix()))
-	docs, err := db.Find(context.Background(), lemon.Q().HasAllTags(qt))
-	require.NoError(t, err)
-
-	require.Equal(t, 3, len(docs))
+	its.Assert().Equal(8, db.Count())
 }
 
-func Test_ScanByTagName(t *testing.T) {
-	suite.Run(t, &scanByTagNameSuite{})
+func (its *ImplicitTagsSuite) TearDownSuite() {
+	if err := os.Remove(its.fixture); err != nil {
+		its.T().Fatal(err)
+	}
+}
+
+func (its *ImplicitTagsSuite) TestTimestamps() {
+	db, closer, err := lemon.Open(its.fixture)
+	its.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			its.T().Fatal(err)
+		}
+	}()
+
+	its.Assert().Equal(8, db.Count())
+
+	from := int(its.start.Add(2300*time.Millisecond).Unix())
+	qt := lemon.QT().IntTagGt(lemon.CreatedAt, from)
+	docs, err := db.Find(context.Background(), lemon.Q().HasAllTags(qt))
+	its.Require().NoError(err)
+
+	its.Require().Equal(3, len(docs))
+	its.Assert().Equal(docs[0].Key(), "key:004")
+	its.Assert().Equal(docs[1].Key(), "key:005")
+	its.Assert().Equal(docs[2].Key(), "key:006")
+}
+
+func (its *ImplicitTagsSuite) TestImplicitContentType() {
+	db, closer, err := lemon.Open(its.fixture)
+	its.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			its.T().Fatal(err)
+		}
+	}()
+
+	its.Assert().Equal(8, db.Count())
+
+	docs, err := db.Find(context.Background(), nil)
+	its.Require().NoError(err)
+
+	its.Require().Equal(8, len(docs))
+
+	its.Assert().Equal("key:0", docs[0].Key())
+	its.Assert().Equal(lemon.JSON, docs[0].ContentType())
+	its.Assert().Equal(true, docs[0].IsJSON())
+
+	its.Assert().Equal("key:001", docs[1].Key())
+	its.Assert().Equal(lemon.JSON, docs[1].ContentType())
+	its.Assert().Equal(true, docs[1].IsJSON())
+
+	its.Assert().Equal("key:002", docs[2].Key())
+	its.Assert().Equal("key:003", docs[3].Key())
+	its.Assert().Equal("key:004", docs[4].Key())
+	its.Assert().Equal("key:005", docs[5].Key())
+	its.Assert().Equal("key:006", docs[6].Key())
+	its.Assert().Equal("key:007", docs[7].Key())
 }
 
 type scanByTagNameSuite struct {
@@ -142,14 +201,14 @@ func seedTaggedCars(t *testing.T, db *lemon.DB, wg *sync.WaitGroup) {
 		if err := tx.InsertOrReplace(
 			"car:12",
 			lemon.M{
-				"id": 12,
+				"id":    12,
 				"maker": "ford",
 				"model": "focus",
 			},
 			lemon.WithTags().Map(lemon.M{
 				"transmission": "automatic",
-				"maxSpeed": 160,
-				"price": 98773.98,
+				"maxSpeed":     160,
+				"price":        98773.98,
 			}),
 		); err != nil {
 			return err
@@ -158,15 +217,15 @@ func seedTaggedCars(t *testing.T, db *lemon.DB, wg *sync.WaitGroup) {
 		if err := tx.InsertOrReplace(
 			"car:10",
 			lemon.M{
-				"id": 10,
-				"maker": "Tesla",
-				"model": "mx900",
+				"id":       10,
+				"maker":    "Tesla",
+				"model":    "mx900",
 				"currency": []string{"EUR", "USD", "GBP"},
 			},
 			lemon.WithTags().Map(lemon.M{
 				"transmission": "automatic",
-				"maxSpeed": 200,
-				"price": 298473.80,
+				"maxSpeed":     200,
+				"price":        298473.80,
 			}),
 		); err != nil {
 			return err
@@ -175,15 +234,15 @@ func seedTaggedCars(t *testing.T, db *lemon.DB, wg *sync.WaitGroup) {
 		if err := tx.InsertOrReplace(
 			"car:104",
 			lemon.M{
-				"id": 104,
-				"maker": "Ferrari",
-				"model": "FX999",
+				"id":       104,
+				"maker":    "Ferrari",
+				"model":    "FX999",
 				"currency": []string{"EUR", "USD"},
 			},
 			lemon.WithTags().Map(lemon.M{
 				"transmission": "manual",
-				"maxSpeed":322,
-				"price": 458473.80,
+				"maxSpeed":     322,
+				"price":        458473.80,
 			}),
 		); err != nil {
 			return err
@@ -192,15 +251,15 @@ func seedTaggedCars(t *testing.T, db *lemon.DB, wg *sync.WaitGroup) {
 		if err := tx.InsertOrReplace(
 			"car:88",
 			lemon.M{
-				"id": 88,
-				"maker": "Nissan",
-				"model": "Murano",
+				"id":       88,
+				"maker":    "Nissan",
+				"model":    "Murano",
 				"currency": []string{"EUR", "USD", "RUR"},
 			},
 			lemon.WithTags().Map(lemon.M{
 				"transmission": "automatic",
-				"maxSpeed": 240,
-				"price": 33900.66,
+				"maxSpeed":     240,
+				"price":        33900.66,
 			}),
 		); err != nil {
 			return err
@@ -213,4 +272,3 @@ func seedTaggedCars(t *testing.T, db *lemon.DB, wg *sync.WaitGroup) {
 		t.Fatal(err)
 	}
 }
-

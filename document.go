@@ -15,23 +15,35 @@ type JSONValue struct {
 }
 
 type Document struct {
-	key   string
-	tags  M
-	value []byte
+	key      string
+	userTags M
+	metaTags M
+	value    []byte
+}
+
+func newDocumentFromEntry(ent *entry) *Document {
+	userTags, metaTags := createMapFromTags(ent.tags)
+
+	d := &Document{
+		key:      ent.key.String(),
+		value:    ent.value, // fixme: maybe copy
+		userTags: userTags,
+		metaTags: metaTags,
+	}
+
+	return d
 }
 
 func (d *Document) Key() string {
 	return d.key
 }
 
-func newDocumentFromEntry(ent *entry) *Document {
-	d := &Document{
-		key:   ent.key.String(),
-		value: ent.value, // fixme: maybe copy
-		tags:  createMapFromTags(ent.tags),
-	}
+func (d *Document) ContentType() string {
+	return d.metaTags.String(ContentType)
+}
 
-	return d
+func (d *Document) IsJSON() bool {
+	return d.metaTags.String(ContentType) == JSON
 }
 
 func (d *Document) Value() []byte {
@@ -46,41 +58,50 @@ func (d *Document) RawString() string {
 	return string(d.value)
 }
 
-func createMapFromTags(t *tags) M {
-	result := make(M)
+func createMapFromTags(t *tags) (M,M) {
+	userTags := make(M)
+	metaTags := make(M)
 	if t == nil {
-		return result
+		return userTags, metaTags
 	}
 
 	for k, v := range t.integers {
 		if !strings.HasPrefix(k, "_") {
-			result[k] = v
+			userTags[k] = v
+		} else {
+			metaTags[k] = v
 		}
 	}
 
 	for k, v := range t.strings {
 		if !strings.HasPrefix(k, "_") {
-			result[k] = v
+			userTags[k] = v
+		} else {
+			metaTags[k] = v
 		}
 	}
 
 	for k, v := range t.floats {
 		if !strings.HasPrefix(k, "_") {
-			result[k] = v
+			userTags[k] = v
+		} else {
+			metaTags[k] = v
 		}
 	}
 
 	for k, v := range t.booleans {
 		if !strings.HasPrefix(k, "_") {
-			result[k] = v
+			userTags[k] = v
+		} else {
+			metaTags[k] = v
 		}
 	}
 
-	return result
+	return userTags, metaTags
 }
 
 func (d *Document) Tags() M {
-	return d.tags
+	return d.userTags
 }
 
 func (d *Document) M() (M, error) {
