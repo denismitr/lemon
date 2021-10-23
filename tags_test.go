@@ -38,7 +38,7 @@ func (its *ImplicitTagsSuite) SetupSuite() {
 	}()
 
 	its.start = time.Now()
-	its.Require().NoError(db.Insert("key:0", lemon.M{"key": 0}))
+	its.Require().NoError(db.Insert("key:0", 0))
 	its.Require().NoError(db.Insert("key:001", lemon.M{"key": 1}, lemon.WithTimestamps()))
 	time.Sleep(1 * time.Second)
 
@@ -107,19 +107,39 @@ func (its *ImplicitTagsSuite) TestImplicitContentType() {
 	its.Require().Equal(8, len(docs))
 
 	its.Assert().Equal("key:0", docs[0].Key())
-	its.Assert().Equal(lemon.JSON, docs[0].ContentType())
-	its.Assert().Equal(true, docs[0].IsJSON())
+	its.Assert().Equal(lemon.Integer, docs[0].ContentType())
+	its.Assert().Equal(false, docs[0].IsJSON())
+	its.Assert().Equal(true, docs[0].IsInteger())
 
 	its.Assert().Equal("key:001", docs[1].Key())
 	its.Assert().Equal(lemon.JSON, docs[1].ContentType())
 	its.Assert().Equal(true, docs[1].IsJSON())
 
 	its.Assert().Equal("key:002", docs[2].Key())
+	its.Assert().Equal(lemon.JSON, docs[2].ContentType())
+	its.Assert().Equal(true, docs[2].IsJSON())
+
 	its.Assert().Equal("key:003", docs[3].Key())
+	its.Assert().Equal(lemon.String, docs[3].ContentType())
+	its.Assert().Equal(false, docs[3].IsJSON())
+	its.Assert().Equal(true, docs[3].IsString())
+
 	its.Assert().Equal("key:004", docs[4].Key())
+	its.Assert().Equal(lemon.Bytes, docs[4].ContentType())
+	its.Assert().Equal(false, docs[4].IsJSON())
+	its.Assert().Equal(true, docs[4].IsBytes())
+
 	its.Assert().Equal("key:005", docs[5].Key())
+	its.Assert().Equal(lemon.JSON, docs[5].ContentType())
+	its.Assert().Equal(true, docs[5].IsJSON())
+
 	its.Assert().Equal("key:006", docs[6].Key())
+	its.Assert().Equal(lemon.JSON, docs[6].ContentType())
+	its.Assert().Equal(true, docs[6].IsJSON())
+
 	its.Assert().Equal("key:007", docs[7].Key())
+	its.Assert().Equal(lemon.JSON, docs[7].ContentType())
+	its.Assert().Equal(true, docs[7].IsJSON())
 }
 
 type scanByTagNameSuite struct {

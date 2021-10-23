@@ -132,14 +132,12 @@ func (x *Tx) Insert(key string, data interface{}, metaAppliers ...MetaApplier) e
 		return ErrTxAlreadyClosed
 	}
 
-	v, isJson, err := serializeToValue(data)
+	v, contentTypeIdentifier, err := serializeToValue(data)
 	if err != nil {
 		return err
 	}
 
-	if isJson {
-		metaAppliers = append(metaAppliers, WithContentType(JSON))
-	}
+	metaAppliers = append(metaAppliers, WithContentType(contentTypeIdentifier))
 
 	ent := newEntry(key, v)
 	ent.tags = newTags()
@@ -164,14 +162,12 @@ func (x *Tx) InsertOrReplace(key string, data interface{}, metaAppliers ...MetaA
 		return ErrTxIsReadOnly
 	}
 
-	v, isJson, err := serializeToValue(data)
+	v, contentTypeIdentifier, err := serializeToValue(data)
 	if err != nil {
 		return err
 	}
 
-	if isJson {
-		metaAppliers = append(metaAppliers, WithContentType(JSON))
-	}
+	metaAppliers = append(metaAppliers, WithContentType(contentTypeIdentifier))
 
 	newEnt := newEntry(key, v)
 	newEnt.tags = newTags()

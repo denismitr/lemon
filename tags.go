@@ -5,11 +5,17 @@ import (
 	"time"
 )
 
+type ContentTypeIdentifier string
+
 const (
-	CreatedAt = "_ca"
-	UpdatedAt = "_ua"
+	CreatedAt   = "_ca"
+	UpdatedAt   = "_ua"
 	ContentType = "_ct"
-	JSON = "json"
+
+	JSON    ContentTypeIdentifier = "json"
+	String  ContentTypeIdentifier = "str"
+	Bytes   ContentTypeIdentifier = "bytes"
+	Integer ContentTypeIdentifier = "int"
 )
 
 var ErrTagNameConflict = errors.New("tag name conflict")
@@ -26,9 +32,9 @@ func WithTimestamps() MetaApplier {
 	}
 }
 
-func WithContentType(ct string) MetaApplier {
+func WithContentType(ct ContentTypeIdentifier) MetaApplier {
 	return M{
-		ContentType: ct,
+		ContentType: string(ct),
 	}
 }
 

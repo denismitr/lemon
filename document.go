@@ -38,12 +38,24 @@ func (d *Document) Key() string {
 	return d.key
 }
 
-func (d *Document) ContentType() string {
-	return d.metaTags.String(ContentType)
+func (d *Document) ContentType() ContentTypeIdentifier {
+	return ContentTypeIdentifier(d.metaTags.String(ContentType))
 }
 
 func (d *Document) IsJSON() bool {
-	return d.metaTags.String(ContentType) == JSON
+	return d.metaTags.String(ContentType) == string(JSON)
+}
+
+func (d *Document) IsInteger() bool {
+	return d.metaTags.String(ContentType) == string(Integer)
+}
+
+func (d *Document) IsString() bool {
+	return d.metaTags.String(ContentType) == string(String)
+}
+
+func (d *Document) IsBytes() bool {
+	return d.metaTags.String(ContentType) == string(Bytes)
 }
 
 func (d *Document) Value() []byte {
