@@ -23,6 +23,7 @@ type ImplicitTagsSuite struct {
 	suite.Suite
 	fixture string
 	start   time.Time
+	finish  time.Time
 }
 
 func (its *ImplicitTagsSuite) SetupSuite() {
@@ -57,6 +58,12 @@ func (its *ImplicitTagsSuite) SetupSuite() {
 	its.Require().NoError(db.Insert("key:006", lemon.M{"key": 6}, lemon.WithTimestamps()))
 	its.Require().NoError(db.Insert("key:007", lemon.M{"key": 7}))
 
+	its.Require().NoError(db.InsertOrReplace("key:002", lemon.M{"key": 20002}, lemon.WithTimestamps()))
+	time.Sleep(1 * time.Second)
+	its.Require().NoError(db.InsertOrReplace("key:004", []byte(`key: 0004`), lemon.WithTimestamps()))
+
+	its.finish = time.Now()
+
 	its.Assert().Equal(8, db.Count())
 }
 
@@ -66,7 +73,7 @@ func (its *ImplicitTagsSuite) TearDownSuite() {
 	}
 }
 
-func (its *ImplicitTagsSuite) TestTimestamps() {
+func (its *ImplicitTagsSuite) TestQueryByTimestamps() {
 	db, closer, err := lemon.Open(its.fixture)
 	its.Require().NoError(err)
 
@@ -78,15 +85,45 @@ func (its *ImplicitTagsSuite) TestTimestamps() {
 
 	its.Assert().Equal(8, db.Count())
 
-	from := int(its.start.Add(2300*time.Millisecond).Unix())
-	qt := lemon.QT().IntTagGt(lemon.CreatedAt, from)
+	qt := lemon.QT().CreatedAfter(its.start.Add(2300*time.Millisecond))
 	docs, err := db.Find(context.Background(), lemon.Q().HasAllTags(qt))
 	its.Require().NoError(err)
 
 	its.Require().Equal(3, len(docs))
-	its.Assert().Equal(docs[0].Key(), "key:004")
-	its.Assert().Equal(docs[1].Key(), "key:005")
-	its.Assert().Equal(docs[2].Key(), "key:006")
+
+	its.Assert().Equal("key:004", docs[0].Key())
+	its.Assert().Equal(true, docs[0].HasTimestamps())
+	its.Assert().True(docs[0].CreatedAt().After(its.start))
+	its.Assert().True(
+		docs[0].UpdatedAt().After(docs[0].CreatedAt()),
+		"updated at should be after created at",
+	)
+	its.Assert().True(
+		docs[0].UpdatedAt().Before(its.finish),
+		"updated at should be before suite setup finish",
+	)
+
+	its.Assert().Equal("key:005", docs[1].Key())
+	its.Assert().Equal(true, docs[1].HasTimestamps())
+	its.Assert().True(
+		docs[1].CreatedAt().Equal(docs[1].UpdatedAt()),
+		"created at and updated at should be equal",
+	)
+	its.Assert().True(
+		docs[1].CreatedAt().After(its.start) && docs[1].CreatedAt().Before(its.finish),
+		"created at should be in range of test suite seed",
+	)
+
+	its.Assert().Equal("key:006", docs[2].Key())
+	its.Assert().Equal(true, docs[2].HasTimestamps())
+	its.Assert().True(
+		docs[2].CreatedAt().Equal(docs[2].UpdatedAt()),
+		"created at and updated at should be equal",
+	)
+	its.Assert().True(
+		docs[2].CreatedAt().After(its.start) && docs[2].CreatedAt().Before(its.finish),
+		"created at should be in range of test suite seed",
+	)
 }
 
 func (its *ImplicitTagsSuite) TestImplicitContentType() {
@@ -110,7 +147,8 @@ func (its *ImplicitTagsSuite) TestImplicitContentType() {
 	its.Assert().Equal(lemon.Integer, docs[0].ContentType())
 	its.Assert().Equal(false, docs[0].IsJSON())
 	its.Assert().Equal(true, docs[0].IsInteger())
-	its.Assert().Equal(10001, docs[0].MustInteger())
+	its.Assert().Equal(10001, docs[0].MustIntegerValue())
+	its.Assert().Equal(false, docs[0].HasTimestamps())
 
 	its.Assert().Equal("key:001", docs[1].Key())
 	its.Assert().Equal(lemon.JSON, docs[1].ContentType())
@@ -130,7 +168,7 @@ func (its *ImplicitTagsSuite) TestImplicitContentType() {
 	its.Assert().Equal(lemon.Bytes, docs[4].ContentType())
 	its.Assert().Equal(false, docs[4].IsJSON())
 	its.Assert().Equal(true, docs[4].IsBytes())
-	its.Assert().Equal([]byte(`key: 004`), docs[4].Value())
+	its.Assert().Equal([]byte(`key: 0004`), docs[4].Value())
 
 	its.Assert().Equal("key:005", docs[5].Key())
 	its.Assert().Equal(lemon.JSON, docs[5].ContentType())
@@ -143,6 +181,7 @@ func (its *ImplicitTagsSuite) TestImplicitContentType() {
 	its.Assert().Equal("key:007", docs[7].Key())
 	its.Assert().Equal(lemon.JSON, docs[7].ContentType())
 	its.Assert().Equal(true, docs[7].IsJSON())
+	its.Assert().Equal(false, docs[0].HasTimestamps())
 }
 
 type scanByTagNameSuite struct {

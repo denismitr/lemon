@@ -61,3 +61,6 @@ if err != nil {
     panic(err)
 }
 ```
+
+## Implicit Tags or Meta Tags
+Implicit tags are set by the LemonDB itself, sometimes with a hint from the user.

@@ -7,6 +7,7 @@ import (
 	"github.com/tidwall/gjson"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var ErrJSONCouldNotBeUnmarshalled = errors.New("json contents could not be unmarshalled, probably is invalid")
@@ -42,6 +43,20 @@ func (d *Document) Key() string {
 
 func (d *Document) ContentType() ContentTypeIdentifier {
 	return ContentTypeIdentifier(d.metaTags.String(ContentType))
+}
+
+func (d *Document) HasTimestamps() bool {
+	return d.metaTags.Int(CreatedAt) > 0 && d.metaTags.Int(UpdatedAt) > 0
+}
+
+func (d *Document) CreatedAt() time.Time {
+	ct := d.metaTags.Int(CreatedAt)
+	return time.Unix(int64(ct), 0)
+}
+
+func (d *Document) UpdatedAt() time.Time {
+	ct := d.metaTags.Int(UpdatedAt)
+	return time.Unix(int64(ct), 0)
 }
 
 func (d *Document) IsJSON() bool {
@@ -126,11 +141,16 @@ func (d *Document) M() (M, error) {
 	return m, nil
 }
 
-func (d *Document) MustInteger() int {
+func (d *Document) MustIntegerValue() int {
 	n, err := strconv.Atoi(string(d.value))
 	if err != nil {
 		panic(fmt.Errorf("could not convert value %s to integer", string(d.value)))
 	}
+	return n
+}
+
+func (d *Document) IntegerValue() int {
+	n, _ := strconv.Atoi(string(d.value))
 	return n
 }
 

@@ -5,84 +5,12 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 var (
 	ErrInvalidQueryOptions = errors.New("invalid query options")
 )
-
-type M map[string]interface{}
-
-func (m M) applyTo(e *entry) error {
-	for k, v := range m {
-		switch typedValue := v.(type) {
-		case int:
-			if it, ok := e.tags.names[k]; ok && it != intDataType {
-				return errors.Wrapf(ErrInvalidTagType, "key %s already taken and has another type", k)
-			}
-
-			e.tags.integers[k] = typedValue
-			e.tags.names[k] = intDataType
-		case string:
-			if it, ok := e.tags.names[k]; ok && it != strDataType {
-				return errors.Wrapf(ErrInvalidTagType, "key %s already taken and has another type", k)
-			}
-
-			e.tags.strings[k] = typedValue
-			e.tags.names[k] = strDataType
-		case float64:
-			if it, ok := e.tags.names[k]; ok && it != strDataType {
-				return errors.Wrapf(ErrInvalidTagType, "key %s already taken and has another type", k)
-			}
-
-			e.tags.floats[k] = typedValue
-			e.tags.names[k] = floatDataType
-		case bool:
-			if it, ok := e.tags.names[k]; ok && it != strDataType {
-				return errors.Wrapf(ErrInvalidTagType, "key %s already taken and has another type", k)
-			}
-
-			e.tags.booleans[k] = typedValue
-			e.tags.names[k] = boolDataType
-		default:
-			return errors.Wrapf(ErrInvalidTagType, "key %s has unsupported type for LemonDB tags", k)
-		}
-	}
-
-	return nil
-}
-
-func (m M) String(k string) string {
-	v, ok := m[k].(string)
-	if !ok {
-		return ""
-	}
-	return v
-}
-
-func (m M) Int(k string) int {
-	v, ok := m[k].(int)
-	if !ok {
-		return 0
-	}
-	return v
-}
-
-func (m M) Bool(k string) bool {
-	v, ok := m[k].(bool)
-	if !ok {
-		return false
-	}
-	return v
-}
-
-func (m M) Float(k string) float64 {
-	v, ok := m[k].(float64)
-	if !ok {
-		return 0
-	}
-	return v
-}
 
 type KeyRange struct {
 	From, To string
@@ -216,6 +144,11 @@ func (qt *QueryTags) IntTagGt(name string, value int) *QueryTags {
 	return qt
 }
 
+func (qt *QueryTags) IntTagLt(name string, value int) *QueryTags {
+	qt.integers[tagKey{name: name, comp: lessThan}] = value
+	return qt
+}
+
 func (qt *QueryTags) FloatTagEq(name string, value float64) *QueryTags {
 	qt.floats[tagKey{name: name, comp: equal}] = value
 	return qt
@@ -224,6 +157,26 @@ func (qt *QueryTags) FloatTagEq(name string, value float64) *QueryTags {
 func (qt *QueryTags) FloatTagGt(name string, value float64) *QueryTags {
 	qt.floats[tagKey{name: name, comp: greaterThan}] = value
 	return qt
+}
+
+func (qt *QueryTags) CreatedAfter(t time.Time) *QueryTags {
+	after := int(t.Unix())
+	return qt.IntTagGt(CreatedAt, after)
+}
+
+func (qt *QueryTags) UpdatedAfter(t time.Time) *QueryTags {
+	after := int(t.Unix())
+	return qt.IntTagGt(UpdatedAt, after)
+}
+
+func (qt *QueryTags) CreatedBefore(t time.Time) *QueryTags {
+	after := int(t.Unix())
+	return qt.IntTagLt(CreatedAt, after)
+}
+
+func (qt *QueryTags) UpdatedBefore(t time.Time) *QueryTags {
+	after := int(t.Unix())
+	return qt.IntTagLt(UpdatedAt, after)
 }
 
 type Order string
