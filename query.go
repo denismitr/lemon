@@ -179,6 +179,10 @@ func (qt *QueryTags) UpdatedBefore(t time.Time) *QueryTags {
 	return qt.IntTagLt(UpdatedAt, after)
 }
 
+func (qt *QueryTags) ContentTypeIs(t ContentTypeIdentifier) *QueryTags {
+	return qt.StrTagEq(ContentType, string(t))
+}
+
 type Order string
 
 const (

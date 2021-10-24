@@ -24,6 +24,9 @@ type ImplicitTagsSuite struct {
 	fixture string
 	start   time.Time
 	finish  time.Time
+
+	closer func() error
+	db *lemon.DB
 }
 
 func (its *ImplicitTagsSuite) SetupSuite() {
@@ -79,26 +82,36 @@ func (its *ImplicitTagsSuite) SetupSuite() {
 	its.Assert().Equal(8, db.Count())
 }
 
+func (its *ImplicitTagsSuite) SetupTest() {
+	var err error
+	its.db, its.closer, err = lemon.Open(its.fixture)
+	if err != nil {
+		its.T().Fatal(err)
+	}
+}
+
 func (its *ImplicitTagsSuite) TearDownSuite() {
 	if err := os.Remove(its.fixture); err != nil {
 		its.T().Fatal(err)
 	}
 }
 
-func (its *ImplicitTagsSuite) TestQueryByTimestamps_GT() {
-	db, closer, err := lemon.Open(its.fixture)
-	its.Require().NoError(err)
-
+func (its *ImplicitTagsSuite) TearDownTest() {
 	defer func() {
-		if err := closer(); err != nil {
-			its.T().Fatal(err)
-		}
+		its.db = nil
+		its.closer = nil
 	}()
 
-	its.Assert().Equal(8, db.Count())
+	if err := its.closer(); err != nil {
+		its.T().Fatal(err)
+	}
+}
+
+func (its *ImplicitTagsSuite) TestQueryByTimestamps_GT() {
+	its.Assert().Equal(8, its.db.Count())
 
 	qt := lemon.QT().CreatedAfter(its.start.Add(2300*time.Millisecond))
-	docs, err := db.FindContext(context.Background(), lemon.Q().HasAllTags(qt))
+	docs, err := its.db.FindContext(context.Background(), lemon.Q().HasAllTags(qt))
 	its.Require().NoError(err)
 
 	its.Require().Equal(3, len(docs))
@@ -138,20 +151,42 @@ func (its *ImplicitTagsSuite) TestQueryByTimestamps_GT() {
 	)
 }
 
-func (its *ImplicitTagsSuite) TestQueryByTimestamps_LT() {
-	db, closer, err := lemon.Open(its.fixture)
+func (its *ImplicitTagsSuite) TestQueryByContentType() {
+	its.Assert().Equal(8, its.db.Count())
+
+	jqt := lemon.QT().ContentTypeIs(lemon.JSON)
+	jsonDocs, err := its.db.Find(lemon.Q().HasAllTags(jqt))
 	its.Require().NoError(err)
 
-	defer func() {
-		if err := closer(); err != nil {
-			its.T().Fatal(err)
-		}
-	}()
+	its.Assert().Equal(5, len(jsonDocs))
+	for i := range jsonDocs {
+		its.Assert().True(jsonDocs[i].IsJSON(), "expected json document")
+	}
 
-	its.Assert().Equal(8, db.Count())
+	sqt := lemon.QT().ContentTypeIs(lemon.String)
+	stringDocs, err := its.db.Find(lemon.Q().HasAllTags(sqt))
+	its.Require().NoError(err)
+
+	its.Assert().Equal(1, len(stringDocs))
+	for i := range stringDocs {
+		its.Assert().True(stringDocs[i].IsString(), "expected string document")
+	}
+
+	bqt := lemon.QT().ContentTypeIs(lemon.Bytes)
+	bytesDocs, err := its.db.Find(lemon.Q().HasAllTags(bqt))
+	its.Require().NoError(err)
+
+	its.Assert().Equal(1, len(bytesDocs))
+	for i := range bytesDocs {
+		its.Assert().True(bytesDocs[i].IsBytes(), "expected bytes document")
+	}
+}
+
+func (its *ImplicitTagsSuite) TestQueryByTimestamps_LT() {
+	its.Assert().Equal(8, its.db.Count())
 
 	qt := lemon.QT().CreatedBefore(its.start.Add(2200*time.Millisecond))
-	docs, err := db.FindContext(context.Background(), lemon.Q().HasAllTags(qt))
+	docs, err := its.db.FindContext(context.Background(), lemon.Q().HasAllTags(qt))
 	its.Require().NoError(err)
 
 	its.Require().Equal(2, len(docs))
@@ -174,18 +209,9 @@ func (its *ImplicitTagsSuite) TestQueryByTimestamps_LT() {
 }
 
 func (its *ImplicitTagsSuite) TestImplicitContentType() {
-	db, closer, err := lemon.Open(its.fixture)
-	its.Require().NoError(err)
+	its.Assert().Equal(8, its.db.Count())
 
-	defer func() {
-		if err := closer(); err != nil {
-			its.T().Fatal(err)
-		}
-	}()
-
-	its.Assert().Equal(8, db.Count())
-
-	docs, err := db.FindContext(context.Background(), nil)
+	docs, err := its.db.FindContext(context.Background(), nil)
 	its.Require().NoError(err)
 
 	its.Require().Equal(8, len(docs))
