@@ -84,7 +84,11 @@ func (db *DB) Count() int {
 }
 
 func (db *DB) CountByQuery(opts *QueryOptions) (int, error) {
-	tx, err := db.Begin(context.Background(), true)
+	return db.CountByQueryContext(context.Background(), opts)
+}
+
+func (db *DB) CountByQueryContext(ctx context.Context, opts *QueryOptions) (int, error) {
+	tx, err := db.Begin(ctx, true)
 	if err != nil {
 		return 0, err
 	}
@@ -223,9 +227,31 @@ func (db *DB) Tag(key string, m M) error {
 	})
 }
 
-// Scan documents with query options and document iterator callback
-func (db *DB) Scan(ctx context.Context, qo *QueryOptions, cb func(d *Document) bool) error {
+func (db *DB) Scan(qo *QueryOptions, cb func(d *Document) bool) error {
+	return db.ScanContext(context.Background(), qo, cb)
+}
+
+// ScanContext iterates documents with query options and receives iterator callback
+// to go through filtered documents one by one
+func (db *DB) ScanContext(ctx context.Context, qo *QueryOptions, cb func(d *Document) bool) error {
 	return db.View(ctx, func(tx *Tx) error {
-		return tx.Scan(ctx, qo, cb)
+		return tx.Scan(qo, cb)
 	})
+}
+
+func (db *DB) Find(qo *QueryOptions) ([]Document, error) {
+	return db.FindContext(context.Background(), qo)
+}
+
+func (db *DB) FindContext(ctx context.Context, qo *QueryOptions) ([]Document, error) {
+	var docs []Document
+	if err := db.View(ctx, func(tx *Tx) error {
+		var err error
+		docs, err = tx.Find(qo)
+		return err
+	}); err != nil {
+		return nil, err
+	}
+
+	return docs, nil
 }

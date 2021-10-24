@@ -132,14 +132,19 @@ func (x *Tx) Insert(key string, data interface{}, metaAppliers ...MetaApplier) e
 		return ErrTxAlreadyClosed
 	}
 
-	v, err := serializeToValue(data)
+	v, contentTypeIdentifier, err := serializeToValue(data)
 	if err != nil {
 		return err
 	}
 
+	metaAppliers = append(metaAppliers, WithContentType(contentTypeIdentifier))
+
 	ent := newEntry(key, v)
+	ent.tags = newTags()
 	for _, applier := range metaAppliers {
-		applier.applyTo(ent)
+		if err := applier.applyTo(ent); err != nil {
+			return err
+		}
 	}
 
 	if err := x.e.Insert(ent); err != nil {
@@ -157,42 +162,60 @@ func (x *Tx) InsertOrReplace(key string, data interface{}, metaAppliers ...MetaA
 		return ErrTxIsReadOnly
 	}
 
-	v, err := serializeToValue(data)
+	v, contentTypeIdentifier, err := serializeToValue(data)
 	if err != nil {
 		return err
 	}
 
-	ent := newEntry(key, v)
+	metaAppliers = append(metaAppliers, WithContentType(contentTypeIdentifier))
+
+	newEnt := newEntry(key, v)
+	newEnt.tags = newTags()
 	for _, applier := range metaAppliers {
-		applier.applyTo(ent)
+		if err := applier.applyTo(newEnt); err != nil {
+			return err
+		}
 	}
 
-	existing, err := x.e.FindByKey(key)
+	existingEnt, err := x.e.FindByKey(key)
 	if err != nil && !errors.Is(err, ErrKeyDoesNotExist) {
 		return err
 	}
 
-	if existing != nil {
-		if updateErr := x.e.Put(ent, true); updateErr != nil {
+	if existingEnt != nil {
+		preserveCreatedAt(existingEnt, newEnt)
+
+		if updateErr := x.e.Put(newEnt, true); updateErr != nil {
 			return updateErr
 		}
 
-		x.updates = append(x.updates, ent)
-		if existing.committed {
-			x.persistCommands = append(x.persistCommands, &deleteCmd{key: existing.key})
-			x.replaced = append(x.replaced, existing)
+		x.updates = append(x.updates, newEnt)
+		if existingEnt.committed {
+			x.persistCommands = append(x.persistCommands, &deleteCmd{key: existingEnt.key})
+			x.replaced = append(x.replaced, existingEnt)
 		}
 	} else {
-		if insertErr := x.e.Put(ent, false); insertErr != nil {
+		if insertErr := x.e.Put(newEnt, false); insertErr != nil {
 			return insertErr
 		}
 
-		x.added = append(x.added, ent)
+		x.added = append(x.added, newEnt)
 	}
 
-	x.persistCommands = append(x.persistCommands, ent)
+	x.persistCommands = append(x.persistCommands, newEnt)
 
 	return nil
+}
+
+func preserveCreatedAt(existingEnt, newEnt *entry) {
+	if existingEnt.tags == nil {
+		return
+	}
+
+	if createdAt, ok := existingEnt.tags.integers[CreatedAt]; ok {
+		newEnt.tags.names[CreatedAt] = strDataType
+		newEnt.tags.integers[CreatedAt] = createdAt
+	}
 }
 
 // Tag adds new tags or replaces existing tags only those specified in the keys of the given map of tags
@@ -253,13 +276,13 @@ func (x *Tx) Untag(key string, tagNames ...string) error {
 	return nil
 }
 
-func (x *Tx) Scan(ctx context.Context, opts *QueryOptions, cb func(d *Document) bool) error {
+func (x *Tx) Scan(opts *QueryOptions, cb func(d *Document) bool) error {
 	ir := func(ent *entry) bool {
 		d := newDocumentFromEntry(ent)
 		return cb(d)
 	}
 
-	if err := x.applyScanner(ctx, opts, ir); err != nil {
+	if err := x.applyScanner(x.ctx, opts, ir); err != nil {
 		return err
 	}
 
@@ -281,17 +304,19 @@ func (x *Tx) CountByQuery(opts *QueryOptions) (int, error) {
 	return counter, nil
 }
 
-func (x *Tx) Find(ctx context.Context, q *QueryOptions, dest *[]Document) error {
+// Find documents by query options
+func (x *Tx) Find(q *QueryOptions) ([]Document, error) {
+	var result []Document
 	ir := func(ent *entry) bool {
-		*dest = append(*dest, *newDocumentFromEntry(ent))
+		result = append(result, *newDocumentFromEntry(ent))
 		return true
 	}
 
-	if err := x.applyScanner(ctx, q, ir); err != nil {
-		return err
+	if err := x.applyScanner(x.ctx, q, ir); err != nil {
+		return nil, err
 	}
 
-	return nil
+	return result, nil
 }
 
 func (x *Tx) applyScanner(ctx context.Context, qo *QueryOptions, it entryIterator) error {

@@ -5,45 +5,12 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 var (
 	ErrInvalidQueryOptions = errors.New("invalid query options")
 )
-
-type M map[string]interface{}
-
-func (m M) String(k string) string {
-	v, ok := m[k].(string)
-	if !ok {
-		return ""
-	}
-	return v
-}
-
-func (m M) Int(k string) int {
-	v, ok := m[k].(int)
-	if !ok {
-		return 0
-	}
-	return v
-}
-
-func (m M) Bool(k string) bool {
-	v, ok := m[k].(bool)
-	if !ok {
-		return false
-	}
-	return v
-}
-
-func (m M) Float(k string) float64 {
-	v, ok := m[k].(float64)
-	if !ok {
-		return 0
-	}
-	return v
-}
 
 type KeyRange struct {
 	From, To string
@@ -177,6 +144,11 @@ func (qt *QueryTags) IntTagGt(name string, value int) *QueryTags {
 	return qt
 }
 
+func (qt *QueryTags) IntTagLt(name string, value int) *QueryTags {
+	qt.integers[tagKey{name: name, comp: lessThan}] = value
+	return qt
+}
+
 func (qt *QueryTags) FloatTagEq(name string, value float64) *QueryTags {
 	qt.floats[tagKey{name: name, comp: equal}] = value
 	return qt
@@ -185,6 +157,26 @@ func (qt *QueryTags) FloatTagEq(name string, value float64) *QueryTags {
 func (qt *QueryTags) FloatTagGt(name string, value float64) *QueryTags {
 	qt.floats[tagKey{name: name, comp: greaterThan}] = value
 	return qt
+}
+
+func (qt *QueryTags) CreatedAfter(t time.Time) *QueryTags {
+	after := int(t.UnixMilli())
+	return qt.IntTagGt(CreatedAt, after)
+}
+
+func (qt *QueryTags) UpdatedAfter(t time.Time) *QueryTags {
+	after := int(t.UnixMilli())
+	return qt.IntTagGt(UpdatedAt, after)
+}
+
+func (qt *QueryTags) CreatedBefore(t time.Time) *QueryTags {
+	after := int(t.UnixMilli())
+	return qt.IntTagLt(CreatedAt, after)
+}
+
+func (qt *QueryTags) UpdatedBefore(t time.Time) *QueryTags {
+	after := int(t.UnixMilli())
+	return qt.IntTagLt(UpdatedAt, after)
 }
 
 type Order string

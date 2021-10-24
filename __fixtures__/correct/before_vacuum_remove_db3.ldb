@@ -1,21 +1,24 @@
-*3
+*4
 +set
 $9
 item:8976
 $44
 {"100":"username","baz":8989764,"foo":"bar"}
-*3
++stg(_ct,json)
+*4
 +set
 $9
 item:1145
 $44
 {"999":null,"baz12":123.879,"foo":"bar5674"}
-*3
++stg(_ct,json)
+*4
 +set
 $5
 users
 $74
 {"user1":"abc123","user2":"John Smith","user3":"anyone","user4":"someone"}
++stg(_ct,json)
 *2
 +del
 $9

@@ -1,18 +1,20 @@
-*6
+*7
 +set
 $6
 book:4
 $42
 {"author":"Brian","edition":1,"year":2008}
-+stg(type,paper)
++btg(paper,true)
++stg(_ct,json)
 +itg(inStock,2)
 +ftg(price,30.45)
-*6
+*7
 +set
 $7
 book:41
 $50
 {"author":"Valeria Pucci","edition":2,"year":2011}
-+stg(type,digital)
++btg(digital,true)
++stg(_ct,json)
 +itg(inStock,29)
 +ftg(price,30.33)

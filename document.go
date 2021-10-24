@@ -2,8 +2,12 @@ package lemon
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/pkg/errors"
 	"github.com/tidwall/gjson"
+	"strconv"
+	"strings"
+	"time"
 )
 
 var ErrJSONCouldNotBeUnmarshalled = errors.New("json contents could not be unmarshalled, probably is invalid")
@@ -14,23 +18,61 @@ type JSONValue struct {
 }
 
 type Document struct {
-	key   string
-	tags  M
-	value []byte
+	key      string
+	userTags M
+	metaTags M
+	value    []byte
+}
+
+func newDocumentFromEntry(ent *entry) *Document {
+	userTags, metaTags := createMapFromTags(ent.tags)
+
+	d := &Document{
+		key:      ent.key.String(),
+		value:    ent.value, // fixme: maybe copy
+		userTags: userTags,
+		metaTags: metaTags,
+	}
+
+	return d
 }
 
 func (d *Document) Key() string {
 	return d.key
 }
 
-func newDocumentFromEntry(ent *entry) *Document {
-	d := &Document{
-		key:   ent.key.String(),
-		value: ent.value, // fixme: maybe copy
-		tags:  createMapFromTags(ent.tags),
-	}
+func (d *Document) ContentType() ContentTypeIdentifier {
+	return ContentTypeIdentifier(d.metaTags.String(ContentType))
+}
 
-	return d
+func (d *Document) HasTimestamps() bool {
+	return d.metaTags.Int(CreatedAt) > 0 && d.metaTags.Int(UpdatedAt) > 0
+}
+
+func (d *Document) CreatedAt() time.Time {
+	ct := d.metaTags.Int(CreatedAt)
+	return time.UnixMilli(int64(ct))
+}
+
+func (d *Document) UpdatedAt() time.Time {
+	ct := d.metaTags.Int(UpdatedAt)
+	return time.UnixMilli(int64(ct))
+}
+
+func (d *Document) IsJSON() bool {
+	return d.metaTags.String(ContentType) == string(JSON)
+}
+
+func (d *Document) IsInteger() bool {
+	return d.metaTags.String(ContentType) == string(Integer)
+}
+
+func (d *Document) IsString() bool {
+	return d.metaTags.String(ContentType) == string(String)
+}
+
+func (d *Document) IsBytes() bool {
+	return d.metaTags.String(ContentType) == string(Bytes)
 }
 
 func (d *Document) Value() []byte {
@@ -45,33 +87,50 @@ func (d *Document) RawString() string {
 	return string(d.value)
 }
 
-func createMapFromTags(t *tags) M {
-	result := make(M)
+func createMapFromTags(t *tags) (M,M) {
+	userTags := make(M)
+	metaTags := make(M)
 	if t == nil {
-		return result
+		return userTags, metaTags
 	}
 
 	for k, v := range t.integers {
-		result[k] = v
+		if !strings.HasPrefix(k, "_") {
+			userTags[k] = v
+		} else {
+			metaTags[k] = v
+		}
 	}
 
 	for k, v := range t.strings {
-		result[k] = v
+		if !strings.HasPrefix(k, "_") {
+			userTags[k] = v
+		} else {
+			metaTags[k] = v
+		}
 	}
 
 	for k, v := range t.floats {
-		result[k] = v
+		if !strings.HasPrefix(k, "_") {
+			userTags[k] = v
+		} else {
+			metaTags[k] = v
+		}
 	}
 
 	for k, v := range t.booleans {
-		result[k] = v
+		if !strings.HasPrefix(k, "_") {
+			userTags[k] = v
+		} else {
+			metaTags[k] = v
+		}
 	}
 
-	return result
+	return userTags, metaTags
 }
 
 func (d *Document) Tags() M {
-	return d.tags
+	return d.userTags
 }
 
 func (d *Document) M() (M, error) {
@@ -80,6 +139,19 @@ func (d *Document) M() (M, error) {
 		return nil, errors.Wrap(err, "could not unmarshal to lemon.M")
 	}
 	return m, nil
+}
+
+func (d *Document) MustIntegerValue() int {
+	n, err := strconv.Atoi(string(d.value))
+	if err != nil {
+		panic(fmt.Errorf("could not convert value %s to integer", string(d.value)))
+	}
+	return n
+}
+
+func (d *Document) IntegerValue() int {
+	n, _ := strconv.Atoi(string(d.value))
+	return n
 }
 
 func (js *JSONValue) Unmarshal(dest interface{}) error {

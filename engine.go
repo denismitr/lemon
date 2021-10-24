@@ -731,20 +731,20 @@ func filteringBTreeIterator(
 	}
 }
 
-func serializeToValue(d interface{}) ([]byte, error) {
+func serializeToValue(d interface{}) ([]byte, ContentTypeIdentifier, error) {
 	switch typedValue := d.(type) {
 	case []byte:
-		return typedValue, nil
+		return typedValue, Bytes, nil
 	case int:
-		return []byte(strconv.Itoa(typedValue)), nil // fixme: probably we do not want pure ints as values
+		return []byte(strconv.Itoa(typedValue)), Integer, nil // fixme: probably we do not want pure ints as values
 	case string:
-		return []byte(typedValue), nil
+		return []byte(typedValue), String, nil
 	}
 
 	b, err := json.Marshal(d)
 	if err != nil {
-		return nil, errors.Wrapf(err, "could not marshal data %+v value", d)
+		return nil, "", errors.Wrapf(err, "could not marshal data %+v value", d)
 	}
 
-	return b, nil
+	return b, JSON, nil
 }

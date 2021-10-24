@@ -57,12 +57,12 @@ func TestLemonDB_Read(t *testing.T) {
 		assert.Equal(t, 4, db.Count())
 
 		q1 := lemon.Q().KeyRange("product:88", "product:100")
-		count1, err := db.CountByQuery(q1)
+		count1, err := db.CountByQueryContext(context.Background(), q1)
 		require.NoError(t, err)
 		assert.Equal(t, 2, count1)
 
 		q2 := lemon.Q().KeyOrder(lemon.DescOrder).KeyRange("product:88", "product:100")
-		count2, err := db.CountByQuery(q2)
+		count2, err := db.CountByQueryContext(context.Background(), q2)
 		require.NoError(t, err)
 		assert.Equal(t, 2, count2)
 	})
@@ -179,15 +179,9 @@ func (fts *findByTagsTestSuite) TestLemonDB_FindByBoolTag() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	var docs []lemon.Document
-	if err := db.View(context.Background(), func(tx *lemon.Tx) error {
-		opts := lemon.Q().KeyOrder(lemon.DescOrder).HasAllTags(lemon.QT().BoolTagEq("foo", true))
-		if err := tx.Find(ctx, opts, &docs); err != nil {
-			return err
-		}
-
-		return nil
-	}); err != nil {
+	opts := lemon.Q().KeyOrder(lemon.DescOrder).HasAllTags(lemon.QT().BoolTagEq("foo", true))
+	docs, err := db.FindContext(ctx, opts)
+	if err != nil {
 		fts.Require().NoError(err)
 	}
 
@@ -240,15 +234,9 @@ func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Descend() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	var docs []lemon.Document
-	if err := db.View(context.Background(), func(tx *lemon.Tx) error {
-		opts := lemon.Q().KeyOrder(lemon.DescOrder).KeyRange("user:100", "user:109")
-		if err := tx.Find(ctx, opts, &docs); err != nil {
-			return err
-		}
-
-		return nil
-	}); err != nil {
+	opts := lemon.Q().KeyOrder(lemon.DescOrder).KeyRange("user:100", "user:109")
+	docs, err := db.FindContext(ctx, opts);
+	if err != nil {
 		fts.Require().NoError(err)
 	}
 
@@ -275,10 +263,13 @@ func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Ascend() {
 	defer cancel()
 
 	var docs []lemon.Document
-	if err := db.View(context.Background(), func(tx *lemon.Tx) error {
+	if err := db.View(ctx, func(tx *lemon.Tx) error {
 		opts := lemon.Q().KeyOrder(lemon.AscOrder).KeyRange("product:500", "product:750")
-		if err := tx.Find(ctx, opts, &docs); err != nil {
+		result, err := tx.Find(opts);
+		if err != nil {
 			return err
+		} else {
+			docs = result
 		}
 
 		return nil
@@ -308,15 +299,9 @@ func (fts *findTestSuite) TestLemonDB_FindAllUsers_Ascend() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	var docs []lemon.Document
-	if err := db.View(context.Background(), func(tx *lemon.Tx) error {
-		opts := lemon.Q().KeyOrder(lemon.AscOrder).Prefix("user")
-		if err := tx.Find(ctx, opts, &docs); err != nil {
-			return err
-		}
-
-		return nil
-	}); err != nil {
+	opts := lemon.Q().KeyOrder(lemon.AscOrder).Prefix("user")
+	docs, err := db.FindContext(ctx, opts);
+	if err != nil {
 		fts.Require().NoError(err, "should be no error")
 	}
 
@@ -343,15 +328,9 @@ func (fts *findTestSuite) TestLemonDB_FindAllUsers_Descend() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	var docs []lemon.Document
-	if err := db.View(context.Background(), func(tx *lemon.Tx) error {
-		q := lemon.Q().KeyOrder(lemon.DescOrder).Prefix("user")
-		if err := tx.Find(ctx, q, &docs); err != nil {
-			return err
-		}
-
-		return nil
-	}); err != nil {
+	q := lemon.Q().KeyOrder(lemon.DescOrder).Prefix("user")
+	docs, err := db.FindContext(ctx, q)
+	if err != nil {
 		fts.Require().NoError(err, "should be no error")
 	}
 
@@ -377,18 +356,9 @@ func (fts *findTestSuite) TestLemonDB_FindAllDocs_Descend() {
 		}
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	var docs []lemon.Document
-	if err := db.View(context.Background(), func(tx *lemon.Tx) error {
-		opts := lemon.Q().KeyOrder(lemon.DescOrder)
-		if err := tx.Find(ctx, opts, &docs); err != nil {
-			return err
-		}
-
-		return nil
-	}); err != nil {
+	opts := lemon.Q().KeyOrder(lemon.DescOrder)
+	docs, err := db.FindContext(context.Background(), opts);
+	if err != nil {
 		fts.Require().NoError(err, "should be no error")
 	}
 
@@ -419,18 +389,9 @@ func (fts *findTestSuite) TestLemonDB_FindAllDocs_Ascend() {
 		}
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	var docs []lemon.Document
-	if err := db.View(context.Background(), func(tx *lemon.Tx) error {
-		opts := lemon.Q().KeyOrder(lemon.AscOrder)
-		if err := tx.Find(ctx, opts, &docs); err != nil {
-			return err
-		}
-
-		return nil
-	}); err != nil {
+	opts := lemon.Q().KeyOrder(lemon.AscOrder)
+	docs, err := db.FindContext(context.Background(), opts);
+	if err != nil {
 		fts.Require().NoError(err, "should be no error")
 	}
 
@@ -540,12 +501,10 @@ func (sts *structsTestSuite) TestScanAll() {
 		}
 	}()
 
-	ctx := context.Background()
-
 	if err := db.View(context.Background(), func(tx *lemon.Tx) error {
 		i := 1
 
-		err := tx.Scan(ctx, nil, func(d *lemon.Document) bool {
+		err := tx.Scan(nil, func(d *lemon.Document) bool {
 			var p person
 			sts.Assert().Equal(fmt.Sprintf("person:%d", i), d.Key())
 			sts.Require().NoError(d.JSON().Unmarshal(&p))
@@ -584,12 +543,10 @@ func (sts *structsTestSuite) TestScanCanBeInterrupted() {
 		}
 	}()
 
-	ctx := context.Background()
-
 	if err := db.View(context.Background(), func(tx *lemon.Tx) error {
 		i := 1
 
-		err := tx.Scan(ctx, nil, func(d *lemon.Document) bool {
+		err := tx.Scan(nil, func(d *lemon.Document) bool {
 			if i >= 3 {
 				return false
 			}
@@ -633,8 +590,6 @@ func (sts *structsTestSuite) Test_ItCanReadOwnWrites() {
 		}
 	}()
 
-	ctx := context.Background()
-
 	if err := db.Update(context.Background(), func(tx *lemon.Tx) error {
 		i := 0
 
@@ -643,7 +598,7 @@ func (sts *structsTestSuite) Test_ItCanReadOwnWrites() {
 
 		var docs []*lemon.Document
 		q := lemon.Q().Match("*:bar:baz").KeyOrder(lemon.AscOrder)
-		err := tx.Scan(ctx, q, func(d *lemon.Document) bool {
+		err := tx.Scan(q, func(d *lemon.Document) bool {
 			docs = append(docs, d)
 			i++
 			return true
@@ -765,6 +720,30 @@ func (sts *scanTestSuite) TearDownSuite() {
 	}
 }
 
+func (sts *scanTestSuite) Test_ScanAll() {
+	db, closer, err := lemon.Open(sts.fixture)
+	sts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			sts.T().Errorf("ERROR: %v", err)
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var docs []*lemon.Document
+	if err := db.ScanContext(ctx, nil, func(d *lemon.Document) bool {
+		docs = append(docs, d)
+		return true
+	}); err != nil {
+		sts.Require().NoError(err)
+	}
+
+	sts.Require().Equal(2158, len(docs))
+}
+
 func (sts *scanTestSuite) Test_ScanUserPets() {
 	db, closer, err := lemon.Open(sts.fixture)
 	sts.Require().NoError(err)
@@ -783,7 +762,7 @@ func (sts *scanTestSuite) Test_ScanUserPets() {
 	var docs []*lemon.Document
 	if err := db.View(ctx, func(tx *lemon.Tx) error {
 		opts := lemon.Q().KeyOrder(lemon.AscOrder).Prefix("user")
-		if scanErr := tx.Scan(ctx, opts, func(d *lemon.Document) bool {
+		if scanErr := tx.Scan(opts, func(d *lemon.Document) bool {
 			if strings.Contains(d.Key(), ":pet:") {
 				docs = append(docs, d)
 			}
@@ -819,7 +798,7 @@ func (sts *scanTestSuite) Test_ScanUserPetsWithManualLimit() {
 	var docs []*lemon.Document
 	if err := db.View(ctx, func(tx *lemon.Tx) error {
 		opts := lemon.Q().KeyOrder(lemon.AscOrder).Prefix("user")
-		if scanErr := tx.Scan(ctx, opts, func(d *lemon.Document) bool {
+		if scanErr := tx.Scan(opts, func(d *lemon.Document) bool {
 			if strings.Contains(d.Key(), ":pet:") {
 				docs = append(docs, d)
 			}

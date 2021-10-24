@@ -253,14 +253,9 @@ func (mts *matchTestSuite) TestMatchSingleUserByPatternAndTag() {
 		}
 	}()
 
-	docs := make([]lemon.Document, 0)
-	ctx := context.Background()
-	err = db.View(context.Background(), func(tx *lemon.Tx) error {
-		q := lemon.Q().Match("user:*").
-			HasAllTags(lemon.QT().StrTagEq("content", "list"))
-
-		return tx.Find(ctx, q, &docs)
-	})
+	q := lemon.Q().Match("user:*").
+		HasAllTags(lemon.QT().StrTagEq("content", "list"))
+	docs, err := db.FindContext(context.Background(), q)
 
 	mts.Require().NoError(err)
 	mts.Require().Len(docs, 1)
@@ -281,15 +276,10 @@ func (mts *matchTestSuite) TestMatchMultipleUsersByPatternAndGtIntTag() {
 		}
 	}()
 
-	docs := make([]lemon.Document, 0)
-	ctx := context.Background()
-	err = db.View(context.Background(), func(tx *lemon.Tx) error {
-		q := lemon.Q().Match("user:*").
-			HasAllTags(lemon.QT().IntTagGt("age", 55))
+	q := lemon.Q().Match("user:*").
+		HasAllTags(lemon.QT().IntTagGt("age", 55))
 
-		return tx.Find(ctx, q, &docs)
-	})
-
+	docs, err := db.FindContext(context.Background(), q)
 	mts.Require().NoError(err)
 	mts.Require().Len(docs, 2)
 
@@ -316,17 +306,12 @@ func (mts *matchTestSuite) TestMatchMultipleUsersByPatternAndTagWithDescSorting(
 		}
 	}()
 
-	var docs []lemon.Document
-	ctx := context.Background()
-	err = db.View(context.Background(), func(tx *lemon.Tx) error {
-		q := lemon.Q().
-			Match("user:*").
-			HasAllTags(lemon.QT().StrTagEq("content", "doc").BoolTagEq("valid", true)).
-			KeyOrder(lemon.DescOrder)
+	q := lemon.Q().
+		Match("user:*").
+		HasAllTags(lemon.QT().StrTagEq("content", "doc").BoolTagEq("valid", true)).
+		KeyOrder(lemon.DescOrder)
 
-		return tx.Find(ctx, q, &docs)
-	})
-
+	docs, err := db.FindContext(context.Background(), q)
 	mts.Require().NoError(err)
 	//mts.Require().Lenf(docs, 4, "got %d instead of 4", len(docs))
 
@@ -367,16 +352,12 @@ func (mts *matchTestSuite) TestMatchMultipleUsersByPatternAndTagWithAscSorting()
 		}
 	}()
 
-	var docs []lemon.Document
-	ctx := context.Background()
-	err = db.View(context.Background(), func(tx *lemon.Tx) error {
-		q := lemon.Q().
-			Match("user:*").
-			HasAllTags(lemon.QT().StrTagEq("auth", "basic")).
-			KeyOrder(lemon.AscOrder)
+	q := lemon.Q().
+		Match("user:*").
+		HasAllTags(lemon.QT().StrTagEq("auth", "basic")).
+		KeyOrder(lemon.AscOrder)
 
-		return tx.Find(ctx, q, &docs)
-	})
+	docs, err := db.FindContext(context.Background(), q)
 
 	mts.Require().NoError(err)
 	mts.Require().Len(docs, 3)
@@ -412,15 +393,11 @@ func (mts *matchTestSuite) TestMatchSingleUsersByPreciseAge() {
 		}
 	}()
 
-	var docs []lemon.Document
-	ctx := context.Background()
-	err = db.View(context.Background(), func(tx *lemon.Tx) error {
-		q := lemon.Q().
-			Match("user:*").
-			HasAllTags(lemon.QT().IntTagEq("age", 55))
+	q := lemon.Q().
+		Match("user:*").
+		HasAllTags(lemon.QT().IntTagEq("age", 55))
 
-		return tx.Find(ctx, q, &docs)
-	})
+	docs, err := db.FindContext(context.Background(), q)
 
 	mts.Require().NoError(err)
 	mts.Require().Len(docs, 1)
@@ -463,15 +440,11 @@ func (mts *matchTestSuite) TestMatchMultipleTvsByGtFloatTag() {
 		}
 	}()
 
-	docs := make([]lemon.Document, 0)
-	ctx := context.Background()
-	err = db.View(context.Background(), func(tx *lemon.Tx) error {
-		q := lemon.Q().
-			HasAllTags(lemon.QT().FloatTagGt("price", 4.1)).
-			KeyOrder(lemon.AscOrder)
+	q := lemon.Q().
+		HasAllTags(lemon.QT().FloatTagGt("price", 4.1)).
+		KeyOrder(lemon.AscOrder)
 
-		return tx.Find(ctx, q, &docs)
-	})
+	docs, err := db.FindContext(context.Background(), q)
 
 	mts.Require().NoError(err)
 	mts.Require().Len(docs, 5)
