@@ -41,8 +41,15 @@ defer func() {
 if you pass `lemon.InMemory` as the first argument to `lemon.Open` database will
 work purely as in memory database and will not persist anything to disk.
 
-[Fetching documents by keys and extracting values](/docs/fetching.md)
-[Iterating, searching and filtering](/docs/searching.md)
-[Inserting and updating documents](/docs/update.md)
-[Tags for secondary indexes](/docs/tags.md)
-[LemonDB documents](/docs/documents.md)
+* [Fetching documents by keys and extracting values](/docs/fetching.md)
+* [Iterating, searching and filtering](/docs/searching.md)
+* [Inserting and updating documents](/docs/update.md)
+* [Tags for secondary indexes](/docs/tags.md)
+* [LemonDB documents](/docs/documents.md)
+
+#### Road map
+* Github Actions
+* Lazy load values
+* Storage cache buffer
+* LemonDB server
+* lemonDB Raft
