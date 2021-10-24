@@ -160,22 +160,22 @@ func (qt *QueryTags) FloatTagGt(name string, value float64) *QueryTags {
 }
 
 func (qt *QueryTags) CreatedAfter(t time.Time) *QueryTags {
-	after := int(t.Unix())
+	after := int(t.UnixMilli())
 	return qt.IntTagGt(CreatedAt, after)
 }
 
 func (qt *QueryTags) UpdatedAfter(t time.Time) *QueryTags {
-	after := int(t.Unix())
+	after := int(t.UnixMilli())
 	return qt.IntTagGt(UpdatedAt, after)
 }
 
 func (qt *QueryTags) CreatedBefore(t time.Time) *QueryTags {
-	after := int(t.Unix())
+	after := int(t.UnixMilli())
 	return qt.IntTagLt(CreatedAt, after)
 }
 
 func (qt *QueryTags) UpdatedBefore(t time.Time) *QueryTags {
-	after := int(t.Unix())
+	after := int(t.UnixMilli())
 	return qt.IntTagLt(UpdatedAt, after)
 }
 

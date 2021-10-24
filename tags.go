@@ -27,8 +27,8 @@ type MetaApplier interface {
 
 func WithTimestamps() MetaApplier {
 	return M{
-		CreatedAt: int(time.Now().Unix()),
-		UpdatedAt: int(time.Now().Unix()),
+		CreatedAt: int(time.Now().UnixMilli()),
+		UpdatedAt: int(time.Now().UnixMilli()),
 	}
 }
 
@@ -75,8 +75,8 @@ func (ta *TagApplier) Float(name string, value float64) *TagApplier {
 func (ta *TagApplier) Timestamps() *TagApplier {
 	ta.keys[CreatedAt] = intDataType
 	ta.keys[UpdatedAt] = intDataType
-	ta.integers[CreatedAt] = int(time.Now().Unix())
-	ta.integers[UpdatedAt] = int(time.Now().Unix())
+	ta.integers[CreatedAt] = int(time.Now().UnixMilli())
+	ta.integers[UpdatedAt] = int(time.Now().UnixMilli())
 	return ta
 }
 

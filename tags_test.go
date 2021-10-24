@@ -40,6 +40,8 @@ func (its *ImplicitTagsSuite) SetupSuite() {
 
 	its.start = time.Now()
 	its.Require().NoError(db.Insert("key:0", 10001))
+	time.Sleep(200 * time.Millisecond)
+
 	its.Require().NoError(db.Insert("key:001", lemon.M{"key": 1}, lemon.WithTimestamps()))
 	time.Sleep(1 * time.Second)
 
@@ -73,7 +75,7 @@ func (its *ImplicitTagsSuite) TearDownSuite() {
 	}
 }
 
-func (its *ImplicitTagsSuite) TestQueryByTimestamps() {
+func (its *ImplicitTagsSuite) TestQueryByTimestamps_GT() {
 	db, closer, err := lemon.Open(its.fixture)
 	its.Require().NoError(err)
 
@@ -123,6 +125,39 @@ func (its *ImplicitTagsSuite) TestQueryByTimestamps() {
 	its.Assert().True(
 		docs[2].CreatedAt().After(its.start) && docs[2].CreatedAt().Before(its.finish),
 		"created at should be in range of test suite seed",
+	)
+}
+
+func (its *ImplicitTagsSuite) TestQueryByTimestamps_LT() {
+	db, closer, err := lemon.Open(its.fixture)
+	its.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			its.T().Fatal(err)
+		}
+	}()
+
+	its.Assert().Equal(8, db.Count())
+
+	qt := lemon.QT().CreatedBefore(its.start.Add(2200*time.Millisecond))
+	docs, err := db.Find(context.Background(), lemon.Q().HasAllTags(qt))
+	its.Require().NoError(err)
+
+	its.Require().Equal(2, len(docs))
+
+	its.Assert().Equal("key:001", docs[0].Key())
+	its.Assert().Equal(true, docs[0].HasTimestamps())
+	its.Assert().True(docs[0].CreatedAt().After(its.start))
+	its.Assert().True(docs[0].UpdatedAt().After(its.start))
+	its.Assert().True(docs[0].CreatedAt().Before(its.finish.Add(100 * time.Millisecond)))
+	its.Assert().True(docs[0].UpdatedAt().Equal(docs[0].CreatedAt()))
+
+	its.Assert().Equal("key:002", docs[1].Key())
+	its.Assert().Equal(true, docs[1].HasTimestamps())
+	its.Assert().True(
+		docs[1].CreatedAt().Before(docs[1].UpdatedAt()),
+		"created at should be before updated at",
 	)
 }
 

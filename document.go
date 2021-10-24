@@ -51,12 +51,12 @@ func (d *Document) HasTimestamps() bool {
 
 func (d *Document) CreatedAt() time.Time {
 	ct := d.metaTags.Int(CreatedAt)
-	return time.Unix(int64(ct), 0)
+	return time.UnixMilli(int64(ct))
 }
 
 func (d *Document) UpdatedAt() time.Time {
 	ct := d.metaTags.Int(UpdatedAt)
-	return time.Unix(int64(ct), 0)
+	return time.UnixMilli(int64(ct))
 }
 
 func (d *Document) IsJSON() bool {
