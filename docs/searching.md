@@ -4,7 +4,7 @@
 ### Example of scanning all entries
 ```go
 var docs []*lemon.Document
-if err := db.Scan(ctx, nil, func(d *lemon.Document) bool {
+if err := db.ScanContext(ctx, nil, func(d *lemon.Document) bool {
     docs = append(docs, d)
     return true
 }); err != nil {
@@ -60,8 +60,10 @@ totalCount := db.Count()
 #### Example of counting documents within a given range
 ```go
 q := lemon.Q().KeyRange("product:88", "product:100")
-rangeCount, err := db.CountByQuery(context.Background(), q)
+rangeCount, err := db.CountByQueryContext(context.Background(), q)
 if err != nil {
 	panic(err)
 }
 ```
+
+alternatively there is `db.CountByQuery(q)`that does not require context.

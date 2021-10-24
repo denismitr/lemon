@@ -255,7 +255,7 @@ func (mts *matchTestSuite) TestMatchSingleUserByPatternAndTag() {
 
 	q := lemon.Q().Match("user:*").
 		HasAllTags(lemon.QT().StrTagEq("content", "list"))
-	docs, err := db.Find(context.Background(), q)
+	docs, err := db.FindContext(context.Background(), q)
 
 	mts.Require().NoError(err)
 	mts.Require().Len(docs, 1)
@@ -279,7 +279,7 @@ func (mts *matchTestSuite) TestMatchMultipleUsersByPatternAndGtIntTag() {
 	q := lemon.Q().Match("user:*").
 		HasAllTags(lemon.QT().IntTagGt("age", 55))
 
-	docs, err := db.Find(context.Background(), q)
+	docs, err := db.FindContext(context.Background(), q)
 	mts.Require().NoError(err)
 	mts.Require().Len(docs, 2)
 
@@ -311,7 +311,7 @@ func (mts *matchTestSuite) TestMatchMultipleUsersByPatternAndTagWithDescSorting(
 		HasAllTags(lemon.QT().StrTagEq("content", "doc").BoolTagEq("valid", true)).
 		KeyOrder(lemon.DescOrder)
 
-	docs, err := db.Find(context.Background(), q)
+	docs, err := db.FindContext(context.Background(), q)
 	mts.Require().NoError(err)
 	//mts.Require().Lenf(docs, 4, "got %d instead of 4", len(docs))
 
@@ -357,7 +357,7 @@ func (mts *matchTestSuite) TestMatchMultipleUsersByPatternAndTagWithAscSorting()
 		HasAllTags(lemon.QT().StrTagEq("auth", "basic")).
 		KeyOrder(lemon.AscOrder)
 
-	docs, err := db.Find(context.Background(), q)
+	docs, err := db.FindContext(context.Background(), q)
 
 	mts.Require().NoError(err)
 	mts.Require().Len(docs, 3)
@@ -397,7 +397,7 @@ func (mts *matchTestSuite) TestMatchSingleUsersByPreciseAge() {
 		Match("user:*").
 		HasAllTags(lemon.QT().IntTagEq("age", 55))
 
-	docs, err := db.Find(context.Background(), q)
+	docs, err := db.FindContext(context.Background(), q)
 
 	mts.Require().NoError(err)
 	mts.Require().Len(docs, 1)
@@ -444,7 +444,7 @@ func (mts *matchTestSuite) TestMatchMultipleTvsByGtFloatTag() {
 		HasAllTags(lemon.QT().FloatTagGt("price", 4.1)).
 		KeyOrder(lemon.AscOrder)
 
-	docs, err := db.Find(context.Background(), q)
+	docs, err := db.FindContext(context.Background(), q)
 
 	mts.Require().NoError(err)
 	mts.Require().Len(docs, 5)

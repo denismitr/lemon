@@ -45,7 +45,12 @@ func (its *ImplicitTagsSuite) SetupSuite() {
 	its.Require().NoError(db.Insert("key:001", lemon.M{"key": 1}, lemon.WithTimestamps()))
 	time.Sleep(1 * time.Second)
 
-	its.Require().NoError(db.Insert("key:002", lemon.M{"key": 2}, lemon.WithTimestamps()))
+	its.Require().NoError(db.Insert(
+		"key:002",
+		lemon.M{"key": 2},
+		lemon.WithTimestamps(),
+		lemon.M{"intTag": 123},
+	))
 	time.Sleep(1 * time.Second)
 
 	its.Require().NoError(db.Insert("key:003", `key: 003`, lemon.WithTimestamps()))
@@ -60,7 +65,12 @@ func (its *ImplicitTagsSuite) SetupSuite() {
 	its.Require().NoError(db.Insert("key:006", lemon.M{"key": 6}, lemon.WithTimestamps()))
 	its.Require().NoError(db.Insert("key:007", lemon.M{"key": 7}))
 
-	its.Require().NoError(db.InsertOrReplace("key:002", lemon.M{"key": 20002}, lemon.WithTimestamps()))
+	its.Require().NoError(db.InsertOrReplace(
+		"key:002",
+		lemon.M{"key": 20002},
+		lemon.WithTimestamps(),
+		lemon.M{"strTag": "foo"},
+	))
 	time.Sleep(1 * time.Second)
 	its.Require().NoError(db.InsertOrReplace("key:004", []byte(`key: 0004`), lemon.WithTimestamps()))
 
@@ -88,7 +98,7 @@ func (its *ImplicitTagsSuite) TestQueryByTimestamps_GT() {
 	its.Assert().Equal(8, db.Count())
 
 	qt := lemon.QT().CreatedAfter(its.start.Add(2300*time.Millisecond))
-	docs, err := db.Find(context.Background(), lemon.Q().HasAllTags(qt))
+	docs, err := db.FindContext(context.Background(), lemon.Q().HasAllTags(qt))
 	its.Require().NoError(err)
 
 	its.Require().Equal(3, len(docs))
@@ -141,7 +151,7 @@ func (its *ImplicitTagsSuite) TestQueryByTimestamps_LT() {
 	its.Assert().Equal(8, db.Count())
 
 	qt := lemon.QT().CreatedBefore(its.start.Add(2200*time.Millisecond))
-	docs, err := db.Find(context.Background(), lemon.Q().HasAllTags(qt))
+	docs, err := db.FindContext(context.Background(), lemon.Q().HasAllTags(qt))
 	its.Require().NoError(err)
 
 	its.Require().Equal(2, len(docs))
@@ -159,6 +169,8 @@ func (its *ImplicitTagsSuite) TestQueryByTimestamps_LT() {
 		docs[1].CreatedAt().Before(docs[1].UpdatedAt()),
 		"created at should be before updated at",
 	)
+
+	its.Assert().Equal(lemon.M{"strTag":"foo"}, docs[1].Tags())
 }
 
 func (its *ImplicitTagsSuite) TestImplicitContentType() {
@@ -173,7 +185,7 @@ func (its *ImplicitTagsSuite) TestImplicitContentType() {
 
 	its.Assert().Equal(8, db.Count())
 
-	docs, err := db.Find(context.Background(), nil)
+	docs, err := db.FindContext(context.Background(), nil)
 	its.Require().NoError(err)
 
 	its.Require().Equal(8, len(docs))
@@ -282,7 +294,7 @@ func testScan(t *testing.T, dbPath string, qo *lemon.QueryOptions) (docs []*lemo
 		}
 	}()
 
-	err = db.Scan(context.Background(), qo, func(d *lemon.Document) bool {
+	err = db.ScanContext(context.Background(), qo, func(d *lemon.Document) bool {
 		docs = append(docs, d)
 		return true
 	})

@@ -1,11 +1,13 @@
-# LemonDB WIP
+# LemonDB 
+## Work in Progress
 ### Attention! The project is under intensive development. The API can still change without backwards compatibility.
 
 A document oriented database which can store strings, BLOBs and JSON documents (as tagged structs or bytes or JSON strings) 
 and is meant for local (non distributed) usage as it stores everything in one file or can work fully in memory. Ideally
 suits cli or desktop applications, non distributed pipelines or testing frameworks.
 
-All data is stored on disk in [RESP](https://redis.io/topics/protocol) **like** encoding.
+All data is stored on disk in format based on [RESP](https://redis.io/topics/protocol) encoding. But it is 
+not exactly **RESP**.
 
 LemonDB supports transactions. Reads are concurrent and writes are executed under exclusive lock.
 
@@ -43,3 +45,4 @@ work purely as in memory database and will not persist anything to disk.
 [Iterating, searching and filtering](/docs/searching.md)
 [Inserting and updating documents](/docs/update.md)
 [Tags for secondary indexes](/docs/tags.md)
+[LemonDB documents](/docs/documents.md)
