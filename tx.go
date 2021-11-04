@@ -10,9 +10,9 @@ var ErrTxIsReadOnly = errors.New("transaction is read only")
 var ErrTxAlreadyClosed = errors.New("transaction already closed")
 
 type Tx struct {
-	readOnly        bool
-	e               engine
-	ctx             context.Context
+	readOnly bool
+	e        executionEngine
+	ctx      context.Context
 	persistCommands []serializer
 	updates         []*entry
 	replaced        []*entry

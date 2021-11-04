@@ -2,6 +2,7 @@ package lemon
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/pkg/errors"
 )
 
@@ -10,7 +11,7 @@ type serializer interface {
 }
 
 type deserializer interface {
-	deserialize(e engine) error
+	deserialize(e executionEngine) error
 }
 
 type untagCmd struct {
@@ -28,7 +29,7 @@ func (cmd *untagCmd) serialize(buf *bytes.Buffer) {
 	}
 }
 
-func (cmd *untagCmd) deserialize(e engine) error {
+func (cmd *untagCmd) deserialize(e executionEngine) error {
 	ent, err := e.FindByKey(cmd.key.String())
 	if err != nil {
 		return errors.Wrapf(err, "could not deserialize tag command for key %s command", cmd.key.String())
@@ -38,7 +39,7 @@ func (cmd *untagCmd) deserialize(e engine) error {
 		dt, ok := ent.tags.getTypeByName(name)
 		if ok {
 			e.RemoveEntryFromTagsByNameAndType(name, dt, ent)
-			ent.tags.removeByNameAndType(name, dt)
+			ent.tags.removeByNameAndType(name)
 		}
 	}
 
@@ -47,7 +48,7 @@ func (cmd *untagCmd) deserialize(e engine) error {
 
 type tagCmd struct {
 	key  PK
-	tags *tags
+	tags tags
 }
 
 func (cmd *tagCmd) serialize(buf *bytes.Buffer) {
@@ -55,54 +56,32 @@ func (cmd *tagCmd) serialize(buf *bytes.Buffer) {
 	writeRespArray(segments, buf)
 	writeRespSimpleString("tag", buf)
 	writeRespKeyString(cmd.key.String(), buf)
-	for n, v := range cmd.tags.integers {
-		writeRespIntTag(n, v, buf)
-	}
-	for n, v := range cmd.tags.floats {
-		writeRespFloatTag(n, v, buf)
-	}
-	for n, v := range cmd.tags.booleans {
-		writeRespBoolTag(n, v, buf)
-	}
-	for n, v := range cmd.tags.strings {
-		writeRespStrTag(n, v, buf)
+	for n, t := range cmd.tags {
+		switch t.dt {
+		case intDataType:
+			writeRespIntTag(n, t.data.(int), buf)
+		case floatDataType:
+			writeRespFloatTag(n, t.data.(float64), buf)
+		case boolDataType:
+			writeRespBoolTag(n, t.data.(bool), buf)
+		case strDataType:
+			writeRespStrTag(n, t.data.(string), buf)
+		default:
+			panic(fmt.Sprintf("invalid tag type %d", t.dt))
+		}
 	}
 }
 
-func (cmd *tagCmd) deserialize(e engine) error {
+func (cmd *tagCmd) deserialize(e executionEngine) error {
 	ent, err := e.FindByKey(cmd.key.String())
 	if err != nil {
 		return errors.Wrapf(err, "could not deserialize tag command for key %s command", cmd.key.String())
 	}
 
-	for n, v := range cmd.tags.integers {
-		e.RemoveEntryFromTagsByNameAndType(n, intDataType, ent)
-		ent.tags.set(n, v)
-		if err := e.AddTag(n, v, ent); err != nil {
-			return err
-		}
-	}
-
-	for n, v := range cmd.tags.strings {
-		e.RemoveEntryFromTagsByNameAndType(n, strDataType, ent)
-		ent.tags.set(n, v)
-		if err := e.AddTag(n, v, ent); err != nil {
-			return err
-		}
-	}
-
-	for n, v := range cmd.tags.booleans {
-		e.RemoveEntryFromTagsByNameAndType(n, boolDataType, ent)
-		ent.tags.set(n, v)
-		if err := e.AddTag(n, v, ent); err != nil {
-			return err
-		}
-	}
-
-	for n, v := range cmd.tags.floats {
-		e.RemoveEntryFromTagsByNameAndType(n, floatDataType, ent)
-		ent.tags.set(n, v)
-		if err := e.AddTag(n, v, ent); err != nil {
+	for n, t := range cmd.tags {
+		e.RemoveEntryFromTagsByNameAndType(n, t.dt, ent)
+		ent.tags.set(n, t.data)
+		if err := e.AddTag(n, t.data, ent); err != nil {
 			return err
 		}
 	}
@@ -117,6 +96,6 @@ func (c flushAllCmd) serialize(buf *bytes.Buffer) {
 	writeRespSimpleString("flushall", buf)
 }
 
-func (flushAllCmd) deserialize(e engine) error {
+func (flushAllCmd) deserialize(e executionEngine) error {
 	return e.FlushAll(func(*entry) {})
 }

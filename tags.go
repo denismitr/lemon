@@ -40,63 +40,58 @@ func WithContentType(ct ContentTypeIdentifier) MetaApplier {
 
 func WithTags() *TagApplier {
 	return &TagApplier{
-		keys:     make(map[string]indexType),
-		booleans: make(map[string]bool),
-		floats:   make(map[string]float64),
-		integers: make(map[string]int),
-		strings:  make(map[string]string),
+		tags: newTags(),
 	}
 }
 
-func (ta *TagApplier) Bool(name string, value bool) *TagApplier {
-	ta.keys[name] = boolDataType
-	ta.booleans[name] = value
+func (ta *TagApplier) append(name string, value interface{}, dt indexType) *TagApplier {
+	if _, exists := ta.tags[name]; exists {
+		ta.err = errors.Wrapf(ErrTagNameConflict, "tag with name %s already exists", name)
+	} else {
+		tg := &tag{dt: dt, data: value}
+		ta.tags[name] = tg
+	}
+
 	return ta
+}
+
+func (ta *TagApplier) Bool(name string, value bool) *TagApplier {
+	return ta.append(name, value, boolDataType)
 }
 
 func (ta *TagApplier) Str(name, value string) *TagApplier {
-	ta.keys[name] = strDataType
-	ta.strings[name] = value
-	return ta
+	return ta.append(name, value, strDataType)
 }
 
 func (ta *TagApplier) Int(name string, value int) *TagApplier {
-	ta.keys[name] = intDataType
-	ta.integers[name] = value
-	return ta
+	return ta.append(name, value, intDataType)
 }
 
 func (ta *TagApplier) Float(name string, value float64) *TagApplier {
-	ta.keys[name] = floatDataType
-	ta.floats[name] = value
-	return ta
+	return ta.append(name, value, floatDataType)
 }
 
 func (ta *TagApplier) Timestamps() *TagApplier {
-	ta.keys[CreatedAt] = intDataType
-	ta.keys[UpdatedAt] = intDataType
-	ta.integers[CreatedAt] = int(time.Now().UnixMilli())
-	ta.integers[UpdatedAt] = int(time.Now().UnixMilli())
+	ta.append(CreatedAt, int(time.Now().UnixMilli()), intDataType)
+	ta.append(UpdatedAt, int(time.Now().UnixMilli()), intDataType)
 	return ta
 }
 
 func (ta *TagApplier) ContentType(ct string) *TagApplier {
-	ta.keys[ContentType] = strDataType
-	ta.strings[ContentType] = ct
-	return ta
+	return ta.append(ContentType, ct, strDataType)
 }
 
 func (ta *TagApplier) Map(m M) *TagApplier {
 	for n, v := range m {
-		switch typedValue := v.(type) {
+		switch v.(type) {
 		case string:
-			ta.strings[n] = typedValue
+			ta.append(n, v, strDataType)
 		case bool:
-			ta.booleans[n] = typedValue
+			ta.append(n, v, boolDataType)
 		case int:
-			ta.integers[n] = typedValue
+			ta.append(n, v, intDataType)
 		case float64:
-			ta.floats[n] = typedValue
+			ta.append(n, v, floatDataType)
 		default:
 			ta.err = errors.Wrapf(ErrInvalidTagType, "%T", v)
 		}
@@ -105,180 +100,122 @@ func (ta *TagApplier) Map(m M) *TagApplier {
 	return ta
 }
 
-type Tagger func(t *tags)
+type Tagger func(t tags)
 
 func boolTagger(name string, value bool) Tagger {
-	return func(t *tags) {
-		t.names[name] = boolDataType
-		t.booleans[name] = value
+	return func(t tags) {
+		t[name] = &tag{dt: boolDataType, data: value}
 	}
 }
 
 func strTagger(name, value string) Tagger {
-	return func(t *tags) {
-		t.names[name] = strDataType
-		t.strings[name] = value
+	return func(t tags) {
+		t[name] = &tag{dt: strDataType, data: value}
 	}
 }
 
 func intTagger(name string, value int) Tagger {
-	return func(t *tags) {
-		t.names[name] = intDataType
-		t.integers[name] = value
+	return func(t tags) {
+		t[name] = &tag{dt: intDataType, data: value}
 	}
 }
 
 func floatTagger(name string, value float64) Tagger {
-	return func(t *tags) {
-		t.names[name] = floatDataType
-		t.floats[name] = value
+	return func(t tags) {
+		t[name] = &tag{dt: floatDataType, data: value}
 	}
 }
 
 type TagApplier struct {
 	err      error
-	keys     map[string]indexType
-	booleans map[string]bool
-	floats   map[string]float64
-	integers map[string]int
-	strings  map[string]string
+	tags tags
 }
 
 func (ta *TagApplier) applyTo(e *entry) error {
-	if e.tags == nil {
-		e.tags = newTags()
-	}
-
-	for n, v := range ta.booleans {
-		e.tags.booleans[n] = v
-	}
-
-	for n, v := range ta.strings {
-		e.tags.strings[n] = v
-	}
-
-	for n, v := range ta.integers {
-		e.tags.integers[n] = v
-	}
-
-	for n, v := range ta.floats {
-		e.tags.floats[n] = v
-	}
-
+	e.tags = ta.tags
 	return nil
 }
 
-type tags struct {
-	names    map[string]indexType
-	booleans map[string]bool
-	floats   map[string]float64
-	integers map[string]int
-	strings  map[string]string
+type tag struct {
+	dt   indexType
+	data interface{}
 }
 
-func (t *tags) applyTo(e *entry) {
+type tags map[string]*tag
+
+func (t tags) applyTo(e *entry) {
 	e.tags = t
 }
 
-func (t *tags) set(name string, v interface{}) {
-	existingTagType, ok := t.names[name]
+func (t tags) set(name string, v interface{}) {
+	_, ok := t[name]
 	if ok {
-		delete(t.names, name)
-
-		switch existingTagType {
-		case boolDataType:
-			delete(t.booleans, name)
-		case intDataType:
-			delete(t.integers, name)
-		case floatDataType:
-			delete(t.floats, name)
-		case strDataType:
-			delete(t.strings, name)
-		}
+		delete(t, name)
 	}
 
-	switch typedValue := v.(type) {
+	newTag := &tag{}
+	switch v.(type) {
 	case int:
-		t.names[name] = intDataType
-		t.integers[name] = typedValue
+		newTag.dt = intDataType
 	case bool:
-		t.names[name] = boolDataType
-		t.booleans[name] = typedValue
+		newTag.dt = boolDataType
 	case string:
-		t.names[name] = strDataType
-		t.strings[name] = typedValue
+		newTag.dt = strDataType
 	case float64:
-		t.names[name] = floatDataType
-		t.floats[name] = typedValue
+		newTag.dt = floatDataType
 	}
+
+	newTag.data = v
+	t[name] = newTag
 }
 
-func (t *tags) removeByNameAndType(name string, dt indexType) {
-	existingTagType, ok := t.names[name]
+func (t tags) removeByNameAndType(name string) {
+	_, ok := t[name]
 	if ok {
-		switch existingTagType {
-		case boolDataType:
-			delete(t.booleans, name)
-		case intDataType:
-			delete(t.integers, name)
-		case floatDataType:
-			delete(t.floats, name)
-		case strDataType:
-			delete(t.strings, name)
-		}
+		delete(t, name)
 	}
 }
 
-func (t *tags) count() int {
-	return len(t.names)
+func (t tags) count() int {
+	return len(t)
 }
 
-func (t *tags) getTypeByName(name string) (indexType, bool) {
-	typ, ok := t.names[name]
-	return typ, ok
-}
-
-func newTags() *tags {
-	return &tags{
-		names:    make(map[string]indexType),
-		booleans: make(map[string]bool),
-		floats:   make(map[string]float64),
-		integers: make(map[string]int),
-		strings:  make(map[string]string),
+func (t tags) getTypeByName(name string) (indexType, bool) {
+	existingTag, ok := t[name]
+	if !ok {
+		return nilDataType, false
 	}
+	return existingTag.dt, ok
 }
 
-func newTagsFromMap(m M) (*tags, error) {
-	t := &tags{
-		names:    make(map[string]indexType),
-		booleans: make(map[string]bool),
-		floats:   make(map[string]float64),
-		integers: make(map[string]int),
-		strings:  make(map[string]string),
-	}
+func newTags() tags {
+	return make(tags)
+}
+
+func newTagsFromMap(m M) (tags, error) {
+	tt := newTags()
 
 	for n, v := range m {
-		if t.names[n] != nilDataType {
+		if _, ok := tt[n]; ok {
 			return nil, errors.Wrapf(ErrTagNameConflict, "tag name %s already taken", n)
 		}
 
-		switch typedValue := v.(type) {
+		newTag := &tag{data: v}
+		switch v.(type) {
 		case int:
-			t.names[n] = intDataType
-			t.integers[n] = typedValue
+			newTag.dt = intDataType
 		case string:
-			t.names[n] = strDataType
-			t.strings[n] = typedValue
+			newTag.dt = strDataType
 		case bool:
-			t.names[n] = boolDataType
-			t.booleans[n] = typedValue
+			newTag.dt = boolDataType
 		case float64:
-			t.names[n] = floatDataType
-			t.floats[n] = typedValue
+			newTag.dt = floatDataType
 		}
+
+		tt[n] = newTag
 	}
 
-	return t, nil
+	return tt, nil
 }
 
 type entries map[string]*entry

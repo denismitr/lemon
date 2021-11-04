@@ -2,6 +2,7 @@ package lemon
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/jinzhu/copier"
 	"github.com/pkg/errors"
 )
@@ -13,7 +14,7 @@ type MetaSetter func(e *entry) error
 type entry struct {
 	key       PK
 	value     []byte
-	tags      *tags
+	tags      tags
 	committed bool
 }
 
@@ -26,12 +27,12 @@ func (ent *entry) clone() *entry {
 	return &cpEnt
 }
 
-func (ent *entry) deserialize(e engine) error {
+func (ent *entry) deserialize(e executionEngine) error {
 	ent.committed = true
 	return e.Put(ent, true)
 }
 
-func newEntryWithTags(key string, value []byte, tags *tags) *entry {
+func newEntryWithTags(key string, value []byte, tags tags) *entry {
 	return &entry{key: newPK(key), value: value, tags: tags}
 }
 
@@ -46,20 +47,19 @@ func (ent *entry) serialize(buf *bytes.Buffer) {
 	writeRespBlob(ent.value, buf)
 
 	if ent.tagCount() > 0 {
-		for n, v := range ent.tags.booleans {
-			writeRespBoolTag(n, v, buf)
-		}
-
-		for n, v := range ent.tags.strings {
-			writeRespStrTag(n, v, buf)
-		}
-
-		for n, v := range ent.tags.integers {
-			writeRespIntTag(n, v, buf)
-		}
-
-		for n, v := range ent.tags.floats {
-			writeRespFloatTag(n, v, buf)
+		for n, v := range ent.tags {
+			switch v.dt {
+			case intDataType:
+				writeRespIntTag(n, v.data.(int), buf)
+			case boolDataType:
+				writeRespBoolTag(n, v.data.(bool), buf)
+			case strDataType:
+				writeRespStrTag(n, v.data.(string), buf)
+			case floatDataType:
+				writeRespFloatTag(n, v.data.(float64), buf)
+			default:
+				panic(fmt.Sprintf("unknown tag type %d", v.dt))
+			}
 		}
 	}
 }
@@ -69,12 +69,7 @@ func (ent *entry) tagCount() int {
 		return 0
 	}
 
-	var count int
-	count += len(ent.tags.booleans)
-	count += len(ent.tags.strings)
-	count += len(ent.tags.floats)
-	count += len(ent.tags.integers)
-	return count
+	return len(ent.tags)
 }
 
 type deleteCmd struct {
@@ -87,7 +82,7 @@ func (cmd *deleteCmd) serialize(buf *bytes.Buffer) {
 	writeRespKeyString(cmd.key.String(), buf)
 }
 
-func (cmd *deleteCmd) deserialize(e engine) error {
+func (cmd *deleteCmd) deserialize(e executionEngine) error {
 	ent, err := e.FindByKey(cmd.key.String())
 	if err != nil {
 		return errors.Wrapf(err, "could not deserialize delete key %s command", cmd.key.String())

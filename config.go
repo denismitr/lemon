@@ -18,10 +18,10 @@ type Config struct {
 }
 
 type EngineOptions interface {
-	applyTo(e engine) error
+	applyTo(e executionEngine) error
 }
 
-func (cfg *Config) applyTo(e engine) error {
+func (cfg *Config) applyTo(e executionEngine) error {
 	if cfg.PersistenceStrategy == "" {
 		cfg.PersistenceStrategy = Sync
 	} else if cfg.PersistenceStrategy == Async && cfg.AsyncPersistenceIntervals == 0 {

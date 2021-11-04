@@ -87,42 +87,18 @@ func (d *Document) RawString() string {
 	return string(d.value)
 }
 
-func createMapFromTags(t *tags) (M,M) {
+func createMapFromTags(tgs tags) (M, M) {
 	userTags := make(M)
 	metaTags := make(M)
-	if t == nil {
+	if tgs == nil {
 		return userTags, metaTags
 	}
 
-	for k, v := range t.integers {
-		if !strings.HasPrefix(k, "_") {
-			userTags[k] = v
+	for name, t := range tgs {
+		if !strings.HasPrefix(name, "_") {
+			userTags[name] = t.data
 		} else {
-			metaTags[k] = v
-		}
-	}
-
-	for k, v := range t.strings {
-		if !strings.HasPrefix(k, "_") {
-			userTags[k] = v
-		} else {
-			metaTags[k] = v
-		}
-	}
-
-	for k, v := range t.floats {
-		if !strings.HasPrefix(k, "_") {
-			userTags[k] = v
-		} else {
-			metaTags[k] = v
-		}
-	}
-
-	for k, v := range t.booleans {
-		if !strings.HasPrefix(k, "_") {
-			userTags[k] = v
-		} else {
-			metaTags[k] = v
+			metaTags[name] = t.data
 		}
 	}
 
