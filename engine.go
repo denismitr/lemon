@@ -39,7 +39,7 @@ type executionEngine interface {
 	FindByKey(key string) (*entry, error)
 	IterateByKeys(pks []string, ir entryIterator) error
 	Remove(key PK) error
-	RemoveEntryFromTagsByNameAndType(name string, ent *entry)
+	RemoveEntryFromTagsByName(name string, ent *entry) error
 	AddTag(name string, value interface{}, ent *entry) error
 	Count() int
 	Put(ent *entry, replace bool) error
@@ -234,8 +234,8 @@ func (e *defaultEngine) Persist(commands []serializer) error {
 	return nil
 }
 
-func (e *defaultEngine) RemoveEntryFromTagsByNameAndType(name string, ent *entry) {
-	e.tags.removeEntryByNameAndType(name, ent)
+func (e *defaultEngine) RemoveEntryFromTagsByName(name string, ent *entry) error {
+	return e.tags.removeEntryByName(name, ent)
 }
 
 func (e *defaultEngine) AddTag(name string, value interface{}, ent *entry) error {
@@ -609,26 +609,11 @@ func (e *defaultEngine) UpsertTag(name string, v interface{}, ent *entry) error 
 
 // RemoveTag - removes a tag from entity and secondary index
 func (e *defaultEngine) RemoveTag(name string, ent *entry) error {
-	// if tag name exists in entity, remove it from secondary index
-	// and remove it from entity itself
-	existingTagType, ok := ent.tags.names[name]
-	if ok {
-		switch existingTagType {
-		case boolDataType:
-			e.tags.removeEntryByNameAndType(name, boolDataType, ent)
-			delete(ent.tags.booleans, name)
-		case intDataType:
-			e.tags.removeEntryByNameAndType(name, intDataType, ent)
-			delete(ent.tags.integers, name)
-		case floatDataType:
-			e.tags.removeEntryByNameAndType(name, floatDataType, ent)
-			delete(ent.tags.floats, name)
-		case strDataType:
-			e.tags.removeEntryByNameAndType(name, strDataType, ent)
-			delete(ent.tags.strings, name)
-		}
+	if err := e.tags.removeEntryByName(name, ent); err != nil {
+		return err
 	}
 
+	ent.tags.removeByName(name)
 	return nil
 }
 

@@ -11,48 +11,48 @@ func Test_AddAndRemove_ByEntry(t *testing.T) {
 
 	e1 := newEntry("e1", nil)
 	e1.tags = newTags()
-	e1.tags.integers["int_foobar"] = 9
-	e1.tags.integers["int_bar_baz"] = 23
-	e1.tags.floats["float_foobar"] = 11.41
-	e1.tags.floats["float_bar_baz"] = 22.434
-	e1.tags.booleans["bool_foobar"] = true
-	e1.tags.booleans["bool_bar_baz"] = false
-	e1.tags.strings["str_foobar"] = "foobar"
-	e1.tags.strings["str_bar_baz"] = "bar_baz"
+	e1.tags["int_foobar"] = &tag{data: 9, dt: intDataType}
+	e1.tags["int_bar_baz"] = &tag{data: 23, dt: intDataType}
+	e1.tags["float_foobar"] = &tag{data: 11.41, dt: floatDataType}
+	e1.tags["float_bar_baz"] = &tag{data: 22.434, dt: floatDataType}
+	e1.tags["bool_foobar"] = &tag{data: true, dt: boolDataType}
+	e1.tags["bool_bar_baz"] = &tag{data: false, dt: boolDataType}
+	e1.tags["str_foobar"] = &tag{data: "foobar", dt: strDataType}
+	e1.tags["str_bar_baz"] = &tag{data: "bar_baz", dt: strDataType}
 
 	e2 := newEntry("e2", nil)
 	e2.tags = newTags()
-	e2.tags.integers["int_foobar"] = 9
-	e2.tags.integers["int_bar_baz"] = 23
-	e2.tags.floats["float_foobar"] = 11.41
-	e2.tags.floats["float_bar_baz"] = 10.40
-	e2.tags.booleans["bool_foobar"] = true
-	e2.tags.booleans["bool_bar_baz"] = false
-	e2.tags.strings["str_foobar"] = "foobar"
-	e2.tags.strings["str_bar_baz"] = "bar_baz"
+	e2.tags["int_foobar"] = &tag{data: 9, dt: intDataType}
+	e2.tags["int_bar_baz"] = &tag{data: 23, dt: intDataType}
+	e2.tags["float_foobar"] = &tag{data: 11.41, dt: floatDataType}
+	e2.tags["float_bar_baz"] = &tag{data: 22.434, dt: floatDataType}
+	e2.tags["bool_foobar"] = &tag{data: true, dt: boolDataType}
+	e2.tags["bool_bar_baz"] = &tag{data: false, dt: boolDataType}
+	e2.tags["str_foobar"] = &tag{data: "foobar", dt: strDataType}
+	e2.tags["str_bar_baz"] = &tag{data: "bar_baz", dt: strDataType}
 
 	e3 := newEntry("e3", nil)
 	e3.tags = newTags()
-	e3.tags.integers["int_123"] = 9
-	e3.tags.integers["int_abc"] = 23
-	e3.tags.floats["float_123"] = 11.41
-	e3.tags.floats["float_abc"] = 22.434
-	e3.tags.booleans["bool_123"] = true
-	e3.tags.booleans["bool_abc"] = false
-	e3.tags.strings["str_123"] = "123"
-	e3.tags.strings["str_abc"] = "abc"
+	e3.tags["int_123"] = &tag{data: 9, dt: intDataType}
+	e3.tags["int_abc"] = &tag{data: 23, dt: intDataType}
+	e3.tags["float_123"] = &tag{data: 11.41, dt: floatDataType}
+	e3.tags["float_abc"] = &tag{data: 22.434, dt: floatDataType}
+	e3.tags["bool_123"] = &tag{data: true, dt: boolDataType}
+	e3.tags["bool_abc"] = &tag{data: false, dt: boolDataType}
+	e3.tags["str_123"] = &tag{data: "123", dt: strDataType}
+	e3.tags["str_abc"] = &tag{data: "abc", dt: strDataType}
 
 	t.Run("adding and removing floats", func(t *testing.T) {
 		ti := newTagIndex()
 
-		require.NoError(t, ti.add("float_foobar", e1.tags.floats["float_foobar"], e1))
-		require.NoError(t, ti.add("float_foobar", e2.tags.floats["float_foobar"], e2))
+		require.NoError(t, ti.add("float_foobar", e1.tags["float_foobar"].data, e1))
+		require.NoError(t, ti.add("float_foobar", e2.tags["float_foobar"].data, e2))
 
-		require.NoError(t, ti.add("float_bar_baz", e1.tags.floats["float_bar_baz"], e1))
-		require.NoError(t, ti.add("float_bar_baz", e2.tags.floats["float_bar_baz"], e2))
+		require.NoError(t, ti.add("float_bar_baz", e1.tags["float_bar_baz"].data, e1))
+		require.NoError(t, ti.add("float_bar_baz", e2.tags["float_bar_baz"].data, e2))
 
-		require.NoError(t, ti.add("float_abc", e3.tags.floats["float_abc"], e3))
-		require.NoError(t, ti.add("float_123", e3.tags.floats["float_123"], e3))
+		require.NoError(t, ti.add("float_abc", e3.tags["float_abc"].data, e3))
+		require.NoError(t, ti.add("float_123", e3.tags["float_123"].data, e3))
 
 		assert.Equal(t, 4, len(ti.data))
 		//entriesBeforeRemove := ti.getEntriesFor("float_foobar", 11.41)

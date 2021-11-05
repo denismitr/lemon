@@ -212,9 +212,9 @@ func preserveCreatedAt(existingEnt, newEnt *entry) {
 		return
 	}
 
-	if createdAt, ok := existingEnt.tags.integers[CreatedAt]; ok {
-		newEnt.tags.names[CreatedAt] = strDataType
-		newEnt.tags.integers[CreatedAt] = createdAt
+	if createdAt, ok := existingEnt.tags[CreatedAt]; ok {
+		newEnt.tags[CreatedAt].dt = intDataType
+		newEnt.tags[CreatedAt] = createdAt
 	}
 }
 

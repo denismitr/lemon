@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/pkg/errors"
+	"sort"
 )
 
 type serializer interface {
@@ -36,10 +37,12 @@ func (cmd *untagCmd) deserialize(e executionEngine) error {
 	}
 
 	for _, name := range cmd.names {
-		dt, ok := ent.tags.getTypeByName(name)
-		if ok {
-			e.RemoveEntryFromTagsByNameAndType(name, dt, ent)
-			ent.tags.removeByNameAndType(name)
+		if ent.tags.exists(name) {
+			if err := e.RemoveEntryFromTagsByName(name, ent); err != nil {
+				return err
+			}
+
+			ent.tags.removeByName(name)
 		}
 	}
 
@@ -56,20 +59,36 @@ func (cmd *tagCmd) serialize(buf *bytes.Buffer) {
 	writeRespArray(segments, buf)
 	writeRespSimpleString("tag", buf)
 	writeRespKeyString(cmd.key.String(), buf)
-	for n, t := range cmd.tags {
+
+	sortedNames := sortNames(cmd.tags)
+
+	for _, name := range sortedNames {
+		t := cmd.tags[name]
 		switch t.dt {
 		case intDataType:
-			writeRespIntTag(n, t.data.(int), buf)
+			writeRespIntTag(name, t.data.(int), buf)
 		case floatDataType:
-			writeRespFloatTag(n, t.data.(float64), buf)
+			writeRespFloatTag(name, t.data.(float64), buf)
 		case boolDataType:
-			writeRespBoolTag(n, t.data.(bool), buf)
+			writeRespBoolTag(name, t.data.(bool), buf)
 		case strDataType:
-			writeRespStrTag(n, t.data.(string), buf)
+			writeRespStrTag(name, t.data.(string), buf)
 		default:
 			panic(fmt.Sprintf("invalid tag type %d", t.dt))
 		}
 	}
+}
+
+func sortNames(tgs tags) []string {
+	names := make([]string, len(tgs))
+	i := 0
+	for name := range tgs {
+		names[i] = name
+		i++
+	}
+
+	sort.Strings(names)
+	return names
 }
 
 func (cmd *tagCmd) deserialize(e executionEngine) error {
@@ -79,7 +98,8 @@ func (cmd *tagCmd) deserialize(e executionEngine) error {
 	}
 
 	for n, t := range cmd.tags {
-		e.RemoveEntryFromTagsByNameAndType(n, t.dt, ent)
+		_ = e.RemoveEntryFromTagsByName(n, ent)
+
 		ent.tags.set(n, t.data)
 		if err := e.AddTag(n, t.data, ent); err != nil {
 			return err

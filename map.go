@@ -6,38 +6,39 @@ type M map[string]interface{}
 
 func (m M) applyTo(e *entry) error {
 	for k, v := range m {
-		switch typedValue := v.(type) {
+		existingTag := e.tags[k]
+		newTag := &tag{data: v}
+
+		switch v.(type) {
 		case int:
-			if it, ok := e.tags.names[k]; ok && it != intDataType {
+			if existingTag != nil && existingTag.dt != intDataType {
 				return errors.Wrapf(ErrInvalidTagType, "key %s already taken and has another type", k)
 			}
 
-			e.tags.integers[k] = typedValue
-			e.tags.names[k] = intDataType
+			newTag.dt = intDataType
 		case string:
-			if it, ok := e.tags.names[k]; ok && it != strDataType {
+			if existingTag != nil && existingTag.dt != strDataType {
 				return errors.Wrapf(ErrInvalidTagType, "key %s already taken and has another type", k)
 			}
 
-			e.tags.strings[k] = typedValue
-			e.tags.names[k] = strDataType
+			newTag.dt = strDataType
 		case float64:
-			if it, ok := e.tags.names[k]; ok && it != strDataType {
+			if existingTag != nil && existingTag.dt != floatDataType {
 				return errors.Wrapf(ErrInvalidTagType, "key %s already taken and has another type", k)
 			}
 
-			e.tags.floats[k] = typedValue
-			e.tags.names[k] = floatDataType
+			newTag.dt = floatDataType
 		case bool:
-			if it, ok := e.tags.names[k]; ok && it != strDataType {
+			if existingTag != nil && existingTag.dt != boolDataType {
 				return errors.Wrapf(ErrInvalidTagType, "key %s already taken and has another type", k)
 			}
 
-			e.tags.booleans[k] = typedValue
-			e.tags.names[k] = boolDataType
+			newTag.dt = boolDataType
 		default:
 			return errors.Wrapf(ErrInvalidTagType, "key %s has unsupported type for LemonDB tags", k)
 		}
+
+		e.tags[k] = newTag
 	}
 
 	return nil

@@ -169,7 +169,7 @@ func (t tags) set(name string, v interface{}) {
 	t[name] = newTag
 }
 
-func (t tags) removeByNameAndType(name string) {
+func (t tags) removeByName(name string) {
 	_, ok := t[name]
 	if ok {
 		delete(t, name)
@@ -180,12 +180,17 @@ func (t tags) count() int {
 	return len(t)
 }
 
-func (t tags) getTypeByName(name string) (indexType, bool) {
-	existingTag, ok := t[name]
-	if !ok {
-		return nilDataType, false
+func (t tags) exists(name string) bool {
+	_, ok := t[name]
+	return ok
+}
+
+func (t tags) asMap() M {
+	m := make(M, len(t))
+	for k, tg := range t {
+		m[k] = tg.data
 	}
-	return existingTag.dt, ok
+	return m
 }
 
 func newTags() tags {

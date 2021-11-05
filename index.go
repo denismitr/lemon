@@ -102,10 +102,10 @@ func (ti *tagIndex) mustRemoveEntryByNameAndValue(name string, v interface{}, en
 	return nil
 }
 
-func (ti *tagIndex) removeEntryByNameAndType(name string, ent *entry) {
+func (ti *tagIndex) removeEntryByName(name string, ent *entry) error {
 	idx := ti.data[name]
 	if idx == nil {
-		return
+		return errors.Wrapf(ErrTagKeyNotFound, "%s", name)
 	}
 
 	for n, t := range ent.tags {
@@ -126,6 +126,8 @@ func (ti *tagIndex) removeEntryByNameAndType(name string, ent *entry) {
 			panic("how can data type not match?")
 		}
 	}
+
+	return nil
 }
 
 func resolveIndexIfNotExists(

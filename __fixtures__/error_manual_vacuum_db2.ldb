@@ -17,4 +17,4 @@ $50
 +stg(_ct,json)
 +btg(delivery,true)
 +itg(inStock,2)
-+ftg(price,21.99)
++ftg(price,21.99)

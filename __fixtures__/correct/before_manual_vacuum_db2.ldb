@@ -4,9 +4,9 @@ $6
 book:4
 $42
 {"author":"Brian","edition":1,"year":2008}
-+btg(paper,true)
 +stg(_ct,json)
 +itg(inStock,2)
++btg(paper,true)
 +ftg(price,30.45)
 *7
 +set
@@ -14,8 +14,8 @@ $7
 book:41
 $50
 {"author":"Valeria Pucci","edition":2,"year":2011}
-+btg(digital,true)
 +stg(_ct,json)
++btg(digital,true)
 +itg(inStock,29)
 +ftg(price,30.33)
 *7
@@ -24,8 +24,8 @@ $8
 book:400
 $52
 {"author":"Valerio Strozzi","edition":1,"year":2021}
-+btg(digital,true)
 +stg(_ct,json)
++btg(digital,true)
 +itg(inStock,290)
 +ftg(price,24.444)
 *7
@@ -34,9 +34,9 @@ $9
 book:1000
 $52
 {"author":"Marco Grigoli","edition":2.8,"year":1989}
-+btg(paper,false)
 +stg(_ct,json)
 +itg(inStock,1)
++btg(paper,false)
 +ftg(price,19.99)
 *2
 +del
@@ -56,7 +56,7 @@ $9
 book:1001
 $50
 {"author":"Alessia Valle","edition":3,"year":1978}
-+btg(delivery,true)
 +stg(_ct,json)
++btg(delivery,true)
 +itg(inStock,2)
 +ftg(price,21.99)

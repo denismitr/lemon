@@ -47,18 +47,21 @@ func (ent *entry) serialize(buf *bytes.Buffer) {
 	writeRespBlob(ent.value, buf)
 
 	if ent.tagCount() > 0 {
-		for n, v := range ent.tags {
-			switch v.dt {
+		sortedNames := sortNames(ent.tags)
+		for _, name := range sortedNames {
+			t := ent.tags[name]
+
+			switch t.dt {
 			case intDataType:
-				writeRespIntTag(n, v.data.(int), buf)
+				writeRespIntTag(name, t.data.(int), buf)
 			case boolDataType:
-				writeRespBoolTag(n, v.data.(bool), buf)
+				writeRespBoolTag(name, t.data.(bool), buf)
 			case strDataType:
-				writeRespStrTag(n, v.data.(string), buf)
+				writeRespStrTag(name, t.data.(string), buf)
 			case floatDataType:
-				writeRespFloatTag(n, v.data.(float64), buf)
+				writeRespFloatTag(name, t.data.(float64), buf)
 			default:
-				panic(fmt.Sprintf("unknown tag type %d", v.dt))
+				panic(fmt.Sprintf("unknown tag type %d", t.dt))
 			}
 		}
 	}
