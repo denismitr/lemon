@@ -38,20 +38,19 @@ func (ti *tagIndex) removeEntry(ent *entry) {
 		return
 	}
 
-	for name, value := range ent.tags.floats {
-		ti.remove(name, floatDataType, ent, &floatTag{value: value})
-	}
-
-	for name, value := range ent.tags.integers {
-		ti.remove(name, intDataType, ent, &intTag{value: value})
-	}
-
-	for name, value := range ent.tags.strings {
-		ti.remove(name, strDataType, ent, &strTag{value: value})
-	}
-
-	for name, value := range ent.tags.booleans {
-		ti.remove(name, boolDataType, ent, &boolTag{value: value})
+	for name, t := range ent.tags {
+		switch t.dt {
+		case floatDataType:
+			ti.remove(name, floatDataType, ent, &floatTag{value: t.data.(float64)})
+		case intDataType:
+			ti.remove(name, intDataType, ent, &intTag{value: t.data.(int)})
+		case strDataType:
+			ti.remove(name, strDataType, ent, &strTag{value: t.data.(string)})
+		case boolDataType:
+			ti.remove(name, boolDataType, ent, &boolTag{value: t.data.(bool)})
+		default:
+			panic("invalid data type")
+		}
 	}
 }
 
@@ -103,38 +102,32 @@ func (ti *tagIndex) mustRemoveEntryByNameAndValue(name string, v interface{}, en
 	return nil
 }
 
-func (ti *tagIndex) removeEntryByNameAndType(name string, dt indexType, ent *entry) {
+func (ti *tagIndex) removeEntryByName(name string, ent *entry) error {
 	idx := ti.data[name]
 	if idx == nil {
-		return
+		return errors.Wrapf(ErrTagKeyNotFound, "%s", name)
 	}
 
-	switch dt {
-	case intDataType:
-		for n, v := range ent.tags.integers {
-			if n == name {
-				ti.remove(name, intDataType, ent, &intTag{value: v})
-			}
+	for n, t := range ent.tags {
+		if n != name {
+			continue
 		}
-	case floatDataType:
-		for n, v := range ent.tags.floats {
-			if n == name {
-				ti.remove(name, floatDataType, ent, &floatTag{value: v})
-			}
-		}
-	case strDataType:
-		for n, v := range ent.tags.strings {
-			if n == name {
-				ti.remove(name, strDataType, ent, &strTag{value: v})
-			}
-		}
-	case boolDataType:
-		for n, v := range ent.tags.booleans {
-			if n == name {
-				ti.remove(name, boolDataType, ent, &boolTag{value: v})
-			}
+
+		switch t.dt {
+		case intDataType:
+			ti.remove(name, intDataType, ent, &intTag{value: t.data.(int)})
+		case floatDataType:
+			ti.remove(name, floatDataType, ent, &floatTag{value: t.data.(float64)})
+		case strDataType:
+			ti.remove(name, strDataType, ent, &strTag{value: t.data.(string)})
+		case boolDataType:
+			ti.remove(name, boolDataType, ent, &boolTag{value: t.data.(bool)})
+		default:
+			panic("how can data type not match?")
 		}
 	}
+
+	return nil
 }
 
 func resolveIndexIfNotExists(

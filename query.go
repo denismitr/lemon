@@ -33,7 +33,12 @@ type matcher func(ent *entry) bool
 
 func (tk *tagKey) getStringMatcher(v string) matcher {
 	return func(ent *entry) bool {
-		sv, ok := ent.tags.strings[tk.name]
+		t, ok := ent.tags[tk.name]
+		if !ok {
+			return false
+		}
+
+		sv, ok := t.data.(string)
 		if !ok {
 			return false
 		}
@@ -52,7 +57,12 @@ func (tk *tagKey) getStringMatcher(v string) matcher {
 
 func (tk *tagKey) getFloatMatcher(v float64) matcher {
 	return func(ent *entry) bool {
-		sv, ok := ent.tags.floats[tk.name]
+		t, ok := ent.tags[tk.name]
+		if !ok {
+			return false
+		}
+
+		sv, ok := t.data.(float64)
 		if !ok {
 			return false
 		}
@@ -71,7 +81,12 @@ func (tk *tagKey) getFloatMatcher(v float64) matcher {
 
 func (tk *tagKey) getIntMatcher(v int) matcher {
 	return func(ent *entry) bool {
-		sv, ok := ent.tags.integers[tk.name]
+		t, ok := ent.tags[tk.name]
+		if !ok {
+			return false
+		}
+
+		sv, ok := t.data.(int)
 		if !ok {
 			return false
 		}
@@ -91,7 +106,12 @@ func (tk *tagKey) getIntMatcher(v int) matcher {
 
 func (tk *tagKey) getBoolMatcher(v bool) matcher {
 	return func(ent *entry) bool {
-		bv, ok := ent.tags.booleans[tk.name]
+		t, ok := ent.tags[tk.name]
+		if !ok {
+			return false
+		}
+
+		bv, ok := t.data.(bool)
 		if !ok {
 			return false
 		}
@@ -318,12 +338,6 @@ func (fe *filterEntriesSink) addMap(entries map[string]*entry) {
 		}
 	}
 }
-
-//func (fe *filterEntriesSink) exists(ent *entry) bool {
-//	fe.RLock()
-//	defer fe.RUnlock()
-//	return fe.entries[ent.key.String()] != nil
-//}
 
 func (fe *filterEntriesSink) empty() bool {
 	fe.RLock()

@@ -28,7 +28,7 @@ type rwLocker interface {
 	RUnlock()
 }
 
-type engine interface {
+type executionEngine interface {
 	rwLocker
 
 	Persist(commands []serializer) error
@@ -39,7 +39,7 @@ type engine interface {
 	FindByKey(key string) (*entry, error)
 	IterateByKeys(pks []string, ir entryIterator) error
 	Remove(key PK) error
-	RemoveEntryFromTagsByNameAndType(name string, dt indexType, ent *entry)
+	RemoveEntryFromTagsByName(name string, ent *entry) error
 	AddTag(name string, value interface{}, ent *entry) error
 	Count() int
 	Put(ent *entry, replace bool) error
@@ -66,15 +66,6 @@ type defaultEngine struct {
 	closed        bool
 }
 
-func (e *defaultEngine) SetCfg(cfg *Config) {
-	e.cfg = cfg
-}
-
-func (e *defaultEngine) RemoveEntry(ent *entry) {
-	e.tags.removeEntry(ent)
-	e.pks.Delete(ent)
-}
-
 func newDefaultEngine(dbFile string, cfg *Config) (*defaultEngine, error) {
 	e := &defaultEngine{
 		dbFile: dbFile,
@@ -85,6 +76,15 @@ func newDefaultEngine(dbFile string, cfg *Config) (*defaultEngine, error) {
 	}
 
 	return e, nil
+}
+
+func (e *defaultEngine) SetCfg(cfg *Config) {
+	e.cfg = cfg
+}
+
+func (e *defaultEngine) RemoveEntry(ent *entry) {
+	e.tags.removeEntry(ent)
+	e.pks.Delete(ent)
 }
 
 func (e *defaultEngine) asyncFlush(d time.Duration) {
@@ -234,8 +234,8 @@ func (e *defaultEngine) Persist(commands []serializer) error {
 	return nil
 }
 
-func (e *defaultEngine) RemoveEntryFromTagsByNameAndType(name string, dt indexType, ent *entry) {
-	e.tags.removeEntryByNameAndType(name, dt, ent)
+func (e *defaultEngine) RemoveEntryFromTagsByName(name string, ent *entry) error {
+	return e.tags.removeEntryByName(name, ent)
 }
 
 func (e *defaultEngine) AddTag(name string, value interface{}, ent *entry) error {
@@ -324,26 +324,8 @@ func (e *defaultEngine) Remove(key PK) error {
 }
 
 func (e *defaultEngine) setEntityTags(ent *entry) error {
-	for n, v := range ent.tags.booleans {
-		if err := e.tags.add(n, v, ent); err != nil {
-			return err
-		}
-	}
-
-	for n, v := range ent.tags.strings {
-		if err := e.tags.add(n, v, ent); err != nil {
-			return err
-		}
-	}
-
-	for n, v := range ent.tags.integers {
-		if err := e.tags.add(n, v, ent); err != nil {
-			return err
-		}
-	}
-
-	for n, v := range ent.tags.floats {
-		if err := e.tags.add(n, v, ent); err != nil {
+	for name, t := range ent.tags {
+		if err := e.tags.add(name, t.data, ent); err != nil {
 			return err
 		}
 	}
@@ -592,36 +574,33 @@ func (e *defaultEngine) UpsertTag(name string, v interface{}, ent *entry) error 
 
 	// if tag name exists in entity, remove it from secondary index
 	// and remove it from entry itself
-	existingTagType, ok := ent.tags.names[name]
+	_, ok := ent.tags[name]
 	if ok {
 		if err := e.tags.mustRemoveEntryByNameAndValue(name, v, ent); err != nil {
 			return err
 		}
 
-		switch existingTagType {
-		case boolDataType:
-			delete(ent.tags.booleans, name)
-		case intDataType:
-			delete(ent.tags.integers, name)
-		case floatDataType:
-			delete(ent.tags.floats, name)
-		case strDataType:
-			delete(ent.tags.strings, name)
-		}
+		ent.tags[name] = nil
+		delete(ent.tags, name)
 	}
 
+	newTag := &tag{data: v}
 	// do type check of value
 	// same name may now contain a different value type
-	switch typedValue := v.(type) {
+	switch v.(type) {
 	case int:
-		ent.tags.integers[name] = typedValue
+		newTag.dt = intDataType
 	case bool:
-		ent.tags.booleans[name] = typedValue
+		newTag.dt = boolDataType
 	case string:
-		ent.tags.strings[name] = typedValue
+		newTag.dt = strDataType
 	case float64:
-		ent.tags.floats[name] = typedValue
+		newTag.dt = floatDataType
+	default:
+		return ErrInvalidTagType
 	}
+
+	ent.tags[name] = newTag
 
 	// add to secondary index
 	// todo: avoid another type cast in the add method
@@ -630,26 +609,11 @@ func (e *defaultEngine) UpsertTag(name string, v interface{}, ent *entry) error 
 
 // RemoveTag - removes a tag from entity and secondary index
 func (e *defaultEngine) RemoveTag(name string, ent *entry) error {
-	// if tag name exists in entity, remove it from secondary index
-	// and remove it from entity itself
-	existingTagType, ok := ent.tags.names[name]
-	if ok {
-		switch existingTagType {
-		case boolDataType:
-			e.tags.removeEntryByNameAndType(name, boolDataType, ent)
-			delete(ent.tags.booleans, name)
-		case intDataType:
-			e.tags.removeEntryByNameAndType(name, intDataType, ent)
-			delete(ent.tags.integers, name)
-		case floatDataType:
-			e.tags.removeEntryByNameAndType(name, floatDataType, ent)
-			delete(ent.tags.floats, name)
-		case strDataType:
-			e.tags.removeEntryByNameAndType(name, strDataType, ent)
-			delete(ent.tags.strings, name)
-		}
+	if err := e.tags.removeEntryByName(name, ent); err != nil {
+		return err
 	}
 
+	ent.tags.removeByName(name)
 	return nil
 }
 

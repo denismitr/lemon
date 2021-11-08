@@ -8,7 +8,7 @@ import (
 const InMemory = ":memory:"
 
 type DB struct {
-	e engine
+	e executionEngine
 }
 
 type UserCallback func(tx *Tx) error
