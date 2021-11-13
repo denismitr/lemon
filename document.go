@@ -29,10 +29,12 @@ func newDocumentFromEntry(ent *entry) *Document {
 
 	d := &Document{
 		key:      ent.key.String(),
-		value:    ent.value, // fixme: maybe copy
 		userTags: userTags,
+		value:    make([]byte, len(ent.value)),
 		metaTags: metaTags,
 	}
+
+	copy(d.value, ent.value)
 
 	return d
 }
