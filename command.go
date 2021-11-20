@@ -1,17 +1,15 @@
 package lemon
 
 import (
-	"bytes"
-	"fmt"
 	"github.com/pkg/errors"
 	"sort"
 )
 
-type serializer interface {
-	serialize(buf *bytes.Buffer)
+type serializable interface {
+	serialize(rs *respSerializer) error
 }
 
-type deserializer interface {
+type deserializable interface {
 	deserialize(e executionEngine) error
 }
 
@@ -20,14 +18,8 @@ type untagCmd struct {
 	names []string
 }
 
-func (cmd *untagCmd) serialize(buf *bytes.Buffer) {
-	segments := len(cmd.names)
-	writeRespArray(segments, buf)
-	writeRespSimpleString("untag", buf)
-	writeRespKeyString(cmd.key.String(), buf)
-	for _, n := range cmd.names {
-		writeRespSimpleString(n, buf)
-	}
+func (cmd *untagCmd) serialize(rs *respSerializer) error {
+	return rs.serializeUntagCommand(cmd)
 }
 
 func (cmd *untagCmd) deserialize(e executionEngine) error {
@@ -54,29 +46,8 @@ type tagCmd struct {
 	tags tags
 }
 
-func (cmd *tagCmd) serialize(buf *bytes.Buffer) {
-	segments := cmd.tags.count()
-	writeRespArray(segments, buf)
-	writeRespSimpleString("tag", buf)
-	writeRespKeyString(cmd.key.String(), buf)
-
-	sortedNames := sortNames(cmd.tags)
-
-	for _, name := range sortedNames {
-		t := cmd.tags[name]
-		switch t.dt {
-		case intDataType:
-			writeRespIntTag(name, t.data.(int), buf)
-		case floatDataType:
-			writeRespFloatTag(name, t.data.(float64), buf)
-		case boolDataType:
-			writeRespBoolTag(name, t.data.(bool), buf)
-		case strDataType:
-			writeRespStrTag(name, t.data.(string), buf)
-		default:
-			panic(fmt.Sprintf("invalid tag type %d", t.dt))
-		}
-	}
+func (cmd *tagCmd) serialize(rs *respSerializer) error {
+	return rs.serializeTagCommand(cmd)
 }
 
 func sortNames(tgs tags) []string {
@@ -111,9 +82,8 @@ func (cmd *tagCmd) deserialize(e executionEngine) error {
 
 type flushAllCmd struct{}
 
-func (c flushAllCmd) serialize(buf *bytes.Buffer) {
-	writeRespArray(1, buf)
-	writeRespSimpleString("flushall", buf)
+func (flushAllCmd) serialize(rs *respSerializer) error {
+	return rs.serializeFlushAllCommand()
 }
 
 func (flushAllCmd) deserialize(e executionEngine) error {

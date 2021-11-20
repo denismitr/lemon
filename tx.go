@@ -13,7 +13,7 @@ type Tx struct {
 	readOnly bool
 	e        executionEngine
 	ctx      context.Context
-	persistCommands []serializer
+	persistCommands []serializable
 	updates         []*entry
 	replaced        []*entry
 	added           []*entry

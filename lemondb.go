@@ -27,6 +27,10 @@ func Open(path string, engineOptions ...EngineOptions) (*DB, Closer, error) {
 		AutoVacuumOnlyOnClose: true,
 	}
 
+	if path == InMemory {
+		defaultCfg.PersistenceStrategy = InMemory
+	}
+
 	e, err := newDefaultEngine(path, defaultCfg)
 	if err != nil {
 		return nil, NullCloser, err

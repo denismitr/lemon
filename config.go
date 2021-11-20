@@ -9,6 +9,7 @@ var defaultPersistenceIntervals = 1 * time.Second
 
 type Config struct {
 	PersistenceStrategy       PersistenceStrategy
+	ValueLoadStrategy         ValueLoadStrategy
 	TruncateFileWhenOpen      bool
 	AsyncPersistenceIntervals time.Duration
 	DisableAutoVacuum         bool

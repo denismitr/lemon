@@ -1,7 +1,6 @@
 package lemon
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"github.com/pkg/errors"
@@ -31,7 +30,7 @@ type rwLocker interface {
 type executionEngine interface {
 	rwLocker
 
-	Persist(commands []serializer) error
+	Persist(commands []serializable) error
 	RemoveTag(name string, ent *entry) error
 	Close(ctx context.Context) error
 	Insert(ent *entry) error
@@ -48,7 +47,7 @@ type executionEngine interface {
 	UpsertTag(name string, v interface{}, ent *entry) error
 	FilterEntriesByTags(q *QueryOptions) (*filterEntriesSink, error)
 	ChooseBestScanner(q *QueryOptions) (scanner, error)
-	RemoveEntry(ent *entry)
+	RemoveEntryUnderLock(ent *entry)
 	SetCfg(cfg *Config)
 }
 
@@ -78,72 +77,79 @@ func newDefaultEngine(dbFile string, cfg *Config) (*defaultEngine, error) {
 	return e, nil
 }
 
-func (e *defaultEngine) SetCfg(cfg *Config) {
-	e.cfg = cfg
+func (ee *defaultEngine) SetCfg(cfg *Config) {
+	ee.cfg = cfg
 }
 
-func (e *defaultEngine) RemoveEntry(ent *entry) {
-	e.tags.removeEntry(ent)
-	e.pks.Delete(ent)
-}
-
-func (e *defaultEngine) asyncFlush(d time.Duration) {
+func (ee *defaultEngine) asyncFlush(d time.Duration) {
 	t := time.NewTicker(d)
 
 	for {
 		select {
-		case <-e.stopCh:
+		case <-ee.stopCh:
 			t.Stop()
 			return
 		case <-t.C:
-			e.Lock()
-			if err := e.persistence.sync(); err != nil {
+			ee.Lock()
+			if err := ee.persistence.sync(); err != nil {
 				panic(err)
 			}
-			e.Unlock()
+			ee.Unlock()
 		}
 	}
 }
 
-func (e *defaultEngine) scheduleVacuum(d time.Duration) {
+func (ee *defaultEngine) scheduleVacuum(d time.Duration) {
 	t := time.NewTicker(d)
 
 	for {
 		select {
-		case <-e.stopCh:
+		case <-ee.stopCh:
 			t.Stop()
 			return
 		case <-t.C:
-			e.Lock()
-			if e.runningVacuum && e.totalDeletes < e.cfg.AutoVacuumMinSize {
-				e.Unlock()
+			ee.Lock()
+			if ee.runningVacuum && ee.totalDeletes < ee.cfg.AutoVacuumMinSize {
+				ee.Unlock()
 				continue
 			}
 
-			e.runningVacuum = true
+			ee.runningVacuum = true
 			// todo: maybe limit run vacuum with context timeout equal to d
-			if err := e.runVacuumUnderLock(context.Background()); err != nil {
+			if err := ee.runVacuumUnderLock(context.Background()); err != nil {
 				panic(err)
 			}
-			e.runningVacuum = false
-			e.Unlock()
+			ee.runningVacuum = false
+			ee.Unlock()
 		}
 	}
 }
 
-func (e *defaultEngine) runVacuumUnderLock(ctx context.Context) error {
-	if e.persistence == nil {
+func (ee *defaultEngine) runVacuumUnderLock(ctx context.Context) error {
+	if ee.persistence == nil {
 		return nil
 	}
 
-	buf := &bytes.Buffer{}
+	rs := respSerializer{}
 
-	e.pks.Ascend(nil, func(i interface{}) bool {
+	ee.pks.Ascend(nil, func(i interface{}) bool {
 		if err := ctx.Err(); err != nil {
 			return false
 		}
 
-		i.(*entry).serialize(buf)
+		ent := i.(*entry)
+		if ent.value == nil && ent.pos.offset != 0 {
+			v, err := ee.persistence.loadValueByPosition(ent.pos)
+			if err != nil {
+				panic(err) // fixme
+			}
+			ent.value = v
+		}
+
+		if err := ent.serialize(&rs); err != nil {
+			panic(err) // fixme
+		}
+
 		return true
 	})
 
@@ -151,119 +157,136 @@ func (e *defaultEngine) runVacuumUnderLock(ctx context.Context) error {
 		return errors.Wrap(err, "could not finish vacuum")
 	}
 
-	if err := e.persistence.writeAndSwap(buf); err != nil {
+	if err := ee.persistence.writeAndSwap(&rs); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (e *defaultEngine) Close(ctx context.Context) error {
-	e.Lock()
+func (ee *defaultEngine) Close(ctx context.Context) error {
+	ee.Lock()
 
-	if e.closed {
+	if ee.closed {
 		return ErrDatabaseAlreadyClosed
 	}
 
-	if !e.cfg.DisableAutoVacuum {
-		if err := e.runVacuumUnderLock(ctx); err != nil {
+	if !ee.cfg.DisableAutoVacuum {
+		if err := ee.runVacuumUnderLock(ctx); err != nil {
 			return err
 		}
 	}
 
 	defer func() {
-		e.pks = nil
-		e.tags = nil
-		e.closed = true
-		e.persistence = nil
-		e.Unlock()
+		ee.pks = nil
+		ee.tags = nil
+		ee.closed = true
+		ee.persistence = nil
+		ee.Unlock()
 	}()
 
-	close(e.stopCh)
+	close(ee.stopCh)
 
-	if e.persistence != nil {
-		return e.persistence.close()
+	if ee.persistence != nil {
+		return ee.persistence.close()
 	}
 
 	return nil
 }
 
-func (e *defaultEngine) init() error {
-	e.Lock()
-	defer e.Unlock()
+func (ee *defaultEngine) init() error {
+	ee.Lock()
+	defer ee.Unlock()
 
-	if e.dbFile != InMemory {
-		p, err := newPersistence(e.dbFile, e.cfg.PersistenceStrategy, e.cfg.TruncateFileWhenOpen)
+	if ee.dbFile != InMemory {
+		p, err := newPersistence(
+			ee.dbFile,
+			ee.cfg.PersistenceStrategy,
+			ee.cfg.TruncateFileWhenOpen,
+			ee.cfg.ValueLoadStrategy,
+		)
+
 		if err != nil {
 			return err
 		}
-		e.persistence = p
 
-		if err := e.persistence.load(func(d deserializer) error {
-			return d.deserialize(e)
+		ee.persistence = p
+
+		if err := ee.persistence.load(func(d deserializable) error {
+			return d.deserialize(ee)
 		}); err != nil {
 			return err
 		}
 
-		if e.cfg.PersistenceStrategy == Async {
-			go e.asyncFlush(e.cfg.AsyncPersistenceIntervals)
+		if ee.cfg.PersistenceStrategy == Async {
+			go ee.asyncFlush(ee.cfg.AsyncPersistenceIntervals)
 		}
 
-		if !e.cfg.DisableAutoVacuum && !e.cfg.AutoVacuumOnlyOnClose {
-			go e.scheduleVacuum(e.cfg.AutoVacuumIntervals)
+		if !ee.cfg.DisableAutoVacuum && !ee.cfg.AutoVacuumOnlyOnClose {
+			go ee.scheduleVacuum(ee.cfg.AutoVacuumIntervals)
 		}
+	} else {
+		ee.cfg.ValueLoadStrategy = EagerLoad
 	}
 
 	return nil
 }
 
-func (e *defaultEngine) Persist(commands []serializer) error {
-	if e.persistence == nil {
+func (ee *defaultEngine) Persist(commands []serializable) error {
+	if ee.persistence == nil {
 		return nil
 	}
 
-	var buf bytes.Buffer
-	for _, cmd := range commands {
-		cmd.serialize(&buf)
-	}
-
-	if err := e.persistence.write(&buf); err != nil {
+	if err := ee.persistence.save(commands); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (e *defaultEngine) RemoveEntryFromTagsByName(name string, ent *entry) error {
-	return e.tags.removeEntryByName(name, ent)
+func (ee *defaultEngine) RemoveEntryUnderLock(ent *entry) {
+	ee.tags.removeEntry(ent)
+	ee.pks.Delete(ent)
+
+	if ee.dbFile != InMemory {
+		ee.persistence.removeValueUnderLock(ent.pos)
+	}
 }
 
-func (e *defaultEngine) AddTag(name string, value interface{}, ent *entry) error {
-	return e.tags.add(name, value, ent)
+func (ee *defaultEngine) RemoveEntryFromTagsByName(name string, ent *entry) error {
+	return ee.tags.removeEntryByName(name, ent)
 }
 
-func (e *defaultEngine) Insert(ent *entry) error {
-	existing := e.pks.Set(ent)
+func (ee *defaultEngine) AddTag(name string, value interface{}, ent *entry) error {
+	return ee.tags.add(name, value, ent)
+}
+
+func (ee *defaultEngine) Insert(ent *entry) error {
+	existing := ee.pks.Set(ent)
 	if existing != nil {
 		return errors.Wrapf(ErrKeyAlreadyExists, "key: %s", ent.key.String())
 	}
 
 	if ent.tags != nil {
-		if err := e.setEntityTags(ent); err != nil {
+		if err := ee.setEntityTags(ent); err != nil {
 			return err
 		}
 	}
 
+	//if ee.dbFile != InMemory {
+	//	ee.persistence.setValueByPosition(pos, ent.value)
+	//}
+
 	return nil
 }
 
-func (e *defaultEngine) Exists(key string) bool {
-	found := e.pks.Get(&entry{key: newPK(key)})
+func (ee *defaultEngine) Exists(key string) bool {
+	found := ee.pks.Get(&entry{key: newPK(key)})
 	return found != nil
 }
 
-func (e *defaultEngine) FindByKey(key string) (*entry, error) {
-	found := e.pks.Get(&entry{key: newPK(key)})
+func (ee *defaultEngine) FindByKey(key string) (*entry, error) {
+	found := ee.pks.Get(&entry{key: newPK(key)})
 	if found == nil {
 		return nil, errors.Wrapf(ErrKeyDoesNotExist, "key %s does not exist in database", key)
 	}
@@ -273,11 +296,22 @@ func (e *defaultEngine) FindByKey(key string) (*entry, error) {
 		panic(castPanic)
 	}
 
+	if ee.cfg.PersistenceStrategy != InMemory {
+		ent.value = nil
+		if ent.value == nil {
+			v, err := ee.persistence.loadValueByPosition(ent.pos)
+			if err != nil {
+				return nil, err
+			}
+			ent.value = v
+		}
+	}
+
 	return ent, nil
 }
 
 // IterateByKeys - takes a slice of primary keys and iterates over matched entries
-func (e *defaultEngine) IterateByKeys(pks []string, ir entryIterator) error {
+func (ee *defaultEngine) IterateByKeys(pks []string, ir entryIterator) error {
 	resultCh := make(chan *entry)
 	var wg sync.WaitGroup
 
@@ -286,7 +320,7 @@ func (e *defaultEngine) IterateByKeys(pks []string, ir entryIterator) error {
 		go func(k string) {
 			defer wg.Done()
 
-			found, err := e.FindByKey(k)
+			found, err := ee.FindByKey(k)
 			if err != nil {
 				// todo: log
 				//return errors.Wrapf(ErrKeyDoesNotExist, "key %s does not exist in database", k)
@@ -311,21 +345,21 @@ func (e *defaultEngine) IterateByKeys(pks []string, ir entryIterator) error {
 }
 
 // Remove entry by primary key
-func (e *defaultEngine) Remove(key PK) error {
-	ent := e.pks.Get(&entry{key: key})
+func (ee *defaultEngine) Remove(key PK) error {
+	ent := ee.pks.Get(&entry{key: key})
 	if ent == nil {
 		return errors.Wrapf(ErrKeyDoesNotExist, "key %s does not exist in DB", key.String())
 	}
 
-	e.totalDeletes++
-	e.pks.Delete(&entry{key: key})
+	ee.totalDeletes++
+	ee.pks.Delete(&entry{key: key})
 
 	return nil
 }
 
-func (e *defaultEngine) setEntityTags(ent *entry) error {
+func (ee *defaultEngine) setEntityTags(ent *entry) error {
 	for name, t := range ent.tags {
-		if err := e.tags.add(name, t.data, ent); err != nil {
+		if err := ee.tags.add(name, t.data, ent); err != nil {
 			return err
 		}
 	}
@@ -333,22 +367,22 @@ func (e *defaultEngine) setEntityTags(ent *entry) error {
 	return nil
 }
 
-func (e *defaultEngine) clearEntityTags(ent *entry) {
-	e.tags.removeEntry(ent)
+func (ee *defaultEngine) clearEntityTags(ent *entry) {
+	ee.tags.removeEntry(ent)
 }
 
-func (e *defaultEngine) Count() int {
-	return e.pks.Len()
+func (ee *defaultEngine) Count() int {
+	return ee.pks.Len()
 }
 
-func (e *defaultEngine) scanBetweenDescend(
+func (ee *defaultEngine) scanBetweenDescend(
 	ctx context.Context,
 	q *QueryOptions,
 	ir entryIterator,
 ) (err error) {
 	// Descend required a reverse order of `from` and `to`
 	descendRange(
-		e.pks,
+		ee.pks,
 		&entry{key: newPK(q.keyRange.From)},
 		&entry{key: newPK(q.keyRange.To)},
 		filteringBTreeIterator(ctx, q, ir),
@@ -357,13 +391,13 @@ func (e *defaultEngine) scanBetweenDescend(
 	return
 }
 
-func (e *defaultEngine) scanBetweenAscend(
+func (ee *defaultEngine) scanBetweenAscend(
 	ctx context.Context,
 	q *QueryOptions,
 	ir entryIterator,
 ) (err error) {
 	ascendRange(
-		e.pks,
+		ee.pks,
 		&entry{key: newPK(q.keyRange.From)},
 		&entry{key: newPK(q.keyRange.To)},
 		filteringBTreeIterator(ctx, q, ir),
@@ -372,70 +406,70 @@ func (e *defaultEngine) scanBetweenAscend(
 	return
 }
 
-func (e *defaultEngine) scanPrefixAscend(
+func (ee *defaultEngine) scanPrefixAscend(
 	ctx context.Context,
 	q *QueryOptions,
 	ir entryIterator,
 ) (err error) {
-	e.pks.Ascend(&entry{key: newPK(q.prefix)}, filteringBTreeIterator(ctx, q, ir))
+	ee.pks.Ascend(&entry{key: newPK(q.prefix)}, filteringBTreeIterator(ctx, q, ir))
 
 	return
 }
 
-func (e *defaultEngine) scanPrefixDescend(
+func (ee *defaultEngine) scanPrefixDescend(
 	ctx context.Context,
 	q *QueryOptions,
 	ir entryIterator,
 ) (err error) {
-	descendGreaterThan(e.pks, &entry{key: newPK(q.prefix)}, filteringBTreeIterator(ctx, q, ir))
+	descendGreaterThan(ee.pks, &entry{key: newPK(q.prefix)}, filteringBTreeIterator(ctx, q, ir))
 	return
 }
 
-func (e *defaultEngine) scanAscend(
+func (ee *defaultEngine) scanAscend(
 	ctx context.Context,
 	q *QueryOptions,
 	ir entryIterator,
 ) (err error) {
-	e.pks.Ascend(nil, filteringBTreeIterator(ctx, q, ir))
+	ee.pks.Ascend(nil, filteringBTreeIterator(ctx, q, ir))
 	return
 }
 
-func (e *defaultEngine) scanDescend(
+func (ee *defaultEngine) scanDescend(
 	ctx context.Context,
 	q *QueryOptions,
 	ir entryIterator,
 ) (err error) {
-	e.pks.Descend(nil, filteringBTreeIterator(ctx, q, ir))
+	ee.pks.Descend(nil, filteringBTreeIterator(ctx, q, ir))
 	return
 }
 
-func (e *defaultEngine) ChooseBestScanner(q *QueryOptions) (scanner, error) {
+func (ee *defaultEngine) ChooseBestScanner(q *QueryOptions) (scanner, error) {
 	if q.keyRange != nil {
 		if q.order == AscOrder {
-			return e.scanBetweenAscend, nil
+			return ee.scanBetweenAscend, nil
 		} else {
-			return e.scanBetweenDescend, nil
+			return ee.scanBetweenDescend, nil
 		}
 	}
 
 	if q.prefix != "" {
 		if q.order == AscOrder {
-			return e.scanPrefixAscend, nil
+			return ee.scanPrefixAscend, nil
 		} else {
-			return e.scanPrefixDescend, nil
+			return ee.scanPrefixDescend, nil
 		}
 	}
 
 	if q.order == AscOrder {
-		return e.scanAscend, nil
+		return ee.scanAscend, nil
 	} else {
-		return e.scanDescend, nil
+		return ee.scanDescend, nil
 	}
 }
 
 // FilterEntriesByTags - uses secondary indexes (tags) to filter entries
 // and puts them to sink, which it creates to store all the matched entries
-func (e *defaultEngine) FilterEntriesByTags(q *QueryOptions) (*filterEntriesSink, error) {
+func (ee *defaultEngine) FilterEntriesByTags(q *QueryOptions) (*filterEntriesSink, error) {
 	if q == nil || (q.allTags == nil && q.byTagName == "") {
 		return nil, nil
 	}
@@ -444,7 +478,7 @@ func (e *defaultEngine) FilterEntriesByTags(q *QueryOptions) (*filterEntriesSink
 
 	// one tag name scan
 	if q.byTagName != "" {
-		idx, ok := e.tags.data[q.byTagName]
+		idx, ok := ee.tags.data[q.byTagName]
 		if !ok {
 			return nil, errors.Wrapf(ErrTagKeyNotFound, "%s", q.byTagName)
 		}
@@ -476,17 +510,17 @@ func (e *defaultEngine) FilterEntriesByTags(q *QueryOptions) (*filterEntriesSink
 			defer wg.Done()
 
 			for tk, v := range q.allTags.booleans {
-				if e.tags.data[tk.name] == nil {
+				if ee.tags.data[tk.name] == nil {
 					continue
 				}
 
-				btf, err := createBoolTagFilter(e.tags, tk, v)
+				btf, err := createBoolTagFilter(ee.tags, tk, v)
 				if err != nil {
 					errCh <- err
 					return
 				}
 
-				e.tags.filterEntities(btf, fes)
+				ee.tags.filterEntities(btf, fes)
 			}
 		}()
 	}
@@ -497,17 +531,17 @@ func (e *defaultEngine) FilterEntriesByTags(q *QueryOptions) (*filterEntriesSink
 			defer wg.Done()
 
 			for tk, v := range q.allTags.strings {
-				if e.tags.data[tk.name] == nil {
+				if ee.tags.data[tk.name] == nil {
 					continue
 				}
 
-				stf, err := createStringTagFilter(e.tags, tk, v)
+				stf, err := createStringTagFilter(ee.tags, tk, v)
 				if err != nil {
 					errCh <- err
 					return
 				}
 
-				e.tags.filterEntities(stf, fes)
+				ee.tags.filterEntities(stf, fes)
 			}
 		}()
 	}
@@ -518,17 +552,17 @@ func (e *defaultEngine) FilterEntriesByTags(q *QueryOptions) (*filterEntriesSink
 			defer wg.Done()
 
 			for tk, v := range q.allTags.integers {
-				if e.tags.data[tk.name] == nil {
+				if ee.tags.data[tk.name] == nil {
 					continue
 				}
 
-				itf, err := createIntegerTagFilter(e.tags, tk, v)
+				itf, err := createIntegerTagFilter(ee.tags, tk, v)
 				if err != nil {
 					errCh <- err
 					return
 				}
 
-				e.tags.filterEntities(itf, fes)
+				ee.tags.filterEntities(itf, fes)
 			}
 		}()
 	}
@@ -539,17 +573,17 @@ func (e *defaultEngine) FilterEntriesByTags(q *QueryOptions) (*filterEntriesSink
 			defer wg.Done()
 
 			for tk, v := range q.allTags.floats {
-				if e.tags.data[tk.name] == nil {
+				if ee.tags.data[tk.name] == nil {
 					continue
 				}
 
-				ftf, err := createFloatTagFilter(e.tags, tk, v)
+				ftf, err := createFloatTagFilter(ee.tags, tk, v)
 				if err != nil {
 					errCh <- err
 					return
 				}
 
-				e.tags.filterEntities(ftf, fes)
+				ee.tags.filterEntities(ftf, fes)
 			}
 		}()
 	}
@@ -566,7 +600,7 @@ func (e *defaultEngine) FilterEntriesByTags(q *QueryOptions) (*filterEntriesSink
 
 // UpsertTag - updates or inserts a new tag, adding it to the entity
 // and corresponding secondary index
-func (e *defaultEngine) UpsertTag(name string, v interface{}, ent *entry) error {
+func (ee *defaultEngine) UpsertTag(name string, v interface{}, ent *entry) error {
 	// just a precaution
 	if ent.tags == nil {
 		ent.tags = newTags()
@@ -576,7 +610,7 @@ func (e *defaultEngine) UpsertTag(name string, v interface{}, ent *entry) error 
 	// and remove it from entry itself
 	_, ok := ent.tags[name]
 	if ok {
-		if err := e.tags.mustRemoveEntryByNameAndValue(name, v, ent); err != nil {
+		if err := ee.tags.mustRemoveEntryByNameAndValue(name, v, ent); err != nil {
 			return err
 		}
 
@@ -604,12 +638,12 @@ func (e *defaultEngine) UpsertTag(name string, v interface{}, ent *entry) error 
 
 	// add to secondary index
 	// todo: avoid another type cast in the add method
-	return e.tags.add(name, v, ent)
+	return ee.tags.add(name, v, ent)
 }
 
 // RemoveTag - removes a tag from entity and secondary index
-func (e *defaultEngine) RemoveTag(name string, ent *entry) error {
-	if err := e.tags.removeEntryByName(name, ent); err != nil {
+func (ee *defaultEngine) RemoveTag(name string, ent *entry) error {
+	if err := ee.tags.removeEntryByName(name, ent); err != nil {
 		return err
 	}
 
@@ -617,11 +651,11 @@ func (e *defaultEngine) RemoveTag(name string, ent *entry) error {
 	return nil
 }
 
-func (e *defaultEngine) Put(ent *entry, replace bool) error {
-	existing := e.pks.Set(ent)
+func (ee *defaultEngine) Put(ent *entry, replace bool) error {
+	existing := ee.pks.Set(ent)
 	if existing != nil {
 		if !replace {
-			_ = e.pks.Set(existing)
+			_ = ee.pks.Set(existing)
 			return errors.Wrapf(ErrKeyAlreadyExists, "key %s", ent.key.String())
 		}
 
@@ -631,12 +665,12 @@ func (e *defaultEngine) Put(ent *entry, replace bool) error {
 		}
 
 		if existingEnt.tags != nil {
-			e.clearEntityTags(ent)
+			ee.clearEntityTags(ent)
 		}
 	}
 
 	if ent.tags != nil {
-		if err := e.setEntityTags(ent); err != nil {
+		if err := ee.setEntityTags(ent); err != nil {
 			return err
 		}
 	}
@@ -644,28 +678,28 @@ func (e *defaultEngine) Put(ent *entry, replace bool) error {
 	return nil
 }
 
-func (e *defaultEngine) FlushAll(ff func(ent *entry)) error {
-	e.pks.Ascend(nil, func(i interface{}) bool {
+func (ee *defaultEngine) FlushAll(ff func(ent *entry)) error {
+	ee.pks.Ascend(nil, func(i interface{}) bool {
 		ent := i.(*entry)
 		ff(ent)
 		return true
 	})
 
-	e.pks = btree.NewNonConcurrent(byPrimaryKeys)
-	e.tags = newTagIndex()
+	ee.pks = btree.NewNonConcurrent(byPrimaryKeys)
+	ee.tags = newTagIndex()
 
 	return nil
 }
 
-func (e *defaultEngine) Vacuum(ctx context.Context) error {
-	if e.persistence == nil {
+func (ee *defaultEngine) Vacuum(ctx context.Context) error {
+	if ee.persistence == nil {
 		return nil
 	}
 
-	e.Lock()
-	defer e.Unlock()
+	ee.Lock()
+	defer ee.Unlock()
 
-	if err := e.runVacuumUnderLock(ctx); err != nil {
+	if err := ee.runVacuumUnderLock(ctx); err != nil {
 		return err
 	}
 

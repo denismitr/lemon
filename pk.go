@@ -43,6 +43,10 @@ func (pk *PK) String() string {
 	return pk.key
 }
 
+func (pk *PK) Bytes() []byte {
+	return []byte(pk.key)
+}
+
 func (pk *PK) Less(other PK) bool {
 	l := smallestSegmentLen(pk.segments, other.segments)
 

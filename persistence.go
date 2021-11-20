@@ -3,11 +3,9 @@ package lemon
 import (
 	"bufio"
 	"bytes"
-	"fmt"
 	"github.com/pkg/errors"
 	"io"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 )
@@ -18,6 +16,7 @@ var ErrCommandInvalid = errors.New("command invalid")
 var ErrParseFailed = errors.New("commands parse error")
 var ErrStorageFailed = errors.New("storage error")
 
+type ValueLoadStrategy uint8
 type PersistenceStrategy string
 
 type commandCode int8
@@ -43,19 +42,27 @@ const (
 	Sync  PersistenceStrategy = "sync"
 )
 
+const (
+	LazyLoad ValueLoadStrategy = iota
+	EagerLoad
+)
+
 type persistence struct {
 	mu       sync.RWMutex
+	vls      ValueLoadStrategy
 	strategy PersistenceStrategy
-	parser   *parser
+	parser   *respParser
 	f        *os.File
 	flushes  int
 	cursor   int
+	cache    map[position][]byte
 }
 
 func newPersistence(
 	filepath string,
 	strategy PersistenceStrategy,
 	truncateFileOnOpen bool,
+	vls ValueLoadStrategy,
 ) (*persistence, error) {
 	flags := os.O_CREATE | os.O_RDWR
 	if truncateFileOnOpen {
@@ -69,7 +76,9 @@ func newPersistence(
 
 	p := &persistence{
 		f:        f,
+		vls:      vls,
 		strategy: strategy,
+		cache:    make(map[position][]byte),
 	}
 
 	return p, nil
@@ -80,6 +89,7 @@ func (p *persistence) close() (err error) {
 	defer func() {
 		p.parser = nil
 		p.f = nil
+		p.cache = nil
 
 		p.mu.Unlock()
 	}()
@@ -94,7 +104,7 @@ func (p *persistence) close() (err error) {
 	return
 }
 
-func (p *persistence) load(cb func(d deserializer) error) error {
+func (p *persistence) load(cb func(d deserializable) error) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -103,11 +113,14 @@ func (p *persistence) load(cb func(d deserializer) error) error {
 		return errors.Wrapf(err, "could not collect file %s stats", p.f.Name())
 	}
 
-	prs := &parser{}
+	// todo: inject
+	prs := &respParser{
+		vls: p.vls,
+	}
 
 	r := bufio.NewReader(p.f)
 
-	n, err := prs.parse(r, cb)
+	n, err := prs.parse(r, p.cache, cb)
 	if err != nil {
 		if errors.Is(err, io.ErrUnexpectedEOF) {
 			if tErr := p.f.Truncate(int64(n)); tErr != nil {
@@ -126,6 +139,18 @@ func (p *persistence) load(cb func(d deserializer) error) error {
 	p.cursor = int(pos)
 
 	return nil
+}
+
+func (p *persistence) save(commands []serializable) error {
+	rs := respSerializer{pos: p.cursor}
+
+	for _, cmd := range commands {
+		if err := cmd.serialize(&rs); err != nil {
+			return err
+		}
+	}
+
+	return p.write(&rs.buf)
 }
 
 func (p *persistence) write(buf *bytes.Buffer) error {
@@ -155,6 +180,7 @@ func (p *persistence) write(buf *bytes.Buffer) error {
 	}
 
 	p.flushes++
+	p.cursor += buf.Len()
 	return nil
 }
 
@@ -168,7 +194,7 @@ func (p *persistence) sync() error {
 	return nil
 }
 
-func (p *persistence) writeAndSwap(buf *bytes.Buffer) error {
+func (p *persistence) writeAndSwap(rs *respSerializer) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -183,8 +209,8 @@ func (p *persistence) writeAndSwap(buf *bytes.Buffer) error {
 		_ = os.RemoveAll(tmpFName)
 	}()
 
-	expectedLen := buf.Len()
-	n, err := tmpF.Write(buf.Bytes())
+	expectedLen := rs.buf.Len()
+	n, err := tmpF.Write(rs.buf.Bytes())
 	if err != nil {
 		return errors.Wrapf(err, "auto vacuum could not write into %s file", tmpFName)
 	}
@@ -222,6 +248,53 @@ func (p *persistence) writeAndSwap(buf *bytes.Buffer) error {
 	return nil
 }
 
+func (p *persistence) setValueByPosition(pos position, v []byte) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.cache[pos] = v
+	return nil
+}
+
+func (p *persistence) loadValueByPosition(pos position) ([]byte, error) {
+	p.mu.RLock()
+	if v, ok := p.cache[pos]; ok {
+		p.mu.RUnlock()
+		return v, nil
+	}
+	p.mu.RUnlock()
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if _, err := p.f.Seek(int64(pos.offset), 0); err != nil {
+		return nil, errors.Wrapf(
+			ErrStorageFailed,
+			"could not seek to offset %d in file %s: %s",
+			pos.offset, err, err.Error(),
+		)
+	}
+
+	r := bufio.NewReader(p.f)
+	blob := make([]byte, pos.length)
+	if _, err := io.ReadFull(r, blob); err != nil {
+		return nil, errors.Wrapf(
+			ErrStorageFailed,
+			"could not read blob at offset %d in file %s: %s",
+			pos.offset, err, err.Error(),
+		)
+	}
+
+	if p.vls != LazyLoad {
+		p.cache[pos] = blob
+	}
+
+	return blob, nil
+}
+
+func (p *persistence) removeValueUnderLock(pos position) {
+	delete(p.cache, pos)
+}
+
 func resolveTagFnTypeAndArguments(expression string) (prefix string, args []string, err error) {
 	for _, p := range []string{boolTagFn, strTagFn, intTagFn, floatTagFn} {
 		if strings.HasPrefix(expression, p) {
@@ -246,59 +319,4 @@ func resolveTagFnTypeAndArguments(expression string) (prefix string, args []stri
 	return
 }
 
-func writeRespArray(segments int, buf *bytes.Buffer) {
-	buf.WriteRune('*')
-	buf.WriteString(strconv.FormatInt(int64(segments), 10))
-	buf.WriteRune('\r')
-	buf.WriteRune('\n')
-}
 
-func writeRespBoolTag(name string, v bool, buf *bytes.Buffer) {
-	writeRespFunc(fmt.Sprintf("btg(%s,%v)", name, v), buf)
-}
-
-func writeRespStrTag(name, v string, buf *bytes.Buffer) {
-	writeRespFunc(fmt.Sprintf("stg(%s,%s)", name, v), buf)
-}
-
-func writeRespIntTag(name string, v int, buf *bytes.Buffer) {
-	writeRespFunc(fmt.Sprintf("%s(%s,%d)", intTagFn, name, v), buf)
-}
-
-func writeRespFloatTag(name string, v float64, buf *bytes.Buffer) {
-	writeRespFunc(fmt.Sprintf("%s(%s,%v)", floatTagFn, name, v), buf)
-}
-
-func writeRespSimpleString(s string, buf *bytes.Buffer) {
-	buf.WriteRune('+')
-	buf.WriteString(s)
-	buf.WriteRune('\r')
-	buf.WriteRune('\n')
-}
-
-func writeRespKeyString(s string, buf *bytes.Buffer) {
-	buf.WriteRune('$')
-	buf.WriteString(strconv.FormatInt(int64(len(s)), 10))
-	buf.WriteRune('\r')
-	buf.WriteRune('\n')
-	buf.WriteString(s)
-	buf.WriteRune('\r')
-	buf.WriteRune('\n')
-}
-
-func writeRespFunc(fn string, buf *bytes.Buffer) {
-	buf.WriteRune('+')
-	buf.WriteString(fn)
-	buf.WriteRune('\r')
-	buf.WriteRune('\n')
-}
-
-func writeRespBlob(blob []byte, buf *bytes.Buffer) {
-	buf.WriteRune('$')
-	buf.WriteString(strconv.FormatInt(int64(len(blob)), 10))
-	buf.WriteRune('\r')
-	buf.WriteRune('\n')
-	buf.Write(blob)
-	buf.WriteRune('\r')
-	buf.WriteRune('\n')
-}

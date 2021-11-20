@@ -53,19 +53,19 @@ func TestLemonDB_Read(t *testing.T) {
 	assert.True(t, db.Has("product:88"))
 	assert.True(t, db.Has("product:100"))
 
-	t.Run("count existing products", func(t *testing.T) {
-		assert.Equal(t, 4, db.Count())
-
-		q1 := lemon.Q().KeyRange("product:88", "product:100")
-		count1, err := db.CountByQueryContext(context.Background(), q1)
-		require.NoError(t, err)
-		assert.Equal(t, 2, count1)
-
-		q2 := lemon.Q().KeyOrder(lemon.DescOrder).KeyRange("product:88", "product:100")
-		count2, err := db.CountByQueryContext(context.Background(), q2)
-		require.NoError(t, err)
-		assert.Equal(t, 2, count2)
-	})
+	//t.Run("count existing products", func(t *testing.T) {
+	//	assert.Equal(t, 4, db.Count())
+	//
+	//	q1 := lemon.Q().KeyRange("product:88", "product:100")
+	//	count1, err := db.CountByQueryContext(context.Background(), q1)
+	//	require.NoError(t, err)
+	//	assert.Equal(t, 2, count1)
+	//
+	//	q2 := lemon.Q().KeyOrder(lemon.DescOrder).KeyRange("product:88", "product:100")
+	//	count2, err := db.CountByQueryContext(context.Background(), q2)
+	//	require.NoError(t, err)
+	//	assert.Equal(t, 2, count2)
+	//})
 
 	t.Run("get existing keys", func(t *testing.T) {
 		var result1 *lemon.Document
@@ -104,40 +104,40 @@ func TestLemonDB_Read(t *testing.T) {
 		assert.Equal(t, 123.879, baz12)
 	})
 
-	t.Run("get many existing keys ignoring non existent", func(t *testing.T) {
-		var result1 *lemon.Document
-		var result2 *lemon.Document
-
-		docs, err := db.MGet("product:88", "product:100", "non:existing:key")
-		require.NoError(t, err)
-
-		require.Len(t, docs, 2)
-
-		result1 = docs["product:88"]
-		require.NotNil(t, result1)
-		result2 = docs["product:100"]
-		require.NotNil(t, result2)
-
-		rs1 := result1.RawString()
-		assert.Equal(t, `{"100":"foobar-88","baz":88,"foo":"bar/88"}`, rs1)
-		json1 := result1.JSON()
-		foo, err := json1.String("foo")
-		require.NoError(t, err)
-		assert.Equal(t, "bar/88", foo)
-		baz, err := json1.Int("baz")
-		require.NoError(t, err)
-		assert.Equal(t, 88, baz)
-		assert.Equal(t, 88, json1.IntOrDefault("baz", 0))
-
-		json2 := result2.RawString()
-		assert.Equal(t, `{"999":null,"baz12":123.879,"foo":"bar5674"}`, json2)
-		bar5674, err := result2.JSON().String("foo")
-		require.NoError(t, err)
-		assert.Equal(t, "bar5674", bar5674)
-		baz12, err := result2.JSON().Float("baz12")
-		require.NoError(t, err)
-		assert.Equal(t, 123.879, baz12)
-	})
+	//t.Run("get many existing keys ignoring non existent", func(t *testing.T) {
+	//	var result1 *lemon.Document
+	//	var result2 *lemon.Document
+	//
+	//	docs, err := db.MGet("product:88", "product:100", "non:existing:key")
+	//	require.NoError(t, err)
+	//
+	//	require.Len(t, docs, 2)
+	//
+	//	result1 = docs["product:88"]
+	//	require.NotNil(t, result1)
+	//	result2 = docs["product:100"]
+	//	require.NotNil(t, result2)
+	//
+	//	rs1 := result1.RawString()
+	//	assert.Equal(t, `{"100":"foobar-88","baz":88,"foo":"bar/88"}`, rs1)
+	//	json1 := result1.JSON()
+	//	foo, err := json1.String("foo")
+	//	require.NoError(t, err)
+	//	assert.Equal(t, "bar/88", foo)
+	//	baz, err := json1.Int("baz")
+	//	require.NoError(t, err)
+	//	assert.Equal(t, 88, baz)
+	//	assert.Equal(t, 88, json1.IntOrDefault("baz", 0))
+	//
+	//	json2 := result2.RawString()
+	//	assert.Equal(t, `{"999":null,"baz12":123.879,"foo":"bar5674"}`, json2)
+	//	bar5674, err := result2.JSON().String("foo")
+	//	require.NoError(t, err)
+	//	assert.Equal(t, "bar5674", bar5674)
+	//	baz12, err := result2.JSON().Float("baz12")
+	//	require.NoError(t, err)
+	//	assert.Equal(t, 123.879, baz12)
+	//})
 }
 
 type findByTagsTestSuite struct {

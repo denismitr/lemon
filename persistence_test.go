@@ -22,7 +22,7 @@ func Test_resolveRespArrayFromLine(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run("valid array cmd", func(t *testing.T) {
-			p := &parser{}
+			p := &respParser{}
 
 			b := &bytes.Buffer{}
 			b.WriteString(tc.in)
@@ -37,12 +37,12 @@ func Test_resolveRespArrayFromLine(t *testing.T) {
 }
 
 type commandsMock struct {
-	commands []deserializer
+	commands []deserializable
 	delCommands int
 	setCommands int
 }
 
-func (cm *commandsMock) acceptWithSuccess(d deserializer) error {
+func (cm *commandsMock) acceptWithSuccess(d deserializable) error {
 	cm.commands = append(cm.commands, d)
 
 	if _, ok := d.(*deleteCmd); ok {
@@ -96,7 +96,7 @@ func Test_writeRespBlob(t *testing.T) {
 func Test_parser(t *testing.T) {
 	t.Run("it can process valid set and del commands without tags", func(t *testing.T) {
 		mock := &commandsMock{}
-		prs := &parser{}
+		prs := &respParser{}
 
 		cmds := strings.Join([]string{
 			"*3\r\n+set\r\n$8\r\nuser:123\r\n$13\r\n" + `{"foo":"bar"}` + "\r\n",
@@ -140,7 +140,7 @@ func Test_parser(t *testing.T) {
 
 	t.Run("it can process valid set and del commands with tags", func(t *testing.T) {
 		mock := &commandsMock{}
-		prs := &parser{}
+		prs := &respParser{}
 
 		cmds := strings.Join([]string{
 			"*4\r\n+set\r\n$8\r\nuser:123\r\n$13\r\n" + `{"foo":"bar"}` + "\r\n+stg(bar,one_two_three)\n",
