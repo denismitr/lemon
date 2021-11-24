@@ -44,8 +44,12 @@ func newEntryWithTags(key string, pos position, tags tags) *entry {
 	}
 }
 
-func newEntry(key string, pos position) *entry {
-	return &entry{key: newPK(key), pos: pos}
+func newEntry(key string, v []byte) *entry {
+	return &entry{key: newPK(key), value: v}
+}
+
+func newEntryWithPosition(key string, v []byte, pos position) *entry {
+	return &entry{key: newPK(key), value: v, pos: pos}
 }
 
 func (ent *entry) serialize(rs *respSerializer) error {

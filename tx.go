@@ -10,50 +10,50 @@ var ErrTxIsReadOnly = errors.New("transaction is read only")
 var ErrTxAlreadyClosed = errors.New("transaction already closed")
 
 type Tx struct {
-	readOnly bool
-	e        executionEngine
-	ctx      context.Context
+	readOnly        bool
+	ee              executionEngine
+	ctx             context.Context
 	persistCommands []serializable
-	updates         []*entry
+	updated         []*entry
 	replaced        []*entry
 	added           []*entry
 }
 
 func (x *Tx) lock() {
 	if x.readOnly {
-		x.e.RLock()
+		x.ee.RLock()
 	} else {
-		x.e.Lock()
+		x.ee.Lock()
 	}
 }
 
 func (x *Tx) unlock() {
 	if x.readOnly {
-		x.e.RUnlock()
+		x.ee.RUnlock()
 	} else {
-		x.e.Unlock()
+		x.ee.Unlock()
 	}
 }
 
 func (x *Tx) Commit() error {
-	if x.e == nil {
+	if x.ee == nil {
 		return ErrTxAlreadyClosed
 	}
 
 	defer func() {
 		x.unlock()
-		x.e = nil
+		x.ee = nil
 		x.persistCommands = nil
 		x.replaced = nil
 		x.added = nil
 	}()
 
-	if err := x.e.Persist(x.persistCommands); err != nil {
+	if err := x.ee.Persist(x.persistCommands); err != nil {
 		return err
 	}
 
-	for i := range x.updates {
-		x.updates[i].committed = true
+	for i := range x.updated {
+		x.updated[i].committed = true
 	}
 
 	for i := range x.added {
@@ -66,17 +66,17 @@ func (x *Tx) Commit() error {
 func (x *Tx) Rollback() error {
 	defer func() {
 		x.unlock()
-		x.e = nil
+		x.ee = nil
 	}()
 
 	for _, ent := range x.replaced {
-		if err := x.e.Put(ent, true); err != nil {
+		if err := x.ee.Put(ent, true); err != nil {
 			return err
 		}
 	}
 
 	for _, ent := range x.added {
-		if err := x.e.Remove(ent.key); err != nil {
+		if err := x.ee.Remove(ent.key); err != nil {
 			return err
 		}
 	}
@@ -91,7 +91,7 @@ func (x *Tx) FlushAll() error {
 
 	x.persistCommands = append(x.persistCommands, &flushAllCmd{})
 
-	return x.e.FlushAll(func(ent *entry) {
+	return x.ee.FlushAll(func(ent *entry) {
 		if ent.committed {
 			x.replaced = append(x.replaced, ent)
 		}
@@ -99,13 +99,19 @@ func (x *Tx) FlushAll() error {
 }
 
 func (x *Tx) Has(key string) bool {
-	return x.e.Exists(key)
+	return x.ee.Exists(key)
 }
 
 func (x *Tx) Get(key string) (*Document, error) { // fixme: decide on ref or value
-	ent, err := x.e.FindByKey(key)
+	ent, err := x.ee.FindByKey(key)
 	if err != nil {
 		return nil, err
+	}
+
+	if ent.value == nil {
+		if err := x.ee.LoadEntryValue(ent); err != nil {
+			return nil, err
+		}
 	}
 
 	return newDocumentFromEntry(ent), nil
@@ -113,7 +119,12 @@ func (x *Tx) Get(key string) (*Document, error) { // fixme: decide on ref or val
 
 func (x *Tx) MGet(keys ...string) (map[string]*Document, error) {
 	docs := make(map[string]*Document, len(keys))
-	if err := x.e.IterateByKeys(keys, func(ent *entry) bool {
+	if err := x.ee.IterateByKeys(keys, func(ent *entry) bool {
+		if ent.value == nil {
+			if err := x.ee.LoadEntryValue(ent); err != nil {
+				// fixme: log
+			}
+		}
 		docs[ent.key.String()] = newDocumentFromEntry(ent)
 		return true
 	}); err != nil {
@@ -128,7 +139,7 @@ func (x *Tx) Insert(key string, data interface{}, metaAppliers ...MetaApplier) e
 		return ErrTxIsReadOnly
 	}
 
-	if x.e == nil {
+	if x.ee == nil {
 		return ErrTxAlreadyClosed
 	}
 
@@ -147,7 +158,7 @@ func (x *Tx) Insert(key string, data interface{}, metaAppliers ...MetaApplier) e
 		}
 	}
 
-	if err := x.e.Insert(ent); err != nil {
+	if err := x.ee.Insert(ent); err != nil {
 		return err
 	}
 
@@ -177,7 +188,7 @@ func (x *Tx) InsertOrReplace(key string, data interface{}, metaAppliers ...MetaA
 		}
 	}
 
-	existingEnt, err := x.e.FindByKey(key)
+	existingEnt, err := x.ee.FindByKey(key)
 	if err != nil && !errors.Is(err, ErrKeyDoesNotExist) {
 		return err
 	}
@@ -185,17 +196,17 @@ func (x *Tx) InsertOrReplace(key string, data interface{}, metaAppliers ...MetaA
 	if existingEnt != nil {
 		preserveCreatedAt(existingEnt, newEnt)
 
-		if updateErr := x.e.Put(newEnt, true); updateErr != nil {
+		if updateErr := x.ee.Put(newEnt, true); updateErr != nil {
 			return updateErr
 		}
 
-		x.updates = append(x.updates, newEnt)
+		x.updated = append(x.updated, newEnt)
 		if existingEnt.committed {
 			x.persistCommands = append(x.persistCommands, &deleteCmd{key: existingEnt.key})
 			x.replaced = append(x.replaced, existingEnt)
 		}
 	} else {
-		if insertErr := x.e.Put(newEnt, false); insertErr != nil {
+		if insertErr := x.ee.Put(newEnt, false); insertErr != nil {
 			return insertErr
 		}
 
@@ -225,7 +236,7 @@ func (x *Tx) Tag(key string, m M) error {
 		return ErrTxIsReadOnly
 	}
 
-	ent, err := x.e.FindByKey(key)
+	ent, err := x.ee.FindByKey(key)
 	if err != nil {
 		return err
 	}
@@ -234,7 +245,7 @@ func (x *Tx) Tag(key string, m M) error {
 	x.replaced = append(x.replaced, ent.clone())
 
 	for name, v := range m {
-		if err := x.e.UpsertTag(name, v, ent); err != nil {
+		if err := x.ee.UpsertTag(name, v, ent); err != nil {
 			return err
 		}
 	}
@@ -255,17 +266,17 @@ func (x *Tx) Untag(key string, tagNames ...string) error {
 		return ErrTxIsReadOnly
 	}
 
-	ent, err := x.e.FindByKey(key)
+	ent, err := x.ee.FindByKey(key)
 	if err != nil {
 		return err
 	}
 
 	// save a copy of the updated entry in case of rollback
 	x.replaced = append(x.replaced, ent.clone())
-	x.updates = append(x.updates, ent)
+	x.updated = append(x.updated, ent)
 
 	for _, name := range tagNames {
-		if err := x.e.RemoveTag(name, ent); err != nil {
+		if err := x.ee.RemoveTag(name, ent); err != nil {
 			return err
 		}
 	}
@@ -278,6 +289,11 @@ func (x *Tx) Untag(key string, tagNames ...string) error {
 
 func (x *Tx) Scan(opts *QueryOptions, cb func(d *Document) bool) error {
 	ir := func(ent *entry) bool {
+		if ent.value == nil {
+			if err := x.ee.LoadEntryValue(ent); err != nil {
+				// fixme: log
+			}
+		}
 		d := newDocumentFromEntry(ent)
 		return cb(d)
 	}
@@ -305,10 +321,15 @@ func (x *Tx) CountByQuery(opts *QueryOptions) (int, error) {
 }
 
 // Find documents by query options
-func (x *Tx) Find(q *QueryOptions) ([]Document, error) {
-	var result []Document
+func (x *Tx) Find(q *QueryOptions) ([]*Document, error) {
+	var result []*Document
 	ir := func(ent *entry) bool {
-		result = append(result, *newDocumentFromEntry(ent))
+		if ent.value == nil {
+			if err := x.ee.LoadEntryValue(ent); err != nil {
+				// fixme: log
+			}
+		}
+		result = append(result, newDocumentFromEntry(ent))
 		return true
 	}
 
@@ -332,7 +353,7 @@ func (x *Tx) applyScanner(ctx context.Context, qo *QueryOptions, it entryIterato
 		qo.order = AscOrder
 	}
 
-	fe, err := x.e.FilterEntriesByTags(qo)
+	fe, err := x.ee.FilterEntriesByTags(qo)
 	if err != nil {
 		return err
 	}
@@ -347,7 +368,7 @@ func (x *Tx) applyScanner(ctx context.Context, qo *QueryOptions, it entryIterato
 
 	// scanner is a function that is chosen dynamically depending
 	// on the query options
-	sc, err := x.e.ChooseBestScanner(qo)
+	sc, err := x.ee.ChooseBestScanner(qo)
 	if err != nil {
 		return err
 	}
@@ -365,12 +386,12 @@ func (x *Tx) Remove(keys ...string) error {
 	}
 
 	for _, k := range keys {
-		found, err := x.e.FindByKey(k)
+		found, err := x.ee.FindByKey(k)
 		if err != nil {
 			return err
 		}
 
-		if err := x.e.Remove(found.key); err != nil {
+		if err := x.ee.Remove(found.key); err != nil {
 			return err
 		}
 
@@ -382,5 +403,5 @@ func (x *Tx) Remove(keys ...string) error {
 }
 
 func (x *Tx) Count() int {
-	return x.e.Count()
+	return x.ee.Count()
 }

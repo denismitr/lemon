@@ -49,6 +49,7 @@ type executionEngine interface {
 	ChooseBestScanner(q *QueryOptions) (scanner, error)
 	RemoveEntryUnderLock(ent *entry)
 	SetCfg(cfg *Config)
+	LoadEntryValue(ent *entry) error
 }
 
 type defaultEngine struct {
@@ -244,6 +245,18 @@ func (ee *defaultEngine) Persist(commands []serializable) error {
 	return nil
 }
 
+func (ee *defaultEngine) LoadEntryValue(ent *entry) error {
+	if ent.pos.offset != 0 {
+		v, err := ee.persistence.loadValueByPosition(ent.pos)
+		if err != nil {
+			return err
+		}
+		ent.value = v
+	}
+
+	return nil
+}
+
 func (ee *defaultEngine) RemoveEntryUnderLock(ent *entry) {
 	ee.tags.removeEntry(ent)
 	ee.pks.Delete(ent)
@@ -273,10 +286,6 @@ func (ee *defaultEngine) Insert(ent *entry) error {
 		}
 	}
 
-	//if ee.dbFile != InMemory {
-	//	ee.persistence.setValueByPosition(pos, ent.value)
-	//}
-
 	return nil
 }
 
@@ -294,17 +303,6 @@ func (ee *defaultEngine) FindByKey(key string) (*entry, error) {
 	ent, ok := found.(*entry)
 	if !ok {
 		panic(castPanic)
-	}
-
-	if ee.cfg.PersistenceStrategy != InMemory {
-		ent.value = nil
-		if ent.value == nil {
-			v, err := ee.persistence.loadValueByPosition(ent.pos)
-			if err != nil {
-				return nil, err
-			}
-			ent.value = v
-		}
 	}
 
 	return ent, nil

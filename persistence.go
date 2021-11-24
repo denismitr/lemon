@@ -13,10 +13,9 @@ import (
 var ErrDbFileWriteFailed = errors.New("database write failed")
 var ErrSourceFileReadFailed = errors.New("source file read failed")
 var ErrCommandInvalid = errors.New("command invalid")
-var ErrParseFailed = errors.New("commands parse error")
 var ErrStorageFailed = errors.New("storage error")
 
-type ValueLoadStrategy uint8
+type ValueLoadStrategy string
 type PersistenceStrategy string
 
 type commandCode int8
@@ -43,8 +42,8 @@ const (
 )
 
 const (
-	LazyLoad ValueLoadStrategy = iota
-	EagerLoad
+	LazyLoad ValueLoadStrategy = "lazy"
+	EagerLoad ValueLoadStrategy = "eager"
 )
 
 type persistence struct {
@@ -142,6 +141,9 @@ func (p *persistence) load(cb func(d deserializable) error) error {
 }
 
 func (p *persistence) save(commands []serializable) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	rs := respSerializer{pos: p.cursor}
 
 	for _, cmd := range commands {
@@ -150,20 +152,21 @@ func (p *persistence) save(commands []serializable) error {
 		}
 	}
 
-	return p.write(&rs.buf)
+	return p.writeUnderLock(&rs.buf)
 }
 
-func (p *persistence) write(buf *bytes.Buffer) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
+func (p *persistence) writeUnderLock(buf *bytes.Buffer) error {
 	n, err := p.f.Write(buf.Bytes())
 	if err != nil {
 		if n > 0 {
 			// partial write occurred, must rollback the file
 			pos, seekErr := p.f.Seek(-int64(n), 1)
 			if seekErr != nil {
-				panic(seekErr)
+				return errors.Wrapf(
+					ErrInternalError,
+					"could not seek file %s to -%d: %v",
+					p.f.Name(), n, seekErr,
+				)
 			}
 
 			if err := p.f.Truncate(pos); err != nil {

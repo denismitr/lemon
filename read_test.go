@@ -262,7 +262,7 @@ func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Ascend() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	var docs []lemon.Document
+	var docs []*lemon.Document
 	if err := db.View(ctx, func(tx *lemon.Tx) error {
 		opts := lemon.Q().KeyOrder(lemon.AscOrder).KeyRange("product:500", "product:750")
 		result, err := tx.Find(opts);
