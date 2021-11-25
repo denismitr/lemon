@@ -155,7 +155,7 @@ func (p *respParser) parseSetCommand(
 		return err
 	}
 
-	pos := position{offset: uint(blobOffset), length: uint(len(value))}
+	pos := position{offset: uint(blobOffset), size: uint(len(value))}
 	ent := newEntryWithTags(string(key), pos, nil)
 	if p.vls != LazyLoad {
 		cache[pos] = value

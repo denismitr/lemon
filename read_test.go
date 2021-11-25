@@ -315,6 +315,38 @@ func (fts *findTestSuite) TestLemonDB_FindAllUsers_Ascend() {
 	}
 }
 
+func (fts *findTestSuite) TestLemonDB_FindAllUsers_Lazy_Ascend() {
+	db, closer, err := lemon.Open(fts.fixture, &lemon.Config{
+		ValueLoadStrategy: lemon.LazyLoad,
+	})
+
+	fts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			fts.T().Errorf("ERROR: %v", err)
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	opts := lemon.Q().KeyOrder(lemon.AscOrder).Prefix("user")
+	docs, err := db.FindContext(ctx, opts);
+	if err != nil {
+		fts.Require().NoError(err, "should be no error")
+	}
+
+	fts.Require().Lenf(docs, 1_000, "users total count mismatch, got %d", len(docs))
+
+	for i := 1; i < 1_001; i++ {
+		fts.Assert().Equal(fmt.Sprintf("username_%d", i), docs[i-1].JSON().StringOrDefault("username", ""))
+		fts.Assert().Equal(fmt.Sprintf("999444555%d", i), docs[i-1].JSON().StringOrDefault("phone", ""))
+		fts.Assert().Equal(i, docs[i-1].JSON().IntOrDefault("logins", 0))
+		fts.Assert().Equal(float64(i), docs[i-1].JSON().FloatOrDefault("balance", 0))
+	}
+}
+
 func (fts *findTestSuite) TestLemonDB_FindAllUsers_Descend() {
 	db, closer, err := lemon.Open(fts.fixture)
 	fts.Require().NoError(err)

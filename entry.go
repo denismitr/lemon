@@ -11,7 +11,7 @@ type MetaSetter func(e *entry) error
 
 type position struct {
 	offset uint
-	length uint
+	size   uint
 }
 
 type entry struct {

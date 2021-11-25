@@ -278,7 +278,7 @@ func (p *persistence) loadValueByPosition(pos position) ([]byte, error) {
 	}
 
 	r := bufio.NewReader(p.f)
-	blob := make([]byte, pos.length)
+	blob := make([]byte, pos.size)
 	if _, err := io.ReadFull(r, blob); err != nil {
 		return nil, errors.Wrapf(
 			ErrStorageFailed,
