@@ -27,8 +27,8 @@ func (rs *respSerializer) serializeSetCommand(ent *entry) error {
 	prefix, total := writeRespBlob(ent.value, &rs.buf)
 
 	ent.pos = position{
-		size:   uint(len(ent.value)),
-		offset: uint(rs.pos + prefix),
+		size:   uint64(len(ent.value)),
+		offset: uint64(rs.pos + prefix),
 	}
 
 	rs.pos += total

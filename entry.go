@@ -10,8 +10,8 @@ var ErrInvalidTagType = errors.New("invalid tag type")
 type MetaSetter func(e *entry) error
 
 type position struct {
-	offset uint
-	size   uint
+	offset uint64
+	size   uint64
 }
 
 type entry struct {

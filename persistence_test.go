@@ -105,7 +105,7 @@ func Test_parser(t *testing.T) {
 			"*3\r\n+set\r\n$14\r\nproducts/items\r\n$15\r\n" + `[1,4,6,7,8,985]` + "\r\n",
 		}, "")
 
-		cache := make(map[position][]byte)
+		cache := newShardedValueMap(20)
 		r := bufio.NewReader(strings.NewReader(cmds))
 		n, err := prs.parse(r, cache, mock.acceptWithSuccess)
 
@@ -120,12 +120,16 @@ func Test_parser(t *testing.T) {
 		cmd1, ok := mock.commands[0].(*entry)
 		require.True(t, ok)
 		assert.Equal(t, newPK("user:123"), cmd1.key)
-		assert.Equal(t, []byte(`{"foo":"bar"}`), cache[cmd1.pos])
+		v1, ok := cache.get(cmd1.pos)
+		assert.Equal(t, []byte(`{"foo":"bar"}`), v1)
+		assert.True(t, ok)
 
 		cmd2, ok := mock.commands[1].(*entry)
 		require.True(t, ok)
 		assert.Equal(t, newPK("user:456"), cmd2.key)
-		assert.Equal(t, []byte(`{"baz":123}`), cache[cmd2.pos])
+		v2, ok := cache.get(cmd2.pos)
+		assert.Equal(t, []byte(`{"baz":123}`), v2)
+		assert.True(t, ok)
 		assert.Nil(t, cmd2.tags)
 
 		cmd3, ok := mock.commands[2].(*deleteCmd)
@@ -135,7 +139,9 @@ func Test_parser(t *testing.T) {
 		cmd4, ok := mock.commands[3].(*entry)
 		require.True(t, ok)
 		assert.Equal(t, newPK("products/items"), cmd4.key)
-		assert.Equal(t, []byte(`[1,4,6,7,8,985]`), cache[cmd4.pos])
+		v4, ok := cache.get(cmd4.pos)
+		assert.Equal(t, []byte(`[1,4,6,7,8,985]`), v4)
+		assert.True(t, ok)
 		assert.Nil(t, cmd2.tags)
 	})
 
@@ -150,7 +156,7 @@ func Test_parser(t *testing.T) {
 			"*3\r\n+set\r\n$14\r\nproducts/items\r\n$15\r\n" + `[1,4,6,7,8,985]` + "\r\n",
 		}, "")
 
-		cache := make(map[position][]byte)
+		cache := newShardedValueMap(valueShards)
 		r := bufio.NewReader(strings.NewReader(cmds))
 		n, err := prs.parse(r, cache, mock.acceptWithSuccess)
 
@@ -165,7 +171,11 @@ func Test_parser(t *testing.T) {
 		cmd1, ok := mock.commands[0].(*entry)
 		require.True(t, ok)
 		assert.Equal(t, newPK("user:123"), cmd1.key)
-		assert.Equal(t, []byte(`{"foo":"bar"}`), cache[cmd1.pos])
+
+		v1, ok := cache.get(cmd1.pos)
+		assert.Equal(t, []byte(`{"foo":"bar"}`), v1)
+		assert.True(t, ok)
+
 		require.NotNil(t, cmd1.tags)
 		require.Len(t, cmd1.tags, 1)
 		require.Equal(t, M{"bar":"one_two_three"}, cmd1.tags.asMap())
@@ -173,7 +183,9 @@ func Test_parser(t *testing.T) {
 		cmd2, ok := mock.commands[1].(*entry)
 		require.True(t, ok)
 		assert.Equal(t, newPK("user:456"), cmd2.key)
-		assert.Equal(t, []byte(`{"baz":123}`), cache[cmd2.pos])
+		v2, ok := cache.get(cmd2.pos)
+		assert.Equal(t, []byte(`{"baz":123}`), v2)
+		assert.True(t, ok)
 		require.NotNil(t, cmd2.tags)
 		require.Len(t, cmd2.tags, 1)
 		require.Equal(t, M{"foo":true}, cmd2.tags.asMap())
@@ -185,7 +197,9 @@ func Test_parser(t *testing.T) {
 		cmd4, ok := mock.commands[3].(*entry)
 		require.True(t, ok)
 		assert.Equal(t, newPK("products/items"), cmd4.key)
-		assert.Equal(t, []byte(`[1,4,6,7,8,985]`), cache[cmd4.pos])
+		v4, ok := cache.get(cmd4.pos)
+		assert.Equal(t, []byte(`[1,4,6,7,8,985]`), v4)
+		assert.True(t, ok)
 		assert.Nil(t, cmd4.tags)
 	})
 }

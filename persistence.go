@@ -3,7 +3,9 @@ package lemon
 import (
 	"bufio"
 	"bytes"
+	"encoding/binary"
 	"github.com/pkg/errors"
+	"github.com/cespare/xxhash/v2"
 	"io"
 	"os"
 	"strings"
@@ -46,6 +48,52 @@ const (
 	EagerLoad ValueLoadStrategy = "eager"
 )
 
+const valueShards = 20
+
+type valueMap struct {
+	sync.RWMutex
+	m map[position][]byte
+}
+
+type shardedValueMap []*valueMap
+
+func newShardedValueMap(shardsNum int) shardedValueMap {
+	shards := make(shardedValueMap, shardsNum)
+	for i := range shards {
+		shards[i] = &valueMap{m: make(map[position][]byte)}
+	}
+	return shards
+}
+
+func (svm shardedValueMap) getShard(pos position) *valueMap {
+	bs := make([]byte, 8)
+	binary.LittleEndian.PutUint64(bs, pos.offset)
+	hash := xxhash.Sum64(bs)
+	return svm[hash % uint64(len(svm))]
+}
+
+func (svm shardedValueMap) get(pos position) ([]byte, bool) {
+	shard := svm.getShard(pos)
+	shard.RLock()
+	defer shard.RUnlock()
+	v, ok := shard.m[pos]
+	return v, ok
+}
+
+func (svm shardedValueMap) set(pos position, v []byte) {
+	shard := svm.getShard(pos)
+	shard.Lock()
+	defer shard.Unlock()
+	shard.m[pos] = v
+}
+
+func (svm shardedValueMap) remove(pos position) {
+	shard := svm.getShard(pos)
+	shard.Lock()
+	defer shard.Unlock()
+	delete(shard.m, pos)
+}
+
 type persistence struct {
 	mu       sync.RWMutex
 	vls      ValueLoadStrategy
@@ -54,7 +102,7 @@ type persistence struct {
 	f        *os.File
 	flushes  int
 	cursor   int
-	cache    map[position][]byte
+	cache    shardedValueMap
 }
 
 func newPersistence(
@@ -77,7 +125,7 @@ func newPersistence(
 		f:        f,
 		vls:      vls,
 		strategy: strategy,
-		cache:    make(map[position][]byte),
+		cache:    newShardedValueMap(valueShards),
 	}
 
 	return p, nil
@@ -254,13 +302,13 @@ func (p *persistence) writeAndSwap(rs *respSerializer) error {
 func (p *persistence) setValueByPosition(pos position, v []byte) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.cache[pos] = v
+	p.cache.set(pos, v)
 	return nil
 }
 
 func (p *persistence) loadValueByPosition(pos position) ([]byte, error) {
 	p.mu.RLock()
-	if v, ok := p.cache[pos]; ok {
+	if v, ok := p.cache.get(pos); ok {
 		p.mu.RUnlock()
 		return v, nil
 	}
@@ -288,14 +336,14 @@ func (p *persistence) loadValueByPosition(pos position) ([]byte, error) {
 	}
 
 	if p.vls != LazyLoad {
-		p.cache[pos] = blob
+		p.cache.set(pos, blob)
 	}
 
 	return blob, nil
 }
 
 func (p *persistence) removeValueUnderLock(pos position) {
-	delete(p.cache, pos)
+	p.cache.remove(pos)
 }
 
 func resolveTagFnTypeAndArguments(expression string) (prefix string, args []string, err error) {
