@@ -15,6 +15,7 @@ type Config struct {
 	DisableAutoVacuum         bool
 	AutoVacuumOnlyOnClose     bool
 	AutoVacuumMinSize         uint64
+	Log                       bool
 	AutoVacuumIntervals       time.Duration
 }
 

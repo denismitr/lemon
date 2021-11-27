@@ -2,7 +2,10 @@ package lemon
 
 import (
 	"context"
+	"fmt"
+	"github.com/denismitr/glog"
 	"github.com/pkg/errors"
+	"path/filepath"
 )
 
 const InMemory = ":memory:"
@@ -28,13 +31,21 @@ func Open(path string, engineOptions ...EngineOptions) (*DB, Closer, error) {
 		AutoVacuumIntervals:   defaultAutovacuumIntervals,
 		AutoVacuumMinSize:     defaultAutoVacuumMinSize,
 		AutoVacuumOnlyOnClose: true,
+		Log: false,
 	}
 
 	if path == InMemory {
 		defaultCfg.PersistenceStrategy = InMemory
 	}
 
-	e, err := newDefaultEngine(path, defaultCfg)
+	var lg glog.Logger
+	if defaultCfg.Log {
+		lg = glog.NewStdoutLogger(glog.Prod, fmt.Sprintf("LemonDB:%s", filepath.Base(path)))
+	} else {
+		lg = glog.NullLogger{}
+	}
+
+	e, err := newDefaultEngine(path, lg, defaultCfg)
 	if err != nil {
 		return nil, NullCloser, err
 	}

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"github.com/cespare/xxhash/v2"
+	"github.com/denismitr/glog"
 	"github.com/pkg/errors"
 	"io"
 	"os"
@@ -44,7 +45,7 @@ const (
 )
 
 const (
-	LazyLoad ValueLoadStrategy = "lazy"
+	LazyLoad  ValueLoadStrategy = "lazy"
 	EagerLoad ValueLoadStrategy = "eager"
 )
 
@@ -69,7 +70,7 @@ func (svm shardedValueMap) getShard(pos position) *valueMap {
 	bs := make([]byte, 8)
 	binary.LittleEndian.PutUint64(bs, pos.offset)
 	hash := xxhash.Sum64(bs)
-	return svm[hash % uint64(len(svm))]
+	return svm[hash%uint64(len(svm))]
 }
 
 func (svm shardedValueMap) get(pos position) ([]byte, bool) {
@@ -103,6 +104,7 @@ type persistence struct {
 	flushes  int
 	cursor   int
 	cache    shardedValueMap
+	lg       glog.Logger
 }
 
 func newPersistence(
@@ -110,6 +112,7 @@ func newPersistence(
 	strategy PersistenceStrategy,
 	truncateFileOnOpen bool,
 	vls ValueLoadStrategy,
+	lg glog.Logger,
 ) (*persistence, error) {
 	flags := os.O_CREATE | os.O_RDWR
 	if truncateFileOnOpen {
@@ -125,30 +128,31 @@ func newPersistence(
 		f:        f,
 		vls:      vls,
 		strategy: strategy,
+		lg:       lg,
 		cache:    newShardedValueMap(valueShards),
 	}
 
 	return p, nil
 }
 
-func (p *persistence) close() (err error) {
+func (p *persistence) close() error {
 	p.mu.Lock()
 	defer func() {
+		if err :=  p.f.Close(); err != nil {
+			p.lg.Error(err)
+		}
+
 		p.parser = nil
 		p.f = nil
 		p.cache = nil
-
 		p.mu.Unlock()
 	}()
 
-	err = p.f.Sync()
-	err = p.f.Close() //fixme
-
-	if err != nil {
-		err = errors.Wrap(err, "could not close file")
+	if err := p.f.Sync(); err != nil {
+		return errors.Wrapf(err, "could not sync %s", p.f.Name())
 	}
 
-	return
+	return nil
 }
 
 func (p *persistence) load(cb func(d deserializable) error) error {
@@ -222,12 +226,18 @@ func (p *persistence) writeUnderLock(buf *bytes.Buffer) error {
 			}
 		}
 
-		_ = p.f.Sync()
+		if sErr := p.f.Sync(); sErr != nil {
+			p.lg.Error(sErr)
+		}
+
 		return errors.Wrap(ErrDbFileWriteFailed, err.Error())
 	}
 
 	if p.strategy == Sync {
-		_ = p.f.Sync()
+		if err := p.f.Sync(); err != nil {
+			p.lg.Error(err)
+			return err
+		}
 	}
 
 	p.flushes++
@@ -242,6 +252,7 @@ func (p *persistence) sync() error {
 	if err := p.f.Sync(); err != nil {
 		return errors.Wrapf(err, "cannot sync file %s", p.f.Name())
 	}
+
 	return nil
 }
 
@@ -256,8 +267,13 @@ func (p *persistence) writeAndSwap(rs *respSerializer) error {
 	}
 
 	defer func() {
-		_ = tmpF.Close()
-		_ = os.RemoveAll(tmpFName)
+		if err := tmpF.Close(); err != nil {
+			p.lg.Error(errors.Wrapf(err, "could not close tmp file %s", tmpF.Name()))
+		}
+
+		if err := os.RemoveAll(tmpFName); err != nil {
+			p.lg.Error(errors.Wrapf(err, "could not remove tmp file %s", tmpF.Name()))
+		}
 	}()
 
 	expectedLen := rs.buf.Len()
@@ -346,6 +362,10 @@ func (p *persistence) removeValueUnderLock(pos position) {
 	p.cache.remove(pos)
 }
 
+func (p *persistence) newSerializer() *respSerializer {
+	return &respSerializer{pos: p.cursor}
+}
+
 func resolveTagFnTypeAndArguments(expression string) (prefix string, args []string, err error) {
 	for _, p := range []string{boolTagFn, strTagFn, intTagFn, floatTagFn} {
 		if strings.HasPrefix(expression, p) {
@@ -364,10 +384,12 @@ func resolveTagFnTypeAndArguments(expression string) (prefix string, args []stri
 	args = strings.Split(argsExp, ",")
 
 	if len(args) < 2 {
-		panic("how args can be less than 2 for tag function")
+		err = errors.Wrapf(
+			ErrCommandInvalid,
+			"expression %s is invalid: too few arguments",
+			expression,
+		)
 	}
 
 	return
 }
-
-

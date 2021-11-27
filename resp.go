@@ -20,6 +20,10 @@ type respSerializer struct {
 	pos int
 }
 
+func (rs *respSerializer) reset() {
+	rs.pos = 0
+}
+
 func (rs *respSerializer) serializeSetCommand(ent *entry) error {
 	rs.pos += writeRespArray(3+ent.tagCount(), &rs.buf)
 	rs.pos += writeRespSimpleString([]byte(setCommand), &rs.buf)

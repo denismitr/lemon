@@ -3,6 +3,7 @@ package lemon
 import (
 	"context"
 	"encoding/json"
+	"github.com/denismitr/glog"
 	"github.com/pkg/errors"
 	"github.com/tidwall/btree"
 	"strconv"
@@ -55,6 +56,7 @@ type executionEngine interface {
 type defaultEngine struct {
 	sync.RWMutex
 
+	lg            glog.Logger
 	dbFile        string
 	cfg           *Config
 	persistence   *persistence
@@ -66,13 +68,14 @@ type defaultEngine struct {
 	closed        bool
 }
 
-func newDefaultEngine(dbFile string, cfg *Config) (*defaultEngine, error) {
+func newDefaultEngine(dbFile string, lg glog.Logger, cfg *Config) (*defaultEngine, error) {
 	e := &defaultEngine{
 		dbFile: dbFile,
 		pks:    btree.NewNonConcurrent(byPrimaryKeys),
 		tags:   newTagIndex(),
 		stopCh: make(chan struct{}, 1),
 		cfg:    cfg,
+		lg:     lg,
 	}
 
 	return e, nil
@@ -93,7 +96,8 @@ func (ee *defaultEngine) asyncFlush(d time.Duration) {
 		case <-t.C:
 			ee.Lock()
 			if err := ee.persistence.sync(); err != nil {
-				panic(err)
+				ee.lg.Error(err)
+				panic(err) // fixme: remove
 			}
 			ee.Unlock()
 		}
@@ -118,7 +122,8 @@ func (ee *defaultEngine) scheduleVacuum(d time.Duration) {
 			ee.runningVacuum = true
 			// todo: maybe limit run vacuum with context timeout equal to d
 			if err := ee.runVacuumUnderLock(context.Background()); err != nil {
-				panic(err)
+				ee.lg.Error(err)
+				panic(err) // fixme: remove
 			}
 			ee.runningVacuum = false
 			ee.Unlock()
@@ -131,7 +136,8 @@ func (ee *defaultEngine) runVacuumUnderLock(ctx context.Context) error {
 		return nil
 	}
 
-	rs := respSerializer{}
+	rs := ee.persistence.newSerializer()
+	rs.reset()
 
 	ee.pks.Ascend(nil, func(i interface{}) bool {
 		if err := ctx.Err(); err != nil {
@@ -142,13 +148,13 @@ func (ee *defaultEngine) runVacuumUnderLock(ctx context.Context) error {
 		if ent.value == nil && ent.pos.offset != 0 {
 			v, err := ee.persistence.loadValueByPosition(ent.pos)
 			if err != nil {
-				panic(err) // fixme
+				ee.lg.Error(err)
 			}
 			ent.value = v
 		}
 
-		if err := ent.serialize(&rs); err != nil {
-			panic(err) // fixme
+		if err := ent.serialize(rs); err != nil {
+			ee.lg.Error(err)
 		}
 
 		return true
@@ -158,7 +164,7 @@ func (ee *defaultEngine) runVacuumUnderLock(ctx context.Context) error {
 		return errors.Wrap(err, "could not finish vacuum")
 	}
 
-	if err := ee.persistence.writeAndSwap(&rs); err != nil {
+	if err := ee.persistence.writeAndSwap(rs); err != nil {
 		return err
 	}
 
@@ -205,6 +211,7 @@ func (ee *defaultEngine) init() error {
 			ee.cfg.PersistenceStrategy,
 			ee.cfg.TruncateFileWhenOpen,
 			ee.cfg.ValueLoadStrategy,
+			ee.lg,
 		)
 
 		if err != nil {
@@ -320,8 +327,7 @@ func (ee *defaultEngine) IterateByKeys(pks []string, ir entryIterator) error {
 
 			found, err := ee.FindByKey(k)
 			if err != nil {
-				// todo: log
-				//return errors.Wrapf(ErrKeyDoesNotExist, "key %s does not exist in database", k)
+				ee.lg.Error(err)
 			} else {
 				resultCh <- found
 			}
@@ -635,7 +641,6 @@ func (ee *defaultEngine) UpsertTag(name string, v interface{}, ent *entry) error
 	ent.tags[name] = newTag
 
 	// add to secondary index
-	// todo: avoid another type cast in the add method
 	return ee.tags.add(name, v, ent)
 }
 
@@ -659,7 +664,7 @@ func (ee *defaultEngine) Put(ent *entry, replace bool) error {
 
 		existingEnt, ok := existing.(*entry)
 		if !ok {
-			panic(castPanic)
+			panic(castPanic) // fixme: return error
 		}
 
 		if existingEnt.tags != nil {
@@ -716,7 +721,7 @@ func filteringBTreeIterator(
 
 		ent, ok := item.(*entry)
 		if !ok {
-			panic(castPanic)
+			panic(castPanic) // fixme: remove
 		}
 
 		if !ent.key.Match(q.patterns) {
