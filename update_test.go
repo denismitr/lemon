@@ -26,13 +26,11 @@ func Test_Write(t *testing.T) {
 }
 
 func Test_TruncateExistingDatabase(t *testing.T) {
-	t.Parallel()
-
-	path := "./__fixtures__/truncate_db1.ldb"
-	seedSomeProducts(t, path, true)
+	p := "./__fixtures__/truncate_db1.ldb"
+	seedSomeProducts(t, p, true)
 
 	t.Run("existing database should be truncated on open", func(t *testing.T) {
-		db, closer, err := lemon.Open(path, &lemon.Config{
+		db, closer, err := lemon.Open(p, &lemon.Config{
 			TruncateFileWhenOpen: true,
 		})
 
@@ -45,7 +43,37 @@ func Test_TruncateExistingDatabase(t *testing.T) {
 				t.Errorf("ERROR: %v", err)
 			}
 
-			_ = os.Remove(path)
+			_ = os.Remove(p)
+		}()
+
+		require.NoError(t, db.Insert("product:2", lemon.M{
+			"100": "foobar2",
+			"baz": 2,
+			"foo": "bar",
+		}))
+	})
+}
+
+func Test_TruncateExistingDatabase_LazyLoad(t *testing.T) {
+	p := "./__fixtures__/truncate_db1.ldb"
+	seedSomeProducts(t, p, true)
+
+	t.Run("existing database should be truncated on open", func(t *testing.T) {
+		db, closer, err := lemon.Open(p, &lemon.Config{
+			TruncateFileWhenOpen: true,
+			ValueLoadStrategy: lemon.LazyLoad,
+		})
+
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		defer func() {
+			if err := closer(); err != nil {
+				t.Errorf("ERROR: %v", err)
+			}
+
+			_ = os.Remove(p)
 		}()
 
 		require.NoError(t, db.Insert("product:2", lemon.M{

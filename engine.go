@@ -15,8 +15,6 @@ var ErrKeyAlreadyExists = errors.New("key already exists")
 var ErrDatabaseAlreadyClosed = errors.New("database already closed")
 var ErrTagKeyNotFound = errors.New("tag key not found")
 
-const castPanic = "how could primary keys item not be of type *entry"
-
 type (
 	entryIterator func(ent *entry) bool
 	scanner       func(ctx context.Context, q *QueryOptions, ir entryIterator) error
@@ -97,7 +95,6 @@ func (ee *defaultEngine) asyncFlush(d time.Duration) {
 			ee.Lock()
 			if err := ee.persistence.sync(); err != nil {
 				ee.lg.Error(err)
-				panic(err) // fixme: remove
 			}
 			ee.Unlock()
 		}
@@ -123,7 +120,7 @@ func (ee *defaultEngine) scheduleVacuum(d time.Duration) {
 			// todo: maybe limit run vacuum with context timeout equal to d
 			if err := ee.runVacuumUnderLock(context.Background()); err != nil {
 				ee.lg.Error(err)
-				panic(err) // fixme: remove
+				return
 			}
 			ee.runningVacuum = false
 			ee.Unlock()
@@ -309,7 +306,7 @@ func (ee *defaultEngine) FindByKey(key string) (*entry, error) {
 
 	ent, ok := found.(*entry)
 	if !ok {
-		panic(castPanic)
+		return nil, errors.Wrap(ErrInternalError, "could not cast to entry")
 	}
 
 	return ent, nil
@@ -389,7 +386,7 @@ func (ee *defaultEngine) scanBetweenDescend(
 		ee.pks,
 		&entry{key: newPK(q.keyRange.From)},
 		&entry{key: newPK(q.keyRange.To)},
-		filteringBTreeIterator(ctx, q, ir),
+		filteringBTreeIterator(ctx, ee.lg, q, ir),
 	)
 
 	return
@@ -404,7 +401,7 @@ func (ee *defaultEngine) scanBetweenAscend(
 		ee.pks,
 		&entry{key: newPK(q.keyRange.From)},
 		&entry{key: newPK(q.keyRange.To)},
-		filteringBTreeIterator(ctx, q, ir),
+		filteringBTreeIterator(ctx, ee.lg, q, ir),
 	)
 
 	return
@@ -415,7 +412,7 @@ func (ee *defaultEngine) scanPrefixAscend(
 	q *QueryOptions,
 	ir entryIterator,
 ) (err error) {
-	ee.pks.Ascend(&entry{key: newPK(q.prefix)}, filteringBTreeIterator(ctx, q, ir))
+	ee.pks.Ascend(&entry{key: newPK(q.prefix)}, filteringBTreeIterator(ctx, ee.lg, q, ir))
 
 	return
 }
@@ -425,7 +422,7 @@ func (ee *defaultEngine) scanPrefixDescend(
 	q *QueryOptions,
 	ir entryIterator,
 ) (err error) {
-	descendGreaterThan(ee.pks, &entry{key: newPK(q.prefix)}, filteringBTreeIterator(ctx, q, ir))
+	descendGreaterThan(ee.pks, &entry{key: newPK(q.prefix)}, filteringBTreeIterator(ctx, ee.lg, q, ir))
 	return
 }
 
@@ -434,7 +431,7 @@ func (ee *defaultEngine) scanAscend(
 	q *QueryOptions,
 	ir entryIterator,
 ) (err error) {
-	ee.pks.Ascend(nil, filteringBTreeIterator(ctx, q, ir))
+	ee.pks.Ascend(nil, filteringBTreeIterator(ctx, ee.lg, q, ir))
 	return
 }
 
@@ -443,7 +440,7 @@ func (ee *defaultEngine) scanDescend(
 	q *QueryOptions,
 	ir entryIterator,
 ) (err error) {
-	ee.pks.Descend(nil, filteringBTreeIterator(ctx, q, ir))
+	ee.pks.Descend(nil, filteringBTreeIterator(ctx, ee.lg, q, ir))
 	return
 }
 
@@ -664,7 +661,7 @@ func (ee *defaultEngine) Put(ent *entry, replace bool) error {
 
 		existingEnt, ok := existing.(*entry)
 		if !ok {
-			panic(castPanic) // fixme: return error
+			return errors.Wrap(ErrInternalError, "could not cast to entry")
 		}
 
 		if existingEnt.tags != nil {
@@ -711,6 +708,7 @@ func (ee *defaultEngine) Vacuum(ctx context.Context) error {
 
 func filteringBTreeIterator(
 	ctx context.Context,
+	lg glog.Logger,
 	q *QueryOptions,
 	ir entryIterator,
 ) func(item interface{}) bool {
@@ -721,7 +719,7 @@ func filteringBTreeIterator(
 
 		ent, ok := item.(*entry)
 		if !ok {
-			panic(castPanic) // fixme: remove
+
 		}
 
 		if !ent.key.Match(q.patterns) {
