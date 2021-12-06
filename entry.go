@@ -1,8 +1,6 @@
 package lemon
 
 import (
-	"bytes"
-	"fmt"
 	"github.com/jinzhu/copier"
 	"github.com/pkg/errors"
 )
@@ -11,9 +9,15 @@ var ErrInvalidTagType = errors.New("invalid tag type")
 
 type MetaSetter func(e *entry) error
 
+type position struct {
+	offset uint64
+	size   uint64
+}
+
 type entry struct {
-	key       PK
-	value     []byte
+	key   PK
+	pos   position
+	value []byte
 	tags      tags
 	committed bool
 }
@@ -32,39 +36,24 @@ func (ent *entry) deserialize(e executionEngine) error {
 	return e.Put(ent, true)
 }
 
-func newEntryWithTags(key string, value []byte, tags tags) *entry {
-	return &entry{key: newPK(key), value: value, tags: tags}
-}
-
-func newEntry(key string, value []byte) *entry {
-	return &entry{key: newPK(key), value: value}
-}
-
-func (ent *entry) serialize(buf *bytes.Buffer) {
-	writeRespArray(3+ent.tagCount(), buf)
-	writeRespSimpleString("set", buf)
-	writeRespKeyString(ent.key.String(), buf)
-	writeRespBlob(ent.value, buf)
-
-	if ent.tagCount() > 0 {
-		sortedNames := sortNames(ent.tags)
-		for _, name := range sortedNames {
-			t := ent.tags[name]
-
-			switch t.dt {
-			case intDataType:
-				writeRespIntTag(name, t.data.(int), buf)
-			case boolDataType:
-				writeRespBoolTag(name, t.data.(bool), buf)
-			case strDataType:
-				writeRespStrTag(name, t.data.(string), buf)
-			case floatDataType:
-				writeRespFloatTag(name, t.data.(float64), buf)
-			default:
-				panic(fmt.Sprintf("unknown tag type %d", t.dt))
-			}
-		}
+func newEntryWithTags(key string, pos position, tags tags) *entry {
+	return &entry{
+		key: newPK(key),
+		pos: pos,
+		tags: tags,
 	}
+}
+
+func newEntry(key string, v []byte) *entry {
+	return &entry{key: newPK(key), value: v}
+}
+
+func newEntryWithPosition(key string, v []byte, pos position) *entry {
+	return &entry{key: newPK(key), value: v, pos: pos}
+}
+
+func (ent *entry) serialize(rs *respSerializer) error {
+	return rs.serializeSetCommand(ent)
 }
 
 func (ent *entry) tagCount() int {
@@ -79,19 +68,17 @@ type deleteCmd struct {
 	key PK
 }
 
-func (cmd *deleteCmd) serialize(buf *bytes.Buffer) {
-	writeRespArray(2, buf)
-	writeRespSimpleString("del", buf)
-	writeRespKeyString(cmd.key.String(), buf)
+func (cmd *deleteCmd) serialize(rs *respSerializer) error {
+	return rs.serializeDelCommand(cmd)
 }
 
-func (cmd *deleteCmd) deserialize(e executionEngine) error {
-	ent, err := e.FindByKey(cmd.key.String())
+func (cmd *deleteCmd) deserialize(ee executionEngine) error {
+	ent, err := ee.FindByKey(cmd.key.String())
 	if err != nil {
 		return errors.Wrapf(err, "could not deserialize delete key %s command", cmd.key.String())
 	}
 
-	e.RemoveEntry(ent)
+	ee.RemoveEntryUnderLock(ent)
 
 	return nil
 }

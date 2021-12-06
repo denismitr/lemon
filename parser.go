@@ -8,16 +8,21 @@ import (
 	"strconv"
 )
 
-type parser struct {
+type respParser struct {
+	vls            ValueLoadStrategy
 	totalSize      int
 	buf            [1024]byte
 	currentCmdSize int
 	totalCommands  int
-	n              int
+	cursor         int
 	currentLine    uint8
 }
 
-func (p *parser) parse(r *bufio.Reader, cb func(d deserializer) error) (int, error) {
+func (p *respParser) parse(
+	r *bufio.Reader,
+	cache shardedValueMap,
+	cb func(d deserializable) error,
+) (int, error) {
 	for {
 		p.currentCmdSize = 0
 
@@ -31,7 +36,7 @@ func (p *parser) parse(r *bufio.Reader, cb func(d deserializer) error) (int, err
 		}
 
 		if firstByte == 0 {
-			p.n++
+			p.cursor++
 			continue
 		}
 
@@ -63,7 +68,7 @@ func (p *parser) parse(r *bufio.Reader, cb func(d deserializer) error) (int, err
 				return p.totalSize, err
 			}
 		case setCode:
-			if err := p.parseSetCommand(r, segments, cb); err != nil {
+			if err := p.parseSetCommand(r, cache, segments, cb); err != nil {
 				return p.totalSize, err
 			}
 		case flushAllCode:
@@ -77,7 +82,7 @@ func (p *parser) parse(r *bufio.Reader, cb func(d deserializer) error) (int, err
 	}
 }
 
-func (p *parser) resolveTagger(r *bufio.Reader) (Tagger, error) {
+func (p *respParser) resolveTagger(r *bufio.Reader) (Tagger, error) {
 	p.currentLine++
 	line, err := r.ReadBytes('\n')
 	if err != nil {
@@ -104,6 +109,7 @@ func (p *parser) resolveTagger(r *bufio.Reader) (Tagger, error) {
 	}
 
 	p.currentCmdSize += len(line)
+	p.cursor += len(line)
 
 	switch prefix {
 	case boolTagFn:
@@ -133,18 +139,27 @@ func (p *parser) resolveTagger(r *bufio.Reader) (Tagger, error) {
 }
 
 // parseSetCommand - parses `set` command from serialization protocol
-func (p *parser) parseSetCommand(r *bufio.Reader, segments int, cb func(d deserializer) error) error {
+func (p *respParser) parseSetCommand(
+	r *bufio.Reader,
+	cache shardedValueMap,
+	segments int,
+	cb func(d deserializable) error,
+) error {
 	key, err := p.resolveRespKey(r)
 	if err != nil {
 		return err
 	}
 
-	value, err := p.resolveRespBlob(r)
+	value, blobOffset, err := p.resolveRespBlob(r)
 	if err != nil {
 		return err
 	}
 
-	ent := newEntryWithTags(string(key), value, nil)
+	pos := position{offset: uint64(blobOffset), size: uint64(len(value))}
+	ent := newEntryWithTags(string(key), pos, nil)
+	if p.vls != LazyLoad {
+		cache.set(pos, value)
+	}
 
 	// subtracting command, key and value
 	segments -= 3
@@ -164,7 +179,10 @@ func (p *parser) parseSetCommand(r *bufio.Reader, segments int, cb func(d deseri
 }
 
 // parseDelCommand - parses delete entry command from serialization protocol
-func (p *parser) parseDelCommand(r *bufio.Reader, cb func(d deserializer) error) error {
+func (p *respParser) parseDelCommand(
+	r *bufio.Reader,
+	cb func(d deserializable) error,
+) error {
 	key, err := p.resolveRespKey(r)
 	if err != nil {
 		return err
@@ -174,7 +192,7 @@ func (p *parser) parseDelCommand(r *bufio.Reader, cb func(d deserializer) error)
 }
 
 // parseUntagCommand - parses untag command from serialization protocol
-func (p *parser) parseUntagCommand(r *bufio.Reader, segments int, cb func(d deserializer) error) error {
+func (p *respParser) parseUntagCommand(r *bufio.Reader, segments int, cb func(d deserializable) error) error {
 	key, err := p.resolveRespKey(r)
 	if err != nil {
 		return err
@@ -189,7 +207,7 @@ func (p *parser) parseUntagCommand(r *bufio.Reader, segments int, cb func(d dese
 }
 
 // parses a tag command from serialization protocol
-func (p *parser) parseTagCommand(r *bufio.Reader, segments int, cb func(d deserializer) error) error {
+func (p *respParser) parseTagCommand(r *bufio.Reader, segments int, cb func(d deserializable) error) error {
 	key, err := p.resolveRespKey(r)
 	if err != nil {
 		return err
@@ -209,45 +227,47 @@ func (p *parser) parseTagCommand(r *bufio.Reader, segments int, cb func(d deseri
 }
 
 // resolveRespBlob - resolves a blob from serialization protocol
-func (p *parser) resolveRespBlob(r *bufio.Reader) ([]byte, error) {
+func (p *respParser) resolveRespBlob(r *bufio.Reader) ([]byte, int, error) {
 	p.currentLine++
 	strInfoLine, err := r.ReadBytes('\n')
 	if err != nil {
 		if errors.Is(err, io.EOF) {
-			return nil, io.ErrUnexpectedEOF
+			return nil, 0, io.ErrUnexpectedEOF
 		}
 
-		return nil, errors.Wrapf(
+		return nil, 0, errors.Wrapf(
 			ErrCommandInvalid,
 			"could not resolve blob at line #%d: %v",
 			p.currentLine, err)
 	}
 
-	p.currentCmdSize += len(strInfoLine)
-
 	if len(strInfoLine) == 0 || strInfoLine[0] != '$' {
-		return nil, errors.Wrapf(ErrCommandInvalid, "line #%d - %s is invalid", p.currentLine, string(strInfoLine))
+		return nil, 0, errors.Wrapf(
+			ErrCommandInvalid,
+			"line #%d - %s is invalid", p.currentLine, string(strInfoLine),
+		)
 	}
+
+	p.currentCmdSize += len(strInfoLine)
+	p.cursor += len(strInfoLine)
 
 	blobLen, err := strconv.Atoi(string(strInfoLine[1 : len(strInfoLine)-2]))
 	if err != nil {
-		return nil, errors.Wrap(ErrCommandInvalid, err.Error())
+		return nil, 0, errors.Wrap(ErrCommandInvalid, err.Error())
 	}
 
 	blob := make([]byte, blobLen+2)
 	n, err := io.ReadFull(r, blob)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
-			return nil, io.ErrUnexpectedEOF
+			return nil, 0, io.ErrUnexpectedEOF
 		}
 
-		return nil, errors.Wrap(ErrCommandInvalid, err.Error())
+		return nil, 0, errors.Wrap(ErrCommandInvalid, err.Error())
 	}
 
-	p.currentCmdSize += n
-
 	if n-2 != blobLen {
-		return nil, errors.Wrapf(
+		return nil, 0, errors.Wrapf(
 			ErrCommandInvalid,
 			"line #%d - %s blob is invalid",
 			p.currentLine,
@@ -255,10 +275,14 @@ func (p *parser) resolveRespBlob(r *bufio.Reader) ([]byte, error) {
 		)
 	}
 
-	return blob[:blobLen], nil
+	blobOffset := p.cursor
+	p.currentCmdSize += n
+	p.cursor += n
+
+	return blob[:blobLen], blobOffset, nil
 }
 
-func (p *parser) resolveNamesToUntag(segments int, r *bufio.Reader) ([]string, error) {
+func (p *respParser) resolveNamesToUntag(segments int, r *bufio.Reader) ([]string, error) {
 	result := make([]string, segments)
 
 	for i := 0; i < segments; i++ {
@@ -281,6 +305,8 @@ func (p *parser) resolveNamesToUntag(segments int, r *bufio.Reader) ([]string, e
 			)
 		}
 
+		p.cursor += len(line)
+
 		name := string(line[1 : len(line)-2])
 		if name == "" {
 			return nil, errors.Wrapf(
@@ -297,11 +323,11 @@ func (p *parser) resolveNamesToUntag(segments int, r *bufio.Reader) ([]string, e
 	return result, nil
 }
 
-func (p *parser) parseFlushAllCommand(cb func(d deserializer) error) error {
+func (p *respParser) parseFlushAllCommand(cb func(d deserializable) error) error {
 	return cb(&flushAllCmd{})
 }
 
-func (p *parser) resolveRespArrayFromLine(r *bufio.Reader) (int, error) {
+func (p *respParser) resolveRespArrayFromLine(r *bufio.Reader) (int, error) {
 	// read a command
 	p.currentLine++
 	line, err := r.ReadBytes('\n')
@@ -318,15 +344,20 @@ func (p *parser) resolveRespArrayFromLine(r *bufio.Reader) (int, error) {
 		)
 	}
 
+	p.cursor += len(line)
+
 	// fixme: investigate - seems we are getting phantoms from prev line
 	if len(line) == 2 {
 		p.currentLine++
 		line, _ = r.ReadBytes('\n')
+		p.cursor += len(line)
 	}
 
 	// should be \*\d{1,}\\r
 	// for now we only expects array like commands
 	if len(line) < 2 || line[0] != '*' {
+		p.cursor -= len(line)
+
 		return p.totalSize, errors.Wrapf(
 			ErrCommandInvalid,
 			"line #%d - %s should actually start with *",
@@ -350,7 +381,7 @@ func (p *parser) resolveRespArrayFromLine(r *bufio.Reader) (int, error) {
 	return n, nil
 }
 
-func (p *parser) resolveRespCommandCode(r *bufio.Reader) (commandCode, error) {
+func (p *respParser) resolveRespCommandCode(r *bufio.Reader) (commandCode, error) {
 	p.currentLine++
 	line, err := r.ReadBytes('\n')
 	if err != nil {
@@ -373,6 +404,7 @@ func (p *parser) resolveRespCommandCode(r *bufio.Reader) (commandCode, error) {
 		)
 	}
 
+	p.cursor += len(line)
 	p.currentCmdSize += len(line)
 
 	if line[1] == 's' && line[2] == 'e' && line[3] == 't' {
@@ -391,6 +423,8 @@ func (p *parser) resolveRespCommandCode(r *bufio.Reader) (commandCode, error) {
 		return untagCode, nil
 	}
 
+	p.cursor -= len(line)
+
 	return invalidCode, errors.Wrapf(
 		ErrCommandInvalid,
 		"at line #%d command [%s] is unknown",
@@ -399,7 +433,7 @@ func (p *parser) resolveRespCommandCode(r *bufio.Reader) (commandCode, error) {
 	)
 }
 
-func (p *parser) resolveRespKey(r *bufio.Reader) ([]byte, error) {
+func (p *respParser) resolveRespKey(r *bufio.Reader) ([]byte, error) {
 	p.currentLine++
 	strInfoLine, err := r.ReadBytes('\n')
 	if err != nil {
@@ -413,14 +447,15 @@ func (p *parser) resolveRespKey(r *bufio.Reader) ([]byte, error) {
 			err.Error(), p.currentLine)
 	}
 
-	p.currentCmdSize += len(strInfoLine)
-
 	if len(strInfoLine) == 0 || strInfoLine[0] != '$' {
 		return nil, errors.Wrapf(
 			ErrCommandInvalid,
 			"line #%d - %s does not contain valid length",
 			p.currentLine, string(strInfoLine))
 	}
+
+	p.currentCmdSize += len(strInfoLine)
+	p.cursor += len(strInfoLine)
 
 	keyLen, err := strconv.Atoi(string(strInfoLine[1 : len(strInfoLine)-2]))
 	if err != nil {
@@ -437,14 +472,15 @@ func (p *parser) resolveRespKey(r *bufio.Reader) ([]byte, error) {
 		return nil, errors.Wrap(ErrCommandInvalid, err.Error())
 	}
 
-	p.currentCmdSize += n
-
 	if n-2 != keyLen {
 		return nil, errors.Wrapf(
 			ErrCommandInvalid,
 			"line #%d - %s has invalid key",
 			p.currentLine, string(strInfoLine))
 	}
+
+	p.currentCmdSize += n
+	p.cursor += n
 
 	return key[:keyLen], nil
 }

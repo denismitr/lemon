@@ -2,7 +2,10 @@ package lemon
 
 import (
 	"context"
+	"fmt"
+	"github.com/denismitr/glog"
 	"github.com/pkg/errors"
+	"path/filepath"
 )
 
 const InMemory = ":memory:"
@@ -10,6 +13,8 @@ const InMemory = ":memory:"
 type DB struct {
 	e executionEngine
 }
+
+var ErrInternalError = errors.New("LemonDB internal error")
 
 type UserCallback func(tx *Tx) error
 
@@ -22,12 +27,25 @@ func Open(path string, engineOptions ...EngineOptions) (*DB, Closer, error) {
 		DisableAutoVacuum:     false,
 		TruncateFileWhenOpen:  false,
 		PersistenceStrategy:   Sync,
+		ValueLoadStrategy:     EagerLoad,
 		AutoVacuumIntervals:   defaultAutovacuumIntervals,
 		AutoVacuumMinSize:     defaultAutoVacuumMinSize,
 		AutoVacuumOnlyOnClose: true,
+		Log: false,
 	}
 
-	e, err := newDefaultEngine(path, defaultCfg)
+	if path == InMemory {
+		defaultCfg.PersistenceStrategy = InMemory
+	}
+
+	var lg glog.Logger
+	if defaultCfg.Log {
+		lg = glog.NewStdoutLogger(glog.Prod, fmt.Sprintf("LemonDB:%s", filepath.Base(path)))
+	} else {
+		lg = glog.NullLogger{}
+	}
+
+	e, err := newDefaultEngine(path, lg, defaultCfg)
 	if err != nil {
 		return nil, NullCloser, err
 	}
@@ -58,7 +76,7 @@ func (db *DB) close() error {
 
 func (db *DB) Begin(ctx context.Context, readOnly bool) (*Tx, error) {
 	tx := Tx{
-		e:        db.e,
+		ee:       db.e,
 		ctx:      ctx,
 		readOnly: readOnly,
 	}
@@ -147,7 +165,7 @@ func (db *DB) MGet(keys ...string) (map[string]*Document, error) {
 	}
 
 	if docs == nil {
-		panic("how can result be nil?")
+		return nil, errors.Wrap(ErrInternalError, "result of MGet cannot be nil")
 	}
 
 	return docs, nil
@@ -215,6 +233,12 @@ func (db *DB) FlushAll() error {
 	})
 }
 
+func (db *DB) FlushAllContext(ctx context.Context) error {
+	return db.Update(ctx, func(tx *Tx) error {
+		return tx.FlushAll()
+	})
+}
+
 func (db *DB) Untag(key string, tagNames ...string) error {
 	return db.Update(context.Background(), func(tx *Tx) error {
 		return tx.Untag(key, tagNames...)
@@ -239,12 +263,12 @@ func (db *DB) ScanContext(ctx context.Context, qo *QueryOptions, cb func(d *Docu
 	})
 }
 
-func (db *DB) Find(qo *QueryOptions) ([]Document, error) {
+func (db *DB) Find(qo *QueryOptions) ([]*Document, error) {
 	return db.FindContext(context.Background(), qo)
 }
 
-func (db *DB) FindContext(ctx context.Context, qo *QueryOptions) ([]Document, error) {
-	var docs []Document
+func (db *DB) FindContext(ctx context.Context, qo *QueryOptions) ([]*Document, error) {
+	var docs []*Document
 	if err := db.View(ctx, func(tx *Tx) error {
 		var err error
 		docs, err = tx.Find(qo)

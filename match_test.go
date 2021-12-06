@@ -266,6 +266,32 @@ func (mts *matchTestSuite) TestMatchSingleUserByPatternAndTag() {
 	mts.Require().Equal("list", docs[0].Tags().String("content"))
 }
 
+func (mts *matchTestSuite) TestMatchSingleUserByPatternAndTag_Lazyload() {
+	db, closer, err := lemon.Open(mts.fixture, &lemon.Config{
+		ValueLoadStrategy: lemon.LazyLoad,
+	})
+
+	mts.Require().NoError(err)
+
+	defer func() {
+		if err := closer(); err != nil {
+			mts.T().Errorf("ERROR: %v", err)
+		}
+	}()
+
+	q := lemon.Q().Match("user:*").
+		HasAllTags(lemon.QT().StrTagEq("content", "list"))
+	docs, err := db.FindContext(context.Background(), q)
+
+	mts.Require().NoError(err)
+	mts.Require().Len(docs, 1)
+	mts.Require().Equal("user:12:animals", docs[0].Key())
+	mts.Require().Equal(`[123, 987, 6789]`, docs[0].RawString())
+	mts.Require().Equal(123, docs[0].JSON().IntOrDefault(`0`, 0))
+	mts.Require().Equal(lemon.M{"content": "list"}, docs[0].Tags())
+	mts.Require().Equal("list", docs[0].Tags().String("content"))
+}
+
 func (mts *matchTestSuite) TestMatchMultipleUsersByPatternAndGtIntTag() {
 	db, closer, err := lemon.Open(mts.fixture)
 	mts.Require().NoError(err)
