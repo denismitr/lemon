@@ -16,6 +16,7 @@ const (
 	String  ContentTypeIdentifier = "str"
 	Bytes   ContentTypeIdentifier = "bytes"
 	Integer ContentTypeIdentifier = "int"
+	Bool    ContentTypeIdentifier = "bool"
 )
 
 var ErrTagNameConflict = errors.New("tag name conflict")
@@ -127,7 +128,7 @@ func floatTagger(name string, value float64) Tagger {
 }
 
 type TagApplier struct {
-	err      error
+	err  error
 	tags tags
 }
 

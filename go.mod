@@ -4,7 +4,7 @@ go 1.16
 
 require (
 	github.com/cespare/xxhash/v2 v2.1.2
-	github.com/denismitr/glog v0.0.0-20211127150218-f2e627fcd5a8
+	github.com/denismitr/glog v0.2.0
 	github.com/jinzhu/copier v0.3.2
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.3.0
