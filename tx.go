@@ -115,7 +115,7 @@ func (x *Tx) Has(key string) bool {
 	return x.ee.Exists(key)
 }
 
-func (x *Tx) Get(key string) (*Document, error) { // fixme: decide on ref or value
+func (x *Tx) Get(key string) (*Document, error) {
 	ent, err := x.ee.FindByKey(key)
 	if err != nil {
 		return nil, err
@@ -130,6 +130,7 @@ func (x *Tx) Get(key string) (*Document, error) { // fixme: decide on ref or val
 	return newDocumentFromEntry(ent), nil
 }
 
+// MGetContext - multi get by keys with context
 func (x *Tx) MGetContext(ctx context.Context, keys ...string) (map[string]*Document, error) {
 	docs := make(map[string]*Document, len(keys))
 	if err := x.ee.IterateByKeys(keys, func(ent *entry) bool {
@@ -153,6 +154,7 @@ func (x *Tx) MGetContext(ctx context.Context, keys ...string) (map[string]*Docum
 	return docs, ctx.Err()
 }
 
+// MGet - multi get by keys
 func (x *Tx) MGet(keys ...string) (map[string]*Document, error) {
 	return x.MGetContext(context.Background(), keys...)
 }

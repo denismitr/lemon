@@ -110,7 +110,7 @@ func (its *ImplicitTagsSuite) TearDownTest() {
 func (its *ImplicitTagsSuite) TestQueryByTimestamps_GT() {
 	its.Assert().Equal(8, its.db.Count())
 
-	qt := lemon.QT().CreatedAfter(its.start.Add(2300 * time.Millisecond))
+	qt := lemon.QT().CreatedAfter(its.start.Add(2600 * time.Millisecond))
 	docs, err := its.db.FindContext(context.Background(), lemon.Q().HasAllTags(qt))
 	its.Require().NoError(err)
 
