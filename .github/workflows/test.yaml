@@ -27,5 +27,8 @@ jobs:
       - name: Check out source code
         uses: actions/checkout@v2
 
+      - name: Install dependencies
+        run: go mod tidy
+
       - name: Run tests
         run: go test -race -v ./...
