@@ -2,6 +2,7 @@ package lemon
 
 import (
 	"context"
+	"github.com/denismitr/glog"
 	"github.com/pkg/errors"
 )
 
@@ -17,6 +18,7 @@ type Tx struct {
 	updated         []*entry
 	replaced        []*entry
 	added           []*entry
+	lg              glog.Logger
 }
 
 func (x *Tx) lock() {
@@ -64,10 +66,21 @@ func (x *Tx) Commit() error {
 }
 
 func (x *Tx) Rollback() error {
+	if x.ee == nil {
+		return ErrTxAlreadyClosed
+	}
+
 	defer func() {
 		x.unlock()
 		x.ee = nil
+		x.persistCommands = nil
+		x.replaced = nil
+		x.added = nil
 	}()
+
+	if x.readOnly {
+		return nil
+	}
 
 	for _, ent := range x.replaced {
 		if err := x.ee.Put(ent, true); err != nil {
@@ -117,21 +130,31 @@ func (x *Tx) Get(key string) (*Document, error) { // fixme: decide on ref or val
 	return newDocumentFromEntry(ent), nil
 }
 
-func (x *Tx) MGet(keys ...string) (map[string]*Document, error) {
+func (x *Tx) MGetContext(ctx context.Context, keys ...string) (map[string]*Document, error) {
 	docs := make(map[string]*Document, len(keys))
-	if err := x.ee.IterateByKeys(keys, func(ent *entry) bool {
+	if err := x.ee.IterateByKeys(ctx, keys, func(ent *entry) bool {
+		if ctx.Err() != nil {
+			return false
+		}
+
 		if ent.value == nil {
 			if err := x.ee.LoadEntryValue(ent); err != nil {
-				// fixme: log
+				x.lg.Error(err)
 			}
 		}
+
 		docs[ent.key.String()] = newDocumentFromEntry(ent)
+
 		return true
 	}); err != nil {
 		return nil, err
 	}
 
-	return docs, nil
+	return docs, ctx.Err()
+}
+
+func (x *Tx) MGet(keys ...string) (map[string]*Document, error) {
+	return x.MGetContext(context.Background(), keys...)
 }
 
 func (x *Tx) Insert(key string, data interface{}, metaAppliers ...MetaApplier) error {

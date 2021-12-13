@@ -2,6 +2,7 @@ package lemon_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/denismitr/lemon"
 	"github.com/stretchr/testify/assert"
@@ -53,19 +54,19 @@ func TestLemonDB_Read(t *testing.T) {
 	assert.True(t, db.Has("product:88"))
 	assert.True(t, db.Has("product:100"))
 
-	//t.Run("count existing products", func(t *testing.T) {
-	//	assert.Equal(t, 4, db.Count())
-	//
-	//	q1 := lemon.Q().KeyRange("product:88", "product:100")
-	//	count1, err := db.CountByQueryContext(context.Background(), q1)
-	//	require.NoError(t, err)
-	//	assert.Equal(t, 2, count1)
-	//
-	//	q2 := lemon.Q().KeyOrder(lemon.DescOrder).KeyRange("product:88", "product:100")
-	//	count2, err := db.CountByQueryContext(context.Background(), q2)
-	//	require.NoError(t, err)
-	//	assert.Equal(t, 2, count2)
-	//})
+	t.Run("count existing products", func(t *testing.T) {
+		assert.Equal(t, 4, db.Count())
+
+		q1 := lemon.Q().KeyRange("product:88", "product:100")
+		count1, err := db.CountByQueryContext(context.Background(), q1)
+		require.NoError(t, err)
+		assert.Equal(t, 2, count1)
+
+		q2 := lemon.Q().KeyOrder(lemon.DescOrder).KeyRange("product:88", "product:100")
+		count2, err := db.CountByQueryContext(context.Background(), q2)
+		require.NoError(t, err)
+		assert.Equal(t, 2, count2)
+	})
 
 	t.Run("get existing keys", func(t *testing.T) {
 		var result1 *lemon.Document
@@ -104,40 +105,50 @@ func TestLemonDB_Read(t *testing.T) {
 		assert.Equal(t, 123.879, baz12)
 	})
 
-	//t.Run("get many existing keys ignoring non existent", func(t *testing.T) {
-	//	var result1 *lemon.Document
-	//	var result2 *lemon.Document
-	//
-	//	docs, err := db.MGet("product:88", "product:100", "non:existing:key")
-	//	require.NoError(t, err)
-	//
-	//	require.Len(t, docs, 2)
-	//
-	//	result1 = docs["product:88"]
-	//	require.NotNil(t, result1)
-	//	result2 = docs["product:100"]
-	//	require.NotNil(t, result2)
-	//
-	//	rs1 := result1.RawString()
-	//	assert.Equal(t, `{"100":"foobar-88","baz":88,"foo":"bar/88"}`, rs1)
-	//	json1 := result1.JSON()
-	//	foo, err := json1.String("foo")
-	//	require.NoError(t, err)
-	//	assert.Equal(t, "bar/88", foo)
-	//	baz, err := json1.Int("baz")
-	//	require.NoError(t, err)
-	//	assert.Equal(t, 88, baz)
-	//	assert.Equal(t, 88, json1.IntOrDefault("baz", 0))
-	//
-	//	json2 := result2.RawString()
-	//	assert.Equal(t, `{"999":null,"baz12":123.879,"foo":"bar5674"}`, json2)
-	//	bar5674, err := result2.JSON().String("foo")
-	//	require.NoError(t, err)
-	//	assert.Equal(t, "bar5674", bar5674)
-	//	baz12, err := result2.JSON().Float("baz12")
-	//	require.NoError(t, err)
-	//	assert.Equal(t, 123.879, baz12)
-	//})
+	t.Run("get many existing keys ignoring non existent", func(t *testing.T) {
+		var result1 *lemon.Document
+		var result2 *lemon.Document
+
+		docs, err := db.MGet("product:88", "product:100", "non:existing:key")
+		require.NoError(t, err)
+
+		require.Len(t, docs, 2)
+
+		result1 = docs["product:88"]
+		require.NotNil(t, result1)
+		result2 = docs["product:100"]
+		require.NotNil(t, result2)
+
+		rs1 := result1.RawString()
+		assert.Equal(t, `{"100":"foobar-88","baz":88,"foo":"bar/88"}`, rs1)
+		json1 := result1.JSON()
+		foo, err := json1.String("foo")
+		require.NoError(t, err)
+		assert.Equal(t, "bar/88", foo)
+		baz, err := json1.Int("baz")
+		require.NoError(t, err)
+		assert.Equal(t, 88, baz)
+		assert.Equal(t, 88, json1.IntOrDefault("baz", 0))
+
+		json2 := result2.RawString()
+		assert.Equal(t, `{"999":null,"baz12":123.879,"foo":"bar5674"}`, json2)
+		bar5674, err := result2.JSON().String("foo")
+		require.NoError(t, err)
+		assert.Equal(t, "bar5674", bar5674)
+		baz12, err := result2.JSON().Float("baz12")
+		require.NoError(t, err)
+		assert.Equal(t, 123.879, baz12)
+	})
+
+	t.Run("MGet with context that gets canceled", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		docs, err := db.MGetContext(ctx, "product:88", "product:100", "non:existing:key")
+		require.Error(t, err)
+		require.Nil(t, docs)
+		require.Truef(t, errors.Is(err, context.Canceled), "context should be canceled")
+	})
 }
 
 type findByTagsTestSuite struct {
@@ -235,7 +246,7 @@ func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Descend() {
 	defer cancel()
 
 	opts := lemon.Q().KeyOrder(lemon.DescOrder).KeyRange("user:100", "user:109")
-	docs, err := db.FindContext(ctx, opts);
+	docs, err := db.FindContext(ctx, opts)
 	if err != nil {
 		fts.Require().NoError(err)
 	}
@@ -265,7 +276,7 @@ func (fts *findTestSuite) TestLemonDB_FindRangeOfUsers_Ascend() {
 	var docs []*lemon.Document
 	if err := db.View(ctx, func(tx *lemon.Tx) error {
 		opts := lemon.Q().KeyOrder(lemon.AscOrder).KeyRange("product:500", "product:750")
-		result, err := tx.Find(opts);
+		result, err := tx.Find(opts)
 		if err != nil {
 			return err
 		} else {
@@ -300,7 +311,7 @@ func (fts *findTestSuite) TestLemonDB_FindAllUsers_Ascend() {
 	defer cancel()
 
 	opts := lemon.Q().KeyOrder(lemon.AscOrder).Prefix("user")
-	docs, err := db.FindContext(ctx, opts);
+	docs, err := db.FindContext(ctx, opts)
 	if err != nil {
 		fts.Require().NoError(err, "should be no error")
 	}
@@ -332,7 +343,7 @@ func (fts *findTestSuite) TestLemonDB_FindAllUsers_Lazy_Ascend() {
 	defer cancel()
 
 	opts := lemon.Q().KeyOrder(lemon.AscOrder).Prefix("user")
-	docs, err := db.FindContext(ctx, opts);
+	docs, err := db.FindContext(ctx, opts)
 	if err != nil {
 		fts.Require().NoError(err, "should be no error")
 	}
@@ -389,7 +400,7 @@ func (fts *findTestSuite) TestLemonDB_FindAllDocs_Descend() {
 	}()
 
 	opts := lemon.Q().KeyOrder(lemon.DescOrder)
-	docs, err := db.FindContext(context.Background(), opts);
+	docs, err := db.FindContext(context.Background(), opts)
 	if err != nil {
 		fts.Require().NoError(err, "should be no error")
 	}
@@ -425,7 +436,7 @@ func (fts *findTestSuite) TestLemonDB_LazyLoad_FindAllDocs_Descend() {
 	}()
 
 	opts := lemon.Q().KeyOrder(lemon.DescOrder)
-	docs, err := db.FindContext(context.Background(), opts);
+	docs, err := db.FindContext(context.Background(), opts)
 	if err != nil {
 		fts.Require().NoError(err, "should be no error")
 	}
@@ -458,7 +469,7 @@ func (fts *findTestSuite) TestLemonDB_FindAllDocs_Ascend() {
 	}()
 
 	opts := lemon.Q().KeyOrder(lemon.AscOrder)
-	docs, err := db.FindContext(context.Background(), opts);
+	docs, err := db.FindContext(context.Background(), opts)
 	if err != nil {
 		fts.Require().NoError(err, "should be no error")
 	}
@@ -481,8 +492,8 @@ func (fts *findTestSuite) TestLemonDB_FindAllDocs_Ascend() {
 }
 
 type structsTestSuite struct {
-	hasTags bool
-	modAddress int
+	hasTags      bool
+	modAddress   int
 	totalPersons int
 	suite.Suite
 	fixture string
@@ -547,7 +558,7 @@ func (sts *structsTestSuite) TestCheckTagsAsync() {
 			doc, err := db.Get(key)
 			sts.Require().NoError(err)
 
-			sts.Assert().Equal(id % sts.modAddress == 0, doc.Tags().Bool("has-address"))
+			sts.Assert().Equal(id%sts.modAddress == 0, doc.Tags().Bool("has-address"))
 			sts.Assert().Equal("application/json", doc.Tags().String("content-type"))
 			sts.Assert().Equal(0, doc.Tags().Int("non-existent"))
 		}(i)
@@ -582,7 +593,7 @@ func (sts *structsTestSuite) TestScanAll() {
 			if p.Address != nil {
 				sts.Assert().True(strings.HasPrefix(p.Address.Street, "New York"))
 			} else {
-				sts.Assert().Truef(p.ID % uint32(sts.modAddress) != 0, "there should be no address here")
+				sts.Assert().Truef(p.ID%uint32(sts.modAddress) != 0, "there should be no address here")
 			}
 
 			sts.Assert().True(p.Salary > 0)
@@ -628,7 +639,7 @@ func (sts *structsTestSuite) TestScanCanBeInterrupted() {
 			if p.Address != nil {
 				sts.Assert().True(strings.HasPrefix(p.Address.Street, "New York"))
 			} else {
-				sts.Assert().Truef(p.ID % uint32(sts.modAddress) != 0, "there should be no address here")
+				sts.Assert().Truef(p.ID%uint32(sts.modAddress) != 0, "there should be no address here")
 			}
 
 			sts.Assert().True(p.Salary > 0)
@@ -662,7 +673,7 @@ func (sts *structsTestSuite) Test_ItCanReadOwnWrites() {
 		i := 0
 
 		sts.NoError(tx.Insert("foo:bar:baz", lemon.M{"foo": []string{"bar", "baz"}}))
-		sts.NoError(tx.Insert("123:bar:baz", lemon.M{"123": []string{"bar123","bar123"}}))
+		sts.NoError(tx.Insert("123:bar:baz", lemon.M{"123": []string{"bar123", "bar123"}}))
 
 		var docs []*lemon.Document
 		q := lemon.Q().Match("*:bar:baz").KeyOrder(lemon.AscOrder)
@@ -687,11 +698,11 @@ type address struct {
 	Zip    int    `json:"zip"`
 }
 type person struct {
-	ID      uint32  `json:"id"`
-	Name    string  `json:"name"`
-	Age     int     `json:"age"`
-	Salary  float64 `json:"salary"`
-	Sex     string  `json:"sex"`
+	ID      uint32   `json:"id"`
+	Name    string   `json:"name"`
+	Age     int      `json:"age"`
+	Salary  float64  `json:"salary"`
+	Sex     string   `json:"sex"`
 	Address *address `json:"address"`
 }
 
@@ -718,7 +729,7 @@ func seedPersonStructs(t *testing.T, db *lemon.DB, num int, tag bool, modAddress
 			Sex:    RandomBoolString("male", "female"),
 		}
 
-		if i % modAddress == 0 {
+		if i%modAddress == 0 {
 			p.Address = &address{
 				Phone:  fmt.Sprintf("+%d", rand.Uint64()),
 				Street: fmt.Sprintf("New York, %s, avenue, %d", RandomString(10), rand.Uint32()),

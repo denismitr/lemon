@@ -6,12 +6,15 @@ import (
 	"github.com/denismitr/glog"
 	"github.com/pkg/errors"
 	"path/filepath"
+	"sync"
 )
 
 const InMemory = ":memory:"
 
 type DB struct {
-	e executionEngine
+	e  executionEngine
+	lg glog.Logger
+	mu sync.RWMutex
 }
 
 var ErrInternalError = errors.New("LemonDB internal error")
@@ -31,7 +34,7 @@ func Open(path string, engineOptions ...EngineOptions) (*DB, Closer, error) {
 		AutoVacuumIntervals:   defaultAutovacuumIntervals,
 		AutoVacuumMinSize:     defaultAutoVacuumMinSize,
 		AutoVacuumOnlyOnClose: true,
-		Log: false,
+		Log:                   false,
 	}
 
 	if path == InMemory {
@@ -56,7 +59,7 @@ func Open(path string, engineOptions ...EngineOptions) (*DB, Closer, error) {
 		}
 	}
 
-	db := DB{e: e}
+	db := DB{e: e, lg: lg}
 
 	if err := e.init(); err != nil {
 		return nil, NullCloser, err
@@ -77,6 +80,7 @@ func (db *DB) close() error {
 func (db *DB) Begin(ctx context.Context, readOnly bool) (*Tx, error) {
 	tx := Tx{
 		ee:       db.e,
+		lg:       db.lg,
 		ctx:      ctx,
 		readOnly: readOnly,
 	}
@@ -151,10 +155,10 @@ func (db *DB) Get(key string) (*Document, error) {
 	return doc, err
 }
 
-func (db *DB) MGet(keys ...string) (map[string]*Document, error) {
+func (db *DB) MGetContext(ctx context.Context, keys ...string) (map[string]*Document, error) {
 	var docs map[string]*Document
 	if err := db.View(context.Background(), func(tx *Tx) error {
-		result, err := tx.MGet(keys...)
+		result, err := tx.MGetContext(ctx, keys...)
 		if err != nil {
 			return err
 		}
@@ -169,6 +173,10 @@ func (db *DB) MGet(keys ...string) (map[string]*Document, error) {
 	}
 
 	return docs, nil
+}
+
+func (db *DB) MGet(keys ...string) (map[string]*Document, error) {
+	return db.MGetContext(context.Background(), keys...)
 }
 
 func (db *DB) Insert(key string, data interface{}, metaAppliers ...MetaApplier) error {
@@ -189,8 +197,7 @@ func (db *DB) View(ctx context.Context, cb UserCallback) error {
 		return err
 	}
 
-	err = cb(tx)
-	if err != nil {
+	if err := cb(tx); err != nil {
 		if rbErr := tx.Rollback(); rbErr != nil {
 			return errors.Wrap(err, rbErr.Error())
 		}

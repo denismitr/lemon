@@ -35,7 +35,7 @@ type executionEngine interface {
 	Insert(ent *entry) error
 	Exists(key string) bool
 	FindByKey(key string) (*entry, error)
-	IterateByKeys(pks []string, ir entryIterator) error
+	IterateByKeys(ctx context.Context, pks []string, ir entryIterator) error
 	Remove(key PK) error
 	RemoveEntryFromTagsByName(name string, ent *entry) error
 	AddTag(name string, value interface{}, ent *entry) error
@@ -238,6 +238,10 @@ func (ee *defaultEngine) init() error {
 }
 
 func (ee *defaultEngine) Persist(commands []serializable) error {
+	if ee.closed {
+		return ErrDatabaseAlreadyClosed
+	}
+
 	if ee.persistence == nil {
 		return nil
 	}
@@ -250,6 +254,10 @@ func (ee *defaultEngine) Persist(commands []serializable) error {
 }
 
 func (ee *defaultEngine) LoadEntryValue(ent *entry) error {
+	if ee.closed {
+		return ErrDatabaseAlreadyClosed
+	}
+
 	if ent.pos.offset != 0 {
 		v, err := ee.persistence.loadValueByPosition(ent.pos)
 		if err != nil {
@@ -262,6 +270,10 @@ func (ee *defaultEngine) LoadEntryValue(ent *entry) error {
 }
 
 func (ee *defaultEngine) RemoveEntryUnderLock(ent *entry) {
+	if ee.closed {
+		return
+	}
+
 	ee.tags.removeEntry(ent)
 	ee.pks.Delete(ent)
 
@@ -271,14 +283,26 @@ func (ee *defaultEngine) RemoveEntryUnderLock(ent *entry) {
 }
 
 func (ee *defaultEngine) RemoveEntryFromTagsByName(name string, ent *entry) error {
+	if ee.closed {
+		return ErrDatabaseAlreadyClosed
+	}
+
 	return ee.tags.removeEntryByName(name, ent)
 }
 
 func (ee *defaultEngine) AddTag(name string, value interface{}, ent *entry) error {
+	if ee.closed {
+		return ErrDatabaseAlreadyClosed
+	}
+
 	return ee.tags.add(name, value, ent)
 }
 
 func (ee *defaultEngine) Insert(ent *entry) error {
+	if ee.closed {
+		return ErrDatabaseAlreadyClosed
+	}
+
 	existing := ee.pks.Set(ent)
 	if existing != nil {
 		return errors.Wrapf(ErrKeyAlreadyExists, "key: %s", ent.key.String())
@@ -294,11 +318,19 @@ func (ee *defaultEngine) Insert(ent *entry) error {
 }
 
 func (ee *defaultEngine) Exists(key string) bool {
+	if ee.closed {
+		return false
+	}
+
 	found := ee.pks.Get(&entry{key: newPK(key)})
 	return found != nil
 }
 
 func (ee *defaultEngine) FindByKey(key string) (*entry, error) {
+	if ee.closed {
+		return nil, ErrDatabaseAlreadyClosed
+	}
+
 	found := ee.pks.Get(&entry{key: newPK(key)})
 	if found == nil {
 		return nil, errors.Wrapf(ErrKeyDoesNotExist, "key %s does not exist in database", key)
@@ -313,14 +345,23 @@ func (ee *defaultEngine) FindByKey(key string) (*entry, error) {
 }
 
 // IterateByKeys - takes a slice of primary keys and iterates over matched entries
-func (ee *defaultEngine) IterateByKeys(pks []string, ir entryIterator) error {
-	resultCh := make(chan *entry)
+func (ee *defaultEngine) IterateByKeys(ctx context.Context, pks []string, ir entryIterator) error {
+	if ee.closed {
+		return ErrDatabaseAlreadyClosed
+	}
+
+	resultCh := make(chan *entry, len(pks))
 	var wg sync.WaitGroup
 
 	for _, k := range pks {
 		wg.Add(1)
 		go func(k string) {
-			defer wg.Done()
+			ee.RLock()
+
+			defer func() {
+				ee.RUnlock()
+				wg.Done()
+			}()
 
 			found, err := ee.FindByKey(k)
 			if err != nil {
@@ -347,6 +388,10 @@ func (ee *defaultEngine) IterateByKeys(pks []string, ir entryIterator) error {
 
 // Remove entry by primary key
 func (ee *defaultEngine) Remove(key PK) error {
+	if ee.closed {
+		return ErrDatabaseAlreadyClosed
+	}
+
 	ent := ee.pks.Get(&entry{key: key})
 	if ent == nil {
 		return errors.Wrapf(ErrKeyDoesNotExist, "key %s does not exist in DB", key.String())
@@ -471,6 +516,10 @@ func (ee *defaultEngine) ChooseBestScanner(q *QueryOptions) (scanner, error) {
 // FilterEntriesByTags - uses secondary indexes (tags) to filter entries
 // and puts them to sink, which it creates to store all the matched entries
 func (ee *defaultEngine) FilterEntriesByTags(q *QueryOptions) (*filterEntriesSink, error) {
+	if ee.closed {
+		return nil, ErrDatabaseAlreadyClosed
+	}
+
 	if q == nil || (q.allTags == nil && q.byTagName == "") {
 		return nil, nil
 	}
@@ -602,6 +651,10 @@ func (ee *defaultEngine) FilterEntriesByTags(q *QueryOptions) (*filterEntriesSin
 // UpsertTag - updates or inserts a new tag, adding it to the entity
 // and corresponding secondary index
 func (ee *defaultEngine) UpsertTag(name string, v interface{}, ent *entry) error {
+	if ee.closed {
+		return ErrDatabaseAlreadyClosed
+	}
+
 	// just a precaution
 	if ent.tags == nil {
 		ent.tags = newTags()
@@ -643,6 +696,10 @@ func (ee *defaultEngine) UpsertTag(name string, v interface{}, ent *entry) error
 
 // RemoveTag - removes a tag from entity and secondary index
 func (ee *defaultEngine) RemoveTag(name string, ent *entry) error {
+	if ee.closed {
+		return ErrDatabaseAlreadyClosed
+	}
+
 	if err := ee.tags.removeEntryByName(name, ent); err != nil {
 		return err
 	}
@@ -652,6 +709,10 @@ func (ee *defaultEngine) RemoveTag(name string, ent *entry) error {
 }
 
 func (ee *defaultEngine) Put(ent *entry, replace bool) error {
+	if ee.closed {
+		return ErrDatabaseAlreadyClosed
+	}
+
 	existing := ee.pks.Set(ent)
 	if existing != nil {
 		if !replace {
@@ -679,6 +740,10 @@ func (ee *defaultEngine) Put(ent *entry, replace bool) error {
 }
 
 func (ee *defaultEngine) FlushAll(ff func(ent *entry)) error {
+	if ee.closed {
+		return ErrDatabaseAlreadyClosed
+	}
+
 	ee.pks.Ascend(nil, func(i interface{}) bool {
 		ent := i.(*entry)
 		ff(ent)
@@ -692,6 +757,10 @@ func (ee *defaultEngine) FlushAll(ff func(ent *entry)) error {
 }
 
 func (ee *defaultEngine) Vacuum(ctx context.Context) error {
+	if ee.closed {
+		return ErrDatabaseAlreadyClosed
+	}
+
 	if ee.persistence == nil {
 		return nil
 	}
