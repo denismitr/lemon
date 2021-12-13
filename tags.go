@@ -148,7 +148,7 @@ func (t tags) applyTo(e *entry) {
 	e.tags = t
 }
 
-func (t tags) set(name string, v interface{}) {
+func (t tags) set(name string, v interface{}) error {
 	_, ok := t[name]
 	if ok {
 		delete(t, name)
@@ -164,10 +164,13 @@ func (t tags) set(name string, v interface{}) {
 		newTag.dt = strDataType
 	case float64:
 		newTag.dt = floatDataType
+	default:
+		return ErrInvalidTagType
 	}
 
 	newTag.data = v
 	t[name] = newTag
+	return nil
 }
 
 func (t tags) removeByName(name string) {

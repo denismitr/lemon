@@ -71,7 +71,10 @@ func (cmd *tagCmd) deserialize(e executionEngine) error {
 	for n, t := range cmd.tags {
 		_ = e.RemoveEntryFromTagsByName(n, ent)
 
-		ent.tags.set(n, t.data)
+		if err := ent.tags.set(n, t.data); err != nil {
+			return err
+		}
+
 		if err := e.AddTag(n, t.data, ent); err != nil {
 			return err
 		}

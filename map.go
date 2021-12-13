@@ -9,6 +9,10 @@ func (m M) applyTo(e *entry) error {
 		existingTag := e.tags[k]
 		newTag := &tag{data: v}
 
+		if existingTag != nil && k == CreatedAt {
+			continue
+		}
+
 		switch v.(type) {
 		case int:
 			if existingTag != nil && existingTag.dt != intDataType {

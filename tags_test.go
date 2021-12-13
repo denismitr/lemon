@@ -26,7 +26,7 @@ type ImplicitTagsSuite struct {
 	finish  time.Time
 
 	closer func() error
-	db *lemon.DB
+	db     *lemon.DB
 }
 
 func (its *ImplicitTagsSuite) SetupSuite() {
@@ -110,7 +110,7 @@ func (its *ImplicitTagsSuite) TearDownTest() {
 func (its *ImplicitTagsSuite) TestQueryByTimestamps_GT() {
 	its.Assert().Equal(8, its.db.Count())
 
-	qt := lemon.QT().CreatedAfter(its.start.Add(2300*time.Millisecond))
+	qt := lemon.QT().CreatedAfter(its.start.Add(2300 * time.Millisecond))
 	docs, err := its.db.FindContext(context.Background(), lemon.Q().HasAllTags(qt))
 	its.Require().NoError(err)
 
@@ -185,7 +185,7 @@ func (its *ImplicitTagsSuite) TestQueryByContentType() {
 func (its *ImplicitTagsSuite) TestQueryByTimestamps_LT() {
 	its.Assert().Equal(8, its.db.Count())
 
-	qt := lemon.QT().CreatedBefore(its.start.Add(2200*time.Millisecond))
+	qt := lemon.QT().CreatedBefore(its.start.Add(2200 * time.Millisecond))
 	docs, err := its.db.FindContext(context.Background(), lemon.Q().HasAllTags(qt))
 	its.Require().NoError(err)
 
@@ -205,7 +205,7 @@ func (its *ImplicitTagsSuite) TestQueryByTimestamps_LT() {
 		"created at should be before updated at",
 	)
 
-	its.Assert().Equal(lemon.M{"strTag":"foo"}, docs[1].Tags())
+	its.Assert().Equal(lemon.M{"strTag": "foo"}, docs[1].Tags())
 }
 
 func (its *ImplicitTagsSuite) TestImplicitContentType() {

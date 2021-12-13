@@ -2,21 +2,42 @@ package lemon
 
 import (
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"testing"
+	"time"
 )
 
 func TestLemonMap(t *testing.T) {
+	t.Run("preserve original createdAt", func(t *testing.T) {
+		now := int(time.Now().UnixMilli())
+		tgs := newTags()
+		require.NoError(t, tgs.set(CreatedAt, now))
+
+		ent := entry{
+			tags: tgs,
+		}
+
+		updateTime := int(time.Now().Add(5 * time.Second).UnixMilli())
+		m := M{
+			CreatedAt: updateTime,
+			UpdatedAt: updateTime,
+		}
+
+		require.NoError(t, m.applyTo(&ent))
+		assert.Exactly(t, M{CreatedAt: now, UpdatedAt: updateTime}, ent.tags.asMap())
+	})
+
 	t.Run("getters", func(t *testing.T) {
 		m := M{
-			"intVal1": 123,
-			"intVal2": -9848774,
+			"intVal1":   123,
+			"intVal2":   -9848774,
 			"floatVal1": 456.3244,
 			"floatVal2": -0.224,
 			"floatVal3": 4.1,
-			"strVal1": "foo",
-			"strVal2": "bar",
-			"boolVal1": true,
-			"boolVal2": false,
+			"strVal1":   "foo",
+			"strVal2":   "bar",
+			"boolVal1":  true,
+			"boolVal2":  false,
 		}
 
 		assert.True(t, m.HasInt("intVal1"))
@@ -42,5 +63,3 @@ func TestLemonMap(t *testing.T) {
 		assert.Equal(t, false, m.Bool("boolVal2"))
 	})
 }
-
-
