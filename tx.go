@@ -132,7 +132,7 @@ func (x *Tx) Get(key string) (*Document, error) { // fixme: decide on ref or val
 
 func (x *Tx) MGetContext(ctx context.Context, keys ...string) (map[string]*Document, error) {
 	docs := make(map[string]*Document, len(keys))
-	if err := x.ee.IterateByKeys(ctx, keys, func(ent *entry) bool {
+	if err := x.ee.IterateByKeys(keys, func(ent *entry) bool {
 		if ctx.Err() != nil {
 			return false
 		}

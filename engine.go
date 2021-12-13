@@ -35,7 +35,7 @@ type executionEngine interface {
 	Insert(ent *entry) error
 	Exists(key string) bool
 	FindByKey(key string) (*entry, error)
-	IterateByKeys(ctx context.Context, pks []string, ir entryIterator) error
+	IterateByKeys(pks []string, ir entryIterator) error
 	Remove(key PK) error
 	RemoveEntryFromTagsByName(name string, ent *entry) error
 	AddTag(name string, value interface{}, ent *entry) error
@@ -345,7 +345,7 @@ func (ee *defaultEngine) FindByKey(key string) (*entry, error) {
 }
 
 // IterateByKeys - takes a slice of primary keys and iterates over matched entries
-func (ee *defaultEngine) IterateByKeys(ctx context.Context, pks []string, ir entryIterator) error {
+func (ee *defaultEngine) IterateByKeys(pks []string, ir entryIterator) error {
 	if ee.closed {
 		return ErrDatabaseAlreadyClosed
 	}
