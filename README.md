@@ -26,7 +26,7 @@ Tags in LemonDB are basically secondary indexes of 4 basic types `float64`, `int
 ## Usage
 Create/open a lemonDB database file
 ```go
-db, closer, err := lemon.Open(mts.fixture)
+db, closer, err := lemon.Open("./mydb.ldb")
 if err != nil {
 	// handle
 }
