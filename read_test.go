@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/denismitr/lemon"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"math/rand"
@@ -16,139 +15,163 @@ import (
 	"time"
 )
 
-func TestTx_Find(t *testing.T) {
+func TestRead_Find(t *testing.T) {
 	t.Parallel()
 	suite.Run(t, &findTestSuite{})
 }
 
-func TestTx_FindByTags(t *testing.T) {
+func TestRead_FindByTags(t *testing.T) {
 	t.Parallel()
 	suite.Run(t, &findByTagsTestSuite{})
 }
 
-func TestTx_Scan(t *testing.T) {
+func TestRead_Scan(t *testing.T) {
 	t.Parallel()
 	suite.Run(t, &scanTestSuite{})
 }
 
-func TestTx_Structs(t *testing.T) {
+func TestRead_Structs(t *testing.T) {
 	t.Parallel()
 	suite.Run(t, &structsTestSuite{})
 }
 
-func TestLemonDB_Read(t *testing.T) {
-	fixture := "./__fixtures__/read_db1.ldb"
-	seedSomeProducts(t, fixture, true)
+func TestRead_ReadExistingDatabase(t *testing.T) {
+	t.Parallel()
+	suite.Run(t, &readExistingDatabaseSuite{})
+}
 
-	db, closer, err := lemon.Open(fixture)
-	if err != nil {
-		t.Fatal(err)
+type readExistingDatabaseSuite struct {
+	suite.Suite
+	fixture string
+	db *lemon.DB
+	closer lemon.Closer
+}
+
+func (rts *readExistingDatabaseSuite) SetupSuite() {
+	rts.fixture = "./__fixtures__/read_db1.ldb"
+	//seedSomeProducts(t, rts.fixture, true)
+	db, closer, err := lemon.Open(rts.fixture)
+	rts.Require().NoError(err)
+	rts.db = db
+	rts.closer = closer
+}
+
+func (rts *readExistingDatabaseSuite) TearDownSuite() {
+	if err := rts.closer(); err != nil {
+		rts.Require().NoError(err)
 	}
+}
+
+func (rts *readExistingDatabaseSuite) TestHas() {
+	rts.Assert().True(rts.db.Has("product:88"))
+	rts.Assert().True(rts.db.Has("product:100"))
+}
+
+func (rts *readExistingDatabaseSuite) Test_AnotherEmptyDatabaseOpen() {
+	fixture := "./__fixtures__/read_empty.ldb"
+	db, closer, err := lemon.Open(fixture)
+	rts.Require().NoError(err)
 
 	defer func() {
-		if err := closer(); err != nil {
-			t.Errorf("ERROR: %v", err)
-		}
+		rts.Require().NoError(closer())
 	}()
 
-	assert.True(t, db.Has("product:88"))
-	assert.True(t, db.Has("product:100"))
+	rts.Assert().Equal(0, db.Count())
+}
 
-	t.Run("count existing products", func(t *testing.T) {
-		assert.Equal(t, 4, db.Count())
+func (rts *readExistingDatabaseSuite) Test_CountExistingProducts() {
+	rts.Assert().Equal(4, rts.db.Count())
 
-		q1 := lemon.Q().KeyRange("product:88", "product:100")
-		count1, err := db.CountByQueryContext(context.Background(), q1)
-		require.NoError(t, err)
-		assert.Equal(t, 2, count1)
+	q1 := lemon.Q().KeyRange("product:88", "product:100")
+	count1, err := rts.db.CountByQueryContext(context.Background(), q1)
+	rts.Require().NoError(err)
+	rts.Assert().Equal(2, count1)
 
-		q2 := lemon.Q().KeyOrder(lemon.DescOrder).KeyRange("product:88", "product:100")
-		count2, err := db.CountByQueryContext(context.Background(), q2)
-		require.NoError(t, err)
-		assert.Equal(t, 2, count2)
-	})
+	q2 := lemon.Q().KeyOrder(lemon.DescOrder).KeyRange("product:88", "product:100")
+	count2, err := rts.db.CountByQueryContext(context.Background(), q2)
+	rts.Require().NoError(err)
+	rts.Assert().Equal(2, count2)
+}
 
-	t.Run("get existing keys", func(t *testing.T) {
-		var result1 *lemon.Document
-		var result2 *lemon.Document
-		if err := db.View(context.Background(), func(tx *lemon.Tx) error {
-			doc1, err := tx.Get("product:88")
-			if err != nil {
-				return err
-			}
-
-			doc2, err := tx.Get("product:100")
-			if err != nil {
-				return err
-			}
-
-			result1 = doc1
-			result2 = doc2
-			return nil
-		}); err != nil {
-			t.Fatal(err)
+func (rts *readExistingDatabaseSuite) Test_GetExistingKeys() {
+	var result1 *lemon.Document
+	var result2 *lemon.Document
+	if err := rts.db.View(context.Background(), func(tx *lemon.Tx) error {
+		doc1, err := tx.Get("product:88")
+		if err != nil {
+			return err
 		}
 
-		json1 := result1.RawString()
-		assert.Equal(t, `{"100":"foobar-88","baz":88,"foo":"bar/88"}`, json1)
-		foo, err := result1.JSON().String("foo")
-		require.NoError(t, err)
-		assert.Equal(t, "bar/88", foo)
+		doc2, err := tx.Get("product:100")
+		if err != nil {
+			return err
+		}
 
-		json2 := result2.RawString()
-		assert.Equal(t, `{"999":null,"baz12":123.879,"foo":"bar5674"}`, json2)
-		bar5674, err := result2.JSON().String("foo")
-		require.NoError(t, err)
-		assert.Equal(t, "bar5674", bar5674)
-		baz12, err := result2.JSON().Float("baz12")
-		require.NoError(t, err)
-		assert.Equal(t, 123.879, baz12)
-	})
+		result1 = doc1
+		result2 = doc2
+		return nil
+	}); err != nil {
+		rts.Require().NoError(err)
+	}
 
-	t.Run("get many existing keys ignoring non existent", func(t *testing.T) {
-		var result1 *lemon.Document
-		var result2 *lemon.Document
+	json1 := result1.RawString()
+	rts.Assert().Equal(`{"100":"foobar-88","baz":88,"foo":"bar/88"}`, json1)
+	foo, err := result1.JSON().String("foo")
+	rts.Require().NoError(err)
+	rts.Assert().Equal("bar/88", foo)
 
-		docs, err := db.MGet("product:88", "product:100", "non:existing:key")
-		require.NoError(t, err)
+	json2 := result2.RawString()
+	rts.Assert().Equal(`{"999":null,"baz12":123.879,"foo":"bar5674"}`, json2)
+	bar5674, err := result2.JSON().String("foo")
+	rts.Require().NoError(err)
+	rts.Assert().Equal("bar5674", bar5674)
+	baz12, err := result2.JSON().Float("baz12")
+	rts.Require().NoError(err)
+	rts.Assert().Equal(123.879, baz12)
+}
 
-		require.Len(t, docs, 2)
+func (rts *readExistingDatabaseSuite) Test_GetManyExistingKeys_IgnoringMissing() {
+	var result1 *lemon.Document
+	var result2 *lemon.Document
 
-		result1 = docs["product:88"]
-		require.NotNil(t, result1)
-		result2 = docs["product:100"]
-		require.NotNil(t, result2)
+	docs, err := rts.db.MGet("product:88", "product:100", "non:existing:key")
+	rts.Require().NoError(err)
+	rts.Require().Len(docs, 2)
 
-		rs1 := result1.RawString()
-		assert.Equal(t, `{"100":"foobar-88","baz":88,"foo":"bar/88"}`, rs1)
-		json1 := result1.JSON()
-		foo, err := json1.String("foo")
-		require.NoError(t, err)
-		assert.Equal(t, "bar/88", foo)
-		baz, err := json1.Int("baz")
-		require.NoError(t, err)
-		assert.Equal(t, 88, baz)
-		assert.Equal(t, 88, json1.IntOrDefault("baz", 0))
+	result1 = docs["product:88"]
+	rts.Require().NotNil(result1)
+	result2 = docs["product:100"]
+	rts.Require().NotNil(result2)
 
-		json2 := result2.RawString()
-		assert.Equal(t, `{"999":null,"baz12":123.879,"foo":"bar5674"}`, json2)
-		bar5674, err := result2.JSON().String("foo")
-		require.NoError(t, err)
-		assert.Equal(t, "bar5674", bar5674)
-		baz12, err := result2.JSON().Float("baz12")
-		require.NoError(t, err)
-		assert.Equal(t, 123.879, baz12)
-	})
+	rs1 := result1.RawString()
+	rts.Assert().Equal(`{"100":"foobar-88","baz":88,"foo":"bar/88"}`, rs1)
+	json1 := result1.JSON()
+	foo, err := json1.String("foo")
+	rts.Require().NoError(err)
+	rts.Assert().Equal("bar/88", foo)
+	baz, err := json1.Int("baz")
+	rts.Require().NoError(err)
+	rts.Assert().Equal(88, baz)
+	rts.Assert().Equal(88, json1.IntOrDefault("baz", 0))
 
-	t.Run("MGet with context that gets canceled", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel()
+	json2 := result2.RawString()
+	rts.Assert().Equal(`{"999":null,"baz12":123.879,"foo":"bar5674"}`, json2)
+	bar5674, err := result2.JSON().String("foo")
+	rts.Require().NoError(err)
+	rts.Assert().Equal("bar5674", bar5674)
+	baz12, err := result2.JSON().Float("baz12")
+	rts.Require().NoError(err)
+	rts.Assert().Equal(123.879, baz12)
+}
 
-		docs, err := db.MGetContext(ctx, "product:88", "product:100", "non:existing:key")
-		require.Error(t, err)
-		require.Nil(t, docs)
-		require.Truef(t, errors.Is(err, context.Canceled), "context should be canceled")
-	})
+func (rts *readExistingDatabaseSuite) Test_MultiGetWithContext_ThatGetsCanceled() {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	docs, err := rts.db.MGetContext(ctx, "product:88", "product:100", "non:existing:key")
+	rts.Require().Error(err)
+	rts.Require().Nil(docs)
+	rts.Require().Truef(errors.Is(err, context.Canceled), "context should be canceled")
 }
 
 type findByTagsTestSuite struct {
