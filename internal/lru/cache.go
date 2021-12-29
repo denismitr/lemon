@@ -23,7 +23,7 @@ func NewCache(shards int, maxTotalBytes uint64) (*Cache, error) {
 		return nil, ErrIllegalCapacity
 	}
 
-	if shards <= 2 {
+	if shards < 2 {
 		return nil, ErrInvalidSharding
 	}
 
