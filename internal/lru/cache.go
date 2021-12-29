@@ -9,10 +9,13 @@ import (
 var ErrIllegalCapacity = errors.New("illegal lru cache capacity")
 var ErrInvalidSharding = errors.New("invalid sharding")
 
+type OnEvict func(k uint64, v []byte)
+
 type Cache struct {
 	maxBytes uint64
 	capacity uint64
 	shards []*lruShard
+	onEvict OnEvict
 }
 
 func NewCache(shards int, maxTotalBytes uint64) (*Cache, error) {
@@ -38,10 +41,17 @@ func NewCache(shards int, maxTotalBytes uint64) (*Cache, error) {
 	return &c, nil
 }
 
+func (c *Cache) OnEvict(fn OnEvict) {
+	c.onEvict = fn
+}
+
 // Add value to cache under key and returns true if eviction happened
-func (c *Cache) Add(key uint64, value []byte) bool {
+func (c *Cache) Add(key uint64, value []byte) {
 	shard := c.getShard(key)
-	return shard.add(key, value)
+	v, evicted := shard.add(key, value)
+	if evicted && c.onEvict != nil {
+		c.onEvict(key, v)
+	}
 }
 
 func (c *Cache) Get(key uint64) ([]byte, bool) {

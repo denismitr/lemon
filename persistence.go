@@ -54,7 +54,7 @@ const (
 )
 
 type cache interface {
-	Add(key uint64, value []byte) bool
+	Add(key uint64, value []byte)
 	Get(key uint64) ([]byte, bool)
 	Remove(key uint64)
 }

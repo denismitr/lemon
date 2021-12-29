@@ -39,17 +39,14 @@ func (ls *lruShard) get(key uint64) ([]byte, bool) {
 }
 
 // Add value to lru map under key and returns true if eviction happened
-func (ls *lruShard) add(key uint64, value []byte) bool {
+func (ls *lruShard) add(key uint64, value []byte) ([]byte, bool) {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
-
-	var evicted bool
 
 	// Check for existing item
 	if elem, ok := ls.elems[key]; ok {
 		ls.evictList.MoveToFront(elem)
 		elem.Value.(*entry).value = value
-		evicted = false
 	} else {
 		// add new item
 		elem = ls.evictList.PushFront(&entry{
@@ -59,15 +56,15 @@ func (ls *lruShard) add(key uint64, value []byte) bool {
 
 		ls.totalBytes += uint64(len(value))
 		ls.elems[key] = elem
-		evicted = ls.totalBytes > ls.maxBytes
+		evicted := ls.totalBytes > ls.maxBytes
 
 		// Verify size not exceeded
 		if evicted {
-			ls.removeOldestUnderLock()
+			return ls.removeOldestUnderLock()
 		}
 	}
 
-	return evicted
+	return nil, false
 }
 
 func (ls *lruShard) purge() {
@@ -81,26 +78,29 @@ func (ls *lruShard) purge() {
 	ls.evictList.Init()
 }
 
-func (ls *lruShard) removeOldestUnderLock() {
+func (ls *lruShard) removeOldestUnderLock() ([]byte, bool) {
 	elem := ls.evictList.Back()
 	if elem != nil {
-		ls.removeElementUnderLock(elem)
+		return ls.removeElementUnderLock(elem), true
+	} else {
+		return nil, false
 	}
 }
 
-func (ls *lruShard) removeElementUnderLock(elem *list.Element) {
-	ls.evictList.Remove(elem)
-	kv := elem.Value.(*entry)
-	delete(ls.elems, kv.key)
-	ls.totalBytes -= uint64(len(kv.value))
-}
-
-func (ls *lruShard) remove(key uint64) {
+func (ls *lruShard) remove(key uint64) ([]byte, bool) {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 	elem, ok := ls.elems[key]
 	if !ok {
-		return
+		return nil, false
 	}
-	ls.removeElementUnderLock(elem)
+	return ls.removeElementUnderLock(elem), true
+}
+
+func (ls *lruShard) removeElementUnderLock(elem *list.Element) []byte {
+	ls.evictList.Remove(elem)
+	kv := elem.Value.(*entry)
+	delete(ls.elems, kv.key)
+	ls.totalBytes -= uint64(len(kv.value))
+	return kv.value
 }
