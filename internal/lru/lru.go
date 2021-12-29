@@ -27,8 +27,8 @@ type entry struct {
 }
 
 func (ls *lruShard) get(key uint64) ([]byte, bool) {
-	ls.mu.RLock()
-	defer ls.mu.RUnlock()
+	ls.mu.Lock()
+	defer ls.mu.Unlock()
 
 	if elem, ok := ls.elems[key]; ok {
 		ls.evictList.MoveToFront(elem)
@@ -93,4 +93,14 @@ func (ls *lruShard) removeElementUnderLock(elem *list.Element) {
 	kv := elem.Value.(*entry)
 	delete(ls.elems, kv.key)
 	ls.totalBytes -= uint64(len(kv.value))
+}
+
+func (ls *lruShard) remove(key uint64) {
+	ls.mu.Lock()
+	defer ls.mu.Unlock()
+	elem, ok := ls.elems[key]
+	if !ok {
+		return
+	}
+	ls.removeElementUnderLock(elem)
 }

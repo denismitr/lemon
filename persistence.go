@@ -3,9 +3,8 @@ package lemon
 import (
 	"bufio"
 	"bytes"
-	"encoding/binary"
-	"github.com/cespare/xxhash/v2"
 	"github.com/denismitr/glog"
+	"github.com/denismitr/lemon/internal/lru"
 	"github.com/pkg/errors"
 	"io"
 	"os"
@@ -49,50 +48,15 @@ const (
 	EagerLoad ValueLoadStrategy = "eager"
 )
 
-const valueShards = 20
+const (
+	valueShards = 20
+	gb uint64 = 1 << 30
+)
 
-type valueMap struct {
-	sync.RWMutex
-	m map[position][]byte
-}
-
-type shardedValueMap []*valueMap
-
-func newShardedValueMap(shardsNum int) shardedValueMap {
-	shards := make(shardedValueMap, shardsNum)
-	for i := range shards {
-		shards[i] = &valueMap{m: make(map[position][]byte)}
-	}
-	return shards
-}
-
-func (svm shardedValueMap) getShard(pos position) *valueMap {
-	bs := make([]byte, 8)
-	binary.LittleEndian.PutUint64(bs, pos.offset)
-	hash := xxhash.Sum64(bs)
-	return svm[hash%uint64(len(svm))]
-}
-
-func (svm shardedValueMap) get(pos position) ([]byte, bool) {
-	shard := svm.getShard(pos)
-	shard.RLock()
-	defer shard.RUnlock()
-	v, ok := shard.m[pos]
-	return v, ok
-}
-
-func (svm shardedValueMap) set(pos position, v []byte) {
-	shard := svm.getShard(pos)
-	shard.Lock()
-	defer shard.Unlock()
-	shard.m[pos] = v
-}
-
-func (svm shardedValueMap) remove(pos position) {
-	shard := svm.getShard(pos)
-	shard.Lock()
-	defer shard.Unlock()
-	delete(shard.m, pos)
+type cache interface {
+	Add(key uint64, value []byte) bool
+	Get(key uint64) ([]byte, bool)
+	Remove(key uint64)
 }
 
 type persistence struct {
@@ -103,7 +67,7 @@ type persistence struct {
 	f        *os.File
 	flushes  int
 	cursor   int
-	cache    shardedValueMap
+	cache    cache
 	lg       glog.Logger
 }
 
@@ -124,12 +88,17 @@ func newPersistence(
 		return nil, err
 	}
 
+	c, err := lru.NewCache(valueShards, gb * 3)
+	if err != nil {
+		return nil, err
+	}
+
 	p := &persistence{
 		f:        f,
 		vls:      vls,
 		strategy: strategy,
 		lg:       lg,
-		cache:    newShardedValueMap(valueShards),
+		cache:    c,
 	}
 
 	return p, nil
@@ -318,13 +287,13 @@ func (p *persistence) writeAndSwap(rs *respSerializer) error {
 func (p *persistence) setValueByPosition(pos position, v []byte) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.cache.set(pos, v)
+	p.cache.Add(pos.offset, v)
 	return nil
 }
 
 func (p *persistence) loadValueByPosition(pos position) ([]byte, error) {
 	p.mu.RLock()
-	if v, ok := p.cache.get(pos); ok {
+	if v, ok := p.cache.Get(pos.offset); ok {
 		p.mu.RUnlock()
 		return v, nil
 	}
@@ -352,14 +321,14 @@ func (p *persistence) loadValueByPosition(pos position) ([]byte, error) {
 	}
 
 	if p.vls != LazyLoad {
-		p.cache.set(pos, blob)
+		p.cache.Add(pos.offset, blob)
 	}
 
 	return blob, nil
 }
 
 func (p *persistence) removeValueUnderLock(pos position) {
-	p.cache.remove(pos)
+	p.cache.Remove(pos.offset)
 }
 
 func (p *persistence) newSerializer() *respSerializer {

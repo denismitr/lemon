@@ -15,8 +15,8 @@ type Cache struct {
 	shards []*lruShard
 }
 
-func NewCache(shards int, maxBytes uint64) (*Cache, error) {
-	if maxBytes <= 2 {
+func NewCache(shards int, maxTotalBytes uint64) (*Cache, error) {
+	if maxTotalBytes <= 2 {
 		return nil, ErrIllegalCapacity
 	}
 
@@ -25,12 +25,12 @@ func NewCache(shards int, maxBytes uint64) (*Cache, error) {
 	}
 
 	c := Cache{
-		maxBytes: maxBytes,
+		maxBytes: maxTotalBytes,
 		capacity: uint64(shards),
-		shards: make([]*lruShard, shards),
+		shards:   make([]*lruShard, shards),
 	}
 
-	shardMaxBytes := maxBytes / c.capacity
+	shardMaxBytes := maxTotalBytes / c.capacity
 	for i := range c.shards {
 		c.shards[i] = newLruShard(shardMaxBytes)
 	}
@@ -47,6 +47,11 @@ func (c *Cache) Add(key uint64, value []byte) bool {
 func (c *Cache) Get(key uint64) ([]byte, bool) {
 	shard := c.getShard(key)
 	return shard.get(key)
+}
+
+func (c *Cache) Remove(key uint64) {
+	shard := c.getShard(key)
+	shard.remove(key)
 }
 
 func (c *Cache) getShard(key uint64) *lruShard {
