@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"github.com/cespare/xxhash/v2"
 	"github.com/pkg/errors"
+	"sync/atomic"
 )
 
 var ErrIllegalCapacity = errors.New("illegal lru cache capacity")
@@ -14,8 +15,9 @@ type OnEvict func(k uint64, v []byte)
 type Cache struct {
 	maxBytes uint64
 	capacity uint64
-	shards []*lruShard
-	onEvict OnEvict
+	count    int64
+	shards   []*lruShard
+	onEvict  OnEvict
 }
 
 func NewCache(shards int, maxTotalBytes uint64) (*Cache, error) {
@@ -52,6 +54,9 @@ func (c *Cache) Add(key uint64, value []byte) {
 	if evicted && c.onEvict != nil {
 		c.onEvict(key, v)
 	}
+	if !evicted {
+		atomic.AddInt64(&c.count, 1)
+	}
 }
 
 func (c *Cache) Get(key uint64) ([]byte, bool) {
@@ -62,6 +67,21 @@ func (c *Cache) Get(key uint64) ([]byte, bool) {
 func (c *Cache) Remove(key uint64) {
 	shard := c.getShard(key)
 	shard.remove(key)
+}
+
+func (c *Cache) Count() int {
+	return int(atomic.LoadInt64(&c.count))
+}
+
+func (c *Cache) Keys() []uint64 {
+	count := atomic.LoadInt64(&c.count)
+	keys := make([]uint64, 0, count)
+
+	for i := range c.shards {
+		keys = append(keys, c.shards[i].keys()...)
+	}
+
+	return keys
 }
 
 func (c *Cache) getShard(key uint64) *lruShard {

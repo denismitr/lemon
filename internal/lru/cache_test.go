@@ -54,6 +54,13 @@ func TestCache_Add(t *testing.T) {
 
 		require.Equal(t, 8, evicted)
 
-		// todo: check remaining keys
+		count := c.Count()
+		assert.Equal(t, 12, count)
+
+		expectedKeys := []uint64{60, 65, 85, 90, 95, 25, 80, 45, 50, 55, 70, 75}
+		for _, k := range expectedKeys {
+			_, ok := c.Get(k)
+			assert.Truef(t, ok, "expected key %d to be in cache", k)
+		}
 	})
 }

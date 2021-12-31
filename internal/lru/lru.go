@@ -8,6 +8,7 @@ import (
 type lruShard struct {
 	mu sync.RWMutex
 	totalBytes uint64
+	elemsCount int64
 	maxBytes   uint64
 	evictList *list.List
 	elems     map[uint64]*list.Element
@@ -55,10 +56,10 @@ func (ls *lruShard) add(key uint64, value []byte) ([]byte, bool) {
 		})
 
 		ls.totalBytes += uint64(len(value))
+		ls.elemsCount++
 		ls.elems[key] = elem
 		evicted := ls.totalBytes > ls.maxBytes
 
-		// Verify size not exceeded
 		if evicted {
 			return ls.removeOldestUnderLock()
 		}
@@ -75,16 +76,10 @@ func (ls *lruShard) purge() {
 		delete(ls.elems, k)
 	}
 
-	ls.evictList.Init()
-}
+	ls.totalBytes = 0
+	ls.elemsCount = 0
 
-func (ls *lruShard) removeOldestUnderLock() ([]byte, bool) {
-	elem := ls.evictList.Back()
-	if elem != nil {
-		return ls.removeElementUnderLock(elem), true
-	} else {
-		return nil, false
-	}
+	ls.evictList.Init()
 }
 
 func (ls *lruShard) remove(key uint64) ([]byte, bool) {
@@ -97,10 +92,30 @@ func (ls *lruShard) remove(key uint64) ([]byte, bool) {
 	return ls.removeElementUnderLock(elem), true
 }
 
+func (ls *lruShard) removeOldestUnderLock() ([]byte, bool) {
+	elem := ls.evictList.Back()
+	if elem != nil {
+		return ls.removeElementUnderLock(elem), true
+	} else {
+		return nil, false
+	}
+}
+
 func (ls *lruShard) removeElementUnderLock(elem *list.Element) []byte {
 	ls.evictList.Remove(elem)
 	kv := elem.Value.(*entry)
 	delete(ls.elems, kv.key)
 	ls.totalBytes -= uint64(len(kv.value))
+	ls.elemsCount--
 	return kv.value
+}
+
+func (ls *lruShard) keys() []uint64 {
+	ls.mu.RLock()
+	defer ls.mu.RUnlock()
+	keys := make([]uint64, 0, ls.elemsCount)
+	for k := range ls.elems {
+		keys = append(keys, k)
+	}
+	return keys
 }
