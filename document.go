@@ -89,6 +89,11 @@ func (d *Document) RawString() string {
 	return string(d.value)
 }
 
+// StringValue - is an alias to RawString
+func (d *Document) StringValue() string {
+	return d.RawString()
+}
+
 func createMapFromTags(tgs tags) (M, M) {
 	userTags := make(M)
 	metaTags := make(M)

@@ -29,8 +29,10 @@ func Open(path string, engineOptions ...EngineOptions) (*DB, Closer, error) {
 	defaultCfg := &Config{
 		DisableAutoVacuum:     false,
 		TruncateFileWhenOpen:  false,
-		PersistenceStrategy:   Sync,
+		PersistenceStrategy:   Async,
+		AsyncPersistenceIntervals: defaultPersistenceIntervals,
 		ValueLoadStrategy:     EagerLoad,
+		MaxCacheSize:          0,
 		AutoVacuumIntervals:   defaultAutovacuumIntervals,
 		AutoVacuumMinSize:     defaultAutoVacuumMinSize,
 		AutoVacuumOnlyOnClose: true,

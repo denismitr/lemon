@@ -61,7 +61,7 @@ func Test_TruncateExistingDatabase_LazyLoad(t *testing.T) {
 	t.Run("existing database should be truncated on open", func(t *testing.T) {
 		db, closer, err := lemon.Open(p, &lemon.Config{
 			TruncateFileWhenOpen: true,
-			ValueLoadStrategy: lemon.LazyLoad,
+			ValueLoadStrategy:    lemon.LazyLoad,
 		})
 
 		if err != nil {
@@ -127,8 +127,8 @@ func TestTx_FlushAll(t *testing.T) {
 			t.Logf("Now we insert a record, update a record, flush all and than rollback everyting")
 
 			assert.NoError(t, tx.Insert("foo:bar:baz", lemon.M{
-				"abc": true,
-				"bar": "baz",
+				"abc":   true,
+				"bar":   "baz",
 				"lemon": "database",
 			}))
 
@@ -174,7 +174,7 @@ func createDbForFlushAllTest(t *testing.T, name string) string {
 	defer closeDB(t, closer, fixture)
 
 	assert.FileExists(t, fixture)
-	seedPersonStructs(t, db,10_000, true, 3)
+	seedPersonStructs(t, db, 10_000, true, 3)
 
 	return fixture
 }
@@ -365,13 +365,12 @@ func (wts *writeTestSuite) Test_ReplaceInsertedDocs() {
 		}
 
 		if err := tx.InsertOrReplace("item:1145", lemon.M{
-			"foo1":   "0",
-			"baz": 123.879,
-			"999":   "bar",
+			"foo1": "0",
+			"baz":  123.879,
+			"999":  "bar",
 		}, lemon.WithTags().Bool("valid", true)); err != nil {
 			return err
 		}
-
 
 		return nil
 	}); txErr != nil {
@@ -463,9 +462,9 @@ func (wts *writeTestSuite) Test_RollbackReplaceOfInsertedDocs() {
 		}
 
 		if err := tx.InsertOrReplace("item:2233", lemon.M{
-			"foo1":   "0",
-			"baz": 123.879,
-			"999":   "bar",
+			"foo1": "0",
+			"baz":  123.879,
+			"999":  "bar",
 		}, lemon.WithTags().Bool("valid", true)); err != nil {
 			return err
 		}
@@ -580,6 +579,51 @@ func (rts *removeTestSuite) TestLemonDB_RemoveItemInTheMiddle() {
 	}
 }
 
+func TestBufferedWrites(t *testing.T) {
+	fixture := "./__fixtures__/buffered_writes_1.ldb"
+	valueSuffix := "this is just a value suffix to artificially increase payload size to store in LemonDB"
+	insertKeys := 300_000
+
+	db, closer, err := lemon.Open(fixture, &lemon.Config{
+		AutoVacuumOnlyOnClose: true,
+		ValueLoadStrategy: lemon.BufferedLoad,
+		MaxCacheSize:      lemon.KiloByte * 4,
+		PersistenceStrategy: lemon.Async,
+	})
+
+	require.NoError(t, err)
+	defer func() {
+		if err := closer(); err != nil {
+			assert.NoError(t, err)
+		}
+
+		if err := os.Remove(fixture); err != nil {
+			assert.NoError(t, err)
+		}
+	}()
+
+	for i := 0; i < insertKeys; i++ {
+		key := fmt.Sprintf("item:%d", i)
+		value := fmt.Sprintf("Value for key: %s with suffix: %s", key, valueSuffix)
+		if err := db.Insert(key, value); err != nil {
+			require.NoError(t, err)
+		}
+	}
+
+	assert.Equal(t, insertKeys, db.Count())
+
+	for i := 0; i < insertKeys; i++ {
+		key := fmt.Sprintf("item:%d", i)
+		value := fmt.Sprintf("Value for key: %s with suffix: %s", key, valueSuffix)
+		if doc, err := db.Get(key); err != nil {
+			require.NoError(t, err)
+		} else {
+			assert.Equal(t, key, doc.Key())
+			assert.Equal(t, value, doc.StringValue())
+		}
+	}
+}
+
 type seedTags struct {
 	hashes bool
 }
@@ -613,13 +657,13 @@ func seedUserData(t *testing.T, db *lemon.DB, n int, tags seedTags) {
 
 			if tags.hashes {
 				var metaSetter []lemon.MetaApplier
-				if i % 4 == 0 {
+				if i%4 == 0 {
 
 					metaSetter = append(metaSetter, lemon.WithTags().Map(lemon.M{
-						"foo": i % 2 == 0,
-						"bar": i % 2 != 0,
-						"baz": "abc123",
-						"foobar": fmt.Sprintf("country_%d", i % 2),
+						"foo":    i%2 == 0,
+						"bar":    i%2 != 0,
+						"baz":    "abc123",
+						"foobar": fmt.Sprintf("country_%d", i%2),
 					}))
 				}
 
@@ -644,23 +688,23 @@ func seedUserPets(t *testing.T, db *lemon.DB, firstUserId, lastUserId, pets int)
 	t.Helper()
 
 	type petData struct {
-		Name   string `json:"Name"`
-		Age    int    `json:"age"`
+		Name   string  `json:"Name"`
+		Age    int     `json:"age"`
 		Weight float64 `json:"weight"`
-		Kind   string `json:"kind"`
+		Kind   string  `json:"kind"`
 	}
 
 	if err := db.Update(context.Background(), func(tx *lemon.Tx) error {
 		for i := firstUserId; i <= lastUserId; i++ {
 			for j := 0; j < pets; j++ {
 				pet := petData{
-					Name: fmt.Sprintf("pet_%d", j + 1),
+					Name:   fmt.Sprintf("pet_%d", j+1),
 					Age:    j + 1,
-					Weight:  float64(j) + 1.5,
-					Kind:   fmt.Sprintf("animal kind %d", j + 1),
+					Weight: float64(j) + 1.5,
+					Kind:   fmt.Sprintf("animal kind %d", j+1),
 				}
 
-				if err := tx.Insert(fmt.Sprintf("user:%d:pet:%d", i, j + 1), pet); err != nil {
+				if err := tx.Insert(fmt.Sprintf("user:%d:pet:%d", i, j+1), pet); err != nil {
 					return err
 				}
 			}
@@ -764,3 +808,4 @@ func assertFileContentsEquals(t *testing.T, path string, expectedContents []byte
 		t.Log("contents match")
 	}
 }
+

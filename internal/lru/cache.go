@@ -20,6 +20,7 @@ type Cache struct {
 	onEvict  OnEvict
 }
 
+
 func NewCache(shards int, maxTotalBytes uint64) (*Cache, error) {
 	if maxTotalBytes <= 2 {
 		return nil, ErrIllegalCapacity

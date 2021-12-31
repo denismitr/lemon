@@ -89,14 +89,16 @@ func (ee *defaultEngine) asyncFlush(d time.Duration) {
 	for {
 		select {
 		case <-ee.stopCh:
-			t.Stop()
-			return
-		case <-t.C:
-			ee.Lock()
 			if err := ee.persistence.sync(); err != nil {
 				ee.lg.Error(err)
 			}
-			ee.Unlock()
+
+			t.Stop()
+			return
+		case <-t.C:
+			if err := ee.persistence.sync(); err != nil {
+				ee.lg.Error(err)
+			}
 		}
 	}
 }
@@ -191,6 +193,10 @@ func (ee *defaultEngine) Close(ctx context.Context) error {
 
 	close(ee.stopCh)
 
+	if ee.cfg.PersistenceStrategy == Async {
+		time.Sleep(ee.cfg.AsyncPersistenceIntervals)
+	}
+
 	if ee.persistence != nil {
 		return ee.persistence.close()
 	}
@@ -208,6 +214,7 @@ func (ee *defaultEngine) init() error {
 			ee.cfg.PersistenceStrategy,
 			ee.cfg.TruncateFileWhenOpen,
 			ee.cfg.ValueLoadStrategy,
+			ee.cfg.MaxCacheSize,
 			ee.lg,
 		)
 
@@ -277,7 +284,7 @@ func (ee *defaultEngine) RemoveEntryUnderLock(ent *entry) {
 	ee.tags.removeEntry(ent)
 	ee.pks.Delete(ent)
 
-	if ee.dbFile != InMemory {
+	if ee.dbFile != InMemory{
 		ee.persistence.removeValueUnderLock(ent.pos)
 	}
 }

@@ -11,10 +11,10 @@ import (
 )
 
 func Test_resolveRespArrayFromLine(t *testing.T) {
-	tt := []struct{
-		in string
+	tt := []struct {
+		in            string
 		bytesExpected int
-		segments int
+		segments      int
 	}{
 		{in: "*5\r\n$3\r\nset\r\n$6\r\nfoo123\r\n$10\r\n+btg(bar,1)\r\n", bytesExpected: 4, segments: 5},
 		{in: "*3\r\n$3\r\ndel\r\n$6foo123", bytesExpected: 4, segments: 3},
@@ -38,7 +38,7 @@ func Test_resolveRespArrayFromLine(t *testing.T) {
 }
 
 type commandsMock struct {
-	commands []deserializable
+	commands    []deserializable
 	delCommands int
 	setCommands int
 }
@@ -58,7 +58,7 @@ func (cm *commandsMock) acceptWithSuccess(d deserializable) error {
 }
 
 func Test_writeRespArray(t *testing.T) {
-	tt := []struct{
+	tt := []struct {
 		segments int
 		expected string
 	}{
@@ -77,8 +77,8 @@ func Test_writeRespArray(t *testing.T) {
 }
 
 func Test_writeRespBlob(t *testing.T) {
-	tt := []struct{
-		in []byte
+	tt := []struct {
+		in       []byte
 		expected string
 	}{
 		{in: []byte(`{"foo":"bar","baz":3456,"one":nil}`), expected: "$34\r\n" + `{"foo":"bar","baz":3456,"one":nil}` + "\r\n"},
@@ -106,7 +106,7 @@ func Test_parser(t *testing.T) {
 			"*3\r\n+set\r\n$14\r\nproducts/items\r\n$15\r\n" + `[1,4,6,7,8,985]` + "\r\n",
 		}, "")
 
-		c, _ := lru.NewCache(20, gb)
+		c, _ := lru.NewCache(20, GigaByte)
 		r := bufio.NewReader(strings.NewReader(cmds))
 		n, err := prs.parse(r, c, mock.acceptWithSuccess)
 
@@ -157,7 +157,7 @@ func Test_parser(t *testing.T) {
 			"*3\r\n+set\r\n$14\r\nproducts/items\r\n$15\r\n" + `[1,4,6,7,8,985]` + "\r\n",
 		}, "")
 
-		c, _ := lru.NewCache(valueShards, gb)
+		c, _ := lru.NewCache(valueShards, GigaByte)
 		r := bufio.NewReader(strings.NewReader(cmds))
 		n, err := prs.parse(r, c, mock.acceptWithSuccess)
 
@@ -179,7 +179,7 @@ func Test_parser(t *testing.T) {
 
 		require.NotNil(t, cmd1.tags)
 		require.Len(t, cmd1.tags, 1)
-		require.Equal(t, M{"bar":"one_two_three"}, cmd1.tags.asMap())
+		require.Equal(t, M{"bar": "one_two_three"}, cmd1.tags.asMap())
 
 		cmd2, ok := mock.commands[1].(*entry)
 		require.True(t, ok)
@@ -189,7 +189,7 @@ func Test_parser(t *testing.T) {
 		assert.True(t, ok)
 		require.NotNil(t, cmd2.tags)
 		require.Len(t, cmd2.tags, 1)
-		require.Equal(t, M{"foo":true}, cmd2.tags.asMap())
+		require.Equal(t, M{"foo": true}, cmd2.tags.asMap())
 
 		cmd3, ok := mock.commands[2].(*deleteCmd)
 		require.True(t, ok)

@@ -1,6 +1,11 @@
 package lemon
 
-import "time"
+import (
+	"github.com/pkg/errors"
+	"time"
+)
+
+var ErrInvalidConfiguration = errors.New("invalid configuration")
 
 const defaultAutoVacuumMinSize uint64 = 1000
 
@@ -17,6 +22,7 @@ type Config struct {
 	AutoVacuumMinSize         uint64
 	Log                       bool
 	AutoVacuumIntervals       time.Duration
+	MaxCacheSize              uint64
 }
 
 type EngineOptions interface {
@@ -25,13 +31,23 @@ type EngineOptions interface {
 
 func (cfg *Config) applyTo(ee executionEngine) error {
 	if cfg.PersistenceStrategy == "" {
-		cfg.PersistenceStrategy = Sync
-	} else if cfg.PersistenceStrategy == Async && cfg.AsyncPersistenceIntervals == 0 {
+		cfg.PersistenceStrategy = Async
+	}
+
+	if cfg.PersistenceStrategy == Async && cfg.AsyncPersistenceIntervals == 0 {
 		cfg.AsyncPersistenceIntervals = defaultPersistenceIntervals
 	}
 
-	if cfg.ValueLoadStrategy != "" {
+	if cfg.ValueLoadStrategy == "" {
 		cfg.ValueLoadStrategy = EagerLoad
+	}
+
+	if cfg.ValueLoadStrategy == LazyLoad && cfg.MaxCacheSize > 0 {
+		return errors.Wrap(ErrInvalidConfiguration, "MaxCacheSize cannot be combined with EagerLoad")
+	}
+
+	if cfg.ValueLoadStrategy == BufferedLoad && cfg.MaxCacheSize <= 0 {
+		return errors.Wrap(ErrInvalidConfiguration, "MaxCacheSize must be set explicitly for BufferedLoad")
 	}
 
 	if cfg.AutoVacuumIntervals == 0 {

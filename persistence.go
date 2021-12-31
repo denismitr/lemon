@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"github.com/denismitr/glog"
 	"github.com/denismitr/lemon/internal/lru"
+	"github.com/pbnjay/memory"
 	"github.com/pkg/errors"
 	"io"
 	"os"
@@ -44,13 +45,16 @@ const (
 )
 
 const (
-	LazyLoad  ValueLoadStrategy = "lazy"
-	EagerLoad ValueLoadStrategy = "eager"
+	LazyLoad     ValueLoadStrategy = "lazy"
+	EagerLoad    ValueLoadStrategy = "eager"
+	BufferedLoad ValueLoadStrategy = "buffered"
 )
 
 const (
-	valueShards = 20
-	gb uint64 = 1 << 30
+	valueShards        = 20
+	KiloByte    uint64 = 1 << (10 * 1)
+	MegaByte    uint64 = 1 << (10 * 2)
+	GigaByte    uint64 = 1 << (10 * 3)
 )
 
 type cache interface {
@@ -76,6 +80,7 @@ func newPersistence(
 	strategy PersistenceStrategy,
 	truncateFileOnOpen bool,
 	vls ValueLoadStrategy,
+	maxCacheSize uint64,
 	lg glog.Logger,
 ) (*persistence, error) {
 	flags := os.O_CREATE | os.O_RDWR
@@ -88,26 +93,44 @@ func newPersistence(
 		return nil, err
 	}
 
-	c, err := lru.NewCache(valueShards, gb * 3)
-	if err != nil {
-		return nil, err
-	}
-
 	p := &persistence{
 		f:        f,
 		vls:      vls,
 		strategy: strategy,
 		lg:       lg,
-		cache:    c,
+	}
+
+	if err := p.initializeCache(valueShards, maxCacheSize); err != nil {
+		return nil, err
 	}
 
 	return p, nil
 }
 
+func (p *persistence) initializeCache(shards, maxCacheSize uint64) error {
+	if p.vls == LazyLoad {
+		p.cache = lru.NullCache{}
+		return nil
+	}
+
+	if p.vls == EagerLoad {
+		maxCacheSize = memory.FreeMemory()
+	}
+
+	c, err := lru.NewCache(valueShards, maxCacheSize)
+	if err != nil {
+		return err
+	}
+
+	p.cache = c
+
+	return nil
+}
+
 func (p *persistence) close() error {
 	p.mu.Lock()
 	defer func() {
-		if err :=  p.f.Close(); err != nil {
+		if err := p.f.Close(); err != nil {
 			p.lg.Error(err)
 		}
 
@@ -285,6 +308,10 @@ func (p *persistence) writeAndSwap(rs *respSerializer) error {
 }
 
 func (p *persistence) setValueByPosition(pos position, v []byte) error {
+	if p.vls == LazyLoad {
+		return nil
+	}
+
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.cache.Add(pos.offset, v)
@@ -292,12 +319,14 @@ func (p *persistence) setValueByPosition(pos position, v []byte) error {
 }
 
 func (p *persistence) loadValueByPosition(pos position) ([]byte, error) {
-	p.mu.RLock()
-	if v, ok := p.cache.Get(pos.offset); ok {
+	if p.vls != LazyLoad {
+		p.mu.RLock()
+		if v, ok := p.cache.Get(pos.offset); ok {
+			p.mu.RUnlock()
+			return v, nil
+		}
 		p.mu.RUnlock()
-		return v, nil
 	}
-	p.mu.RUnlock()
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -328,6 +357,10 @@ func (p *persistence) loadValueByPosition(pos position) ([]byte, error) {
 }
 
 func (p *persistence) removeValueUnderLock(pos position) {
+	if p.vls == LazyLoad {
+		return
+	}
+
 	p.cache.Remove(pos.offset)
 }
 

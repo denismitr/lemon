@@ -157,6 +157,7 @@ func (p *respParser) parseSetCommand(
 
 	pos := position{offset: uint64(blobOffset), size: uint64(len(value))}
 	ent := newEntryWithTags(string(key), pos, nil)
+
 	if p.vls != LazyLoad {
 		cache.Add(pos.offset, value)
 	}
