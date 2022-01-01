@@ -23,6 +23,7 @@ type Config struct {
 	Log                       bool
 	AutoVacuumIntervals       time.Duration
 	MaxCacheSize              uint64
+	OnCacheEvict              OnCacheEvict
 }
 
 type EngineOptions interface {

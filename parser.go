@@ -176,6 +176,7 @@ func (p *respParser) parseSetCommand(
 		tagger(ent.tags)
 	}
 
+	// todo: send ent to output channel
 	return cb(ent)
 }
 

@@ -49,7 +49,7 @@ func (c *Cache) OnEvict(fn OnEvict) {
 }
 
 // Add value to cache under key and returns true if eviction happened
-func (c *Cache) Add(key uint64, value []byte) {
+func (c *Cache) Add(key uint64, value []byte) bool {
 	shard := c.getShard(key)
 	v, evicted := shard.add(key, value)
 	if evicted && c.onEvict != nil {
@@ -58,6 +58,8 @@ func (c *Cache) Add(key uint64, value []byte) {
 	if !evicted {
 		atomic.AddInt64(&c.count, 1)
 	}
+
+	return evicted
 }
 
 func (c *Cache) Get(key uint64) ([]byte, bool) {

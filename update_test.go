@@ -579,16 +579,22 @@ func (rts *removeTestSuite) TestLemonDB_RemoveItemInTheMiddle() {
 	}
 }
 
-func TestBufferedWrites(t *testing.T) {
+func Test_MassiveBufferedWrites(t *testing.T) {
 	fixture := "./__fixtures__/buffered_writes_1.ldb"
 	valueSuffix := "this is just a value suffix to artificially increase payload size to store in LemonDB"
 	insertKeys := 300_000
 
+	evictedKeys := 0
+	onEvict := func(k string) {
+		evictedKeys++
+	}
+
 	db, closer, err := lemon.Open(fixture, &lemon.Config{
 		AutoVacuumOnlyOnClose: true,
 		ValueLoadStrategy: lemon.BufferedLoad,
-		MaxCacheSize:      lemon.KiloByte * 4,
+		MaxCacheSize:      lemon.MegaByte * 20,
 		PersistenceStrategy: lemon.Async,
+		OnCacheEvict: onEvict,
 	})
 
 	require.NoError(t, err)
@@ -611,6 +617,7 @@ func TestBufferedWrites(t *testing.T) {
 	}
 
 	assert.Equal(t, insertKeys, db.Count())
+	assert.Equal(t, 131_348, evictedKeys)
 
 	for i := 0; i < insertKeys; i++ {
 		key := fmt.Sprintf("item:%d", i)
@@ -622,6 +629,37 @@ func TestBufferedWrites(t *testing.T) {
 			assert.Equal(t, value, doc.StringValue())
 		}
 	}
+
+	for i := 0; i < insertKeys; i++ {
+		key := fmt.Sprintf("item:%d", i)
+		value := fmt.Sprintf("Value for key: %s with suffix: %s", key, valueSuffix)
+		if err := db.InsertOrReplace(key, value); err != nil {
+			require.NoError(t, err)
+		}
+
+		if doc, err := db.Get(key); err != nil {
+			require.NoError(t, err)
+		} else {
+			assert.Equal(t, key, doc.Key())
+			assert.Equal(t, value, doc.StringValue())
+		}
+	}
+
+	assert.Equal(t, insertKeys, db.Count())
+	assert.Equal(t, 431_341, evictedKeys)
+
+	for i := 0; i < insertKeys; i++ {
+		key := fmt.Sprintf("item:%d", i)
+		value := fmt.Sprintf("Value for key: %s with suffix: %s", key, valueSuffix)
+		if doc, err := db.Get(key); err != nil {
+			require.NoError(t, err)
+		} else {
+			assert.Equal(t, key, doc.Key())
+			assert.Equal(t, value, doc.StringValue())
+		}
+	}
+
+	assert.Equal(t, 431_341, evictedKeys)
 }
 
 type seedTags struct {

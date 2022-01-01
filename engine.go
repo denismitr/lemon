@@ -138,6 +138,7 @@ func (ee *defaultEngine) runVacuumUnderLock(ctx context.Context) error {
 	rs := ee.persistence.newSerializer()
 	rs.reset()
 
+	var pErr error
 	ee.pks.Ascend(nil, func(i interface{}) bool {
 		if err := ctx.Err(); err != nil {
 			return false
@@ -145,19 +146,25 @@ func (ee *defaultEngine) runVacuumUnderLock(ctx context.Context) error {
 
 		ent := i.(*entry)
 		if ent.value == nil && ent.pos.offset != 0 {
-			v, err := ee.persistence.loadValueByPosition(ent.pos)
-			if err != nil {
+			if err := ee.persistence.loadValueToEntry(ent); err != nil {
 				ee.lg.Error(err)
+				pErr = err
+				return false
 			}
-			ent.value = v
 		}
 
 		if err := ent.serialize(rs); err != nil {
 			ee.lg.Error(err)
+			pErr = err
+			return false
 		}
 
 		return true
 	})
+
+	if pErr != nil {
+		return errors.Wrap(pErr, "could not finish vacuum")
+	}
 
 	if err := ctx.Err(); err != nil {
 		return errors.Wrap(err, "could not finish vacuum")
@@ -215,6 +222,7 @@ func (ee *defaultEngine) init() error {
 			ee.cfg.TruncateFileWhenOpen,
 			ee.cfg.ValueLoadStrategy,
 			ee.cfg.MaxCacheSize,
+			ee.cfg.OnCacheEvict,
 			ee.lg,
 		)
 
@@ -266,11 +274,9 @@ func (ee *defaultEngine) LoadEntryValue(ent *entry) error {
 	}
 
 	if ent.pos.offset != 0 {
-		v, err := ee.persistence.loadValueByPosition(ent.pos)
-		if err != nil {
+		if err := ee.persistence.loadValueToEntry(ent); err != nil {
 			return err
 		}
-		ent.value = v
 	}
 
 	return nil

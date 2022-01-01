@@ -227,7 +227,8 @@ func (x *Tx) InsertOrReplace(key string, data interface{}, metaAppliers ...MetaA
 
 		x.updated = append(x.updated, newEnt)
 		if existingEnt.committed {
-			x.persistCommands = append(x.persistCommands, &deleteCmd{key: existingEnt.key})
+			delCmd := &deleteCmd{key: existingEnt.key, pos: existingEnt.pos}
+			x.persistCommands = append(x.persistCommands, delCmd)
 			x.replaced = append(x.replaced, existingEnt)
 		}
 	} else {
@@ -421,7 +422,7 @@ func (x *Tx) Remove(keys ...string) error {
 		}
 
 		x.replaced = append(x.replaced, found)
-		x.persistCommands = append(x.persistCommands, &deleteCmd{found.key})
+		x.persistCommands = append(x.persistCommands, &deleteCmd{key: found.key, pos: found.pos})
 	}
 
 	return nil

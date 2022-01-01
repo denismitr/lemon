@@ -15,9 +15,9 @@ type position struct {
 }
 
 type entry struct {
-	key   PK
-	pos   position
-	value []byte
+	key       PK
+	pos       position
+	value     []byte
 	tags      tags
 	committed bool
 }
@@ -38,8 +38,8 @@ func (ent *entry) deserialize(e executionEngine) error {
 
 func newEntryWithTags(key string, pos position, tags tags) *entry {
 	return &entry{
-		key: newPK(key),
-		pos: pos,
+		key:  newPK(key),
+		pos:  pos,
 		tags: tags,
 	}
 }
@@ -66,6 +66,7 @@ func (ent *entry) tagCount() int {
 
 type deleteCmd struct {
 	key PK
+	pos position
 }
 
 func (cmd *deleteCmd) serialize(rs *respSerializer) error {

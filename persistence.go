@@ -58,10 +58,12 @@ const (
 )
 
 type cache interface {
-	Add(key uint64, value []byte)
+	Add(key uint64, value []byte) bool
 	Get(key uint64) ([]byte, bool)
 	Remove(key uint64)
 }
+
+type OnCacheEvict func(k string)
 
 type persistence struct {
 	mu       sync.RWMutex
@@ -72,6 +74,7 @@ type persistence struct {
 	flushes  int
 	cursor   int
 	cache    cache
+	onEvict  OnCacheEvict
 	lg       glog.Logger
 }
 
@@ -81,6 +84,7 @@ func newPersistence(
 	truncateFileOnOpen bool,
 	vls ValueLoadStrategy,
 	maxCacheSize uint64,
+	onCacheEvict OnCacheEvict,
 	lg glog.Logger,
 ) (*persistence, error) {
 	flags := os.O_CREATE | os.O_RDWR
@@ -98,6 +102,7 @@ func newPersistence(
 		vls:      vls,
 		strategy: strategy,
 		lg:       lg,
+		onEvict:  onCacheEvict,
 	}
 
 	if err := p.initializeCache(valueShards, maxCacheSize); err != nil {
@@ -190,13 +195,41 @@ func (p *persistence) save(commands []serializable) error {
 
 	rs := respSerializer{pos: p.cursor}
 
+	// in case we have inserts or updates we need to collect
+	// these items to update cache
+	// in case of deletes cache must be cleaned
+	changedEntries := make([]*entry, 0, len(commands))
+	deletes := make([]*deleteCmd, 0, len(commands))
 	for _, cmd := range commands {
 		if err := cmd.serialize(&rs); err != nil {
 			return err
 		}
+
+		if ent, ok := cmd.(*entry); ok {
+			changedEntries = append(changedEntries, ent)
+		}
+
+		if del, ok := cmd.(*deleteCmd); ok {
+			deletes = append(deletes, del)
+		}
 	}
 
-	return p.writeUnderLock(&rs.buf)
+	if err := p.writeUnderLock(&rs.buf); err != nil {
+		return err
+	}
+
+	// remove deleted entries data from cache
+	for i := range deletes {
+		p.removeFromCache(deletes[i])
+	}
+
+	// if write was a success we need to update cache
+	// otherwise reads can get old values and lru can be inadequate
+	for i := range changedEntries {
+		p.cacheEntryValue(changedEntries[i])
+	}
+
+	return nil
 }
 
 func (p *persistence) writeUnderLock(buf *bytes.Buffer) error {
@@ -307,53 +340,54 @@ func (p *persistence) writeAndSwap(rs *respSerializer) error {
 	return nil
 }
 
-func (p *persistence) setValueByPosition(pos position, v []byte) error {
-	if p.vls == LazyLoad {
-		return nil
+func (p *persistence) cacheEntryValue(ent *entry) {
+	if p.vls == LazyLoad || ent.value == nil || ent.pos.offset <= 0 {
+		return
 	}
 
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.cache.Add(pos.offset, v)
-	return nil
+	if evicted := p.cache.Add(ent.pos.offset, ent.value); evicted && p.onEvict != nil {
+		p.onEvict(ent.key.String())
+	}
 }
 
-func (p *persistence) loadValueByPosition(pos position) ([]byte, error) {
+func (p *persistence) loadValueToEntry(ent *entry) error {
 	if p.vls != LazyLoad {
-		p.mu.RLock()
-		if v, ok := p.cache.Get(pos.offset); ok {
-			p.mu.RUnlock()
-			return v, nil
+		if v, ok := p.cache.Get(ent.pos.offset); ok {
+			ent.value = v
+			return nil
 		}
-		p.mu.RUnlock()
 	}
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if _, err := p.f.Seek(int64(pos.offset), 0); err != nil {
-		return nil, errors.Wrapf(
+	if _, err := p.f.Seek(int64(ent.pos.offset), 0); err != nil {
+		return errors.Wrapf(
 			ErrStorageFailed,
 			"could not seek to offset %d in file %s: %s",
-			pos.offset, err, err.Error(),
+			ent.pos.offset, err, err.Error(),
 		)
 	}
 
 	r := bufio.NewReader(p.f)
-	blob := make([]byte, pos.size)
+	blob := make([]byte, ent.pos.size)
 	if _, err := io.ReadFull(r, blob); err != nil {
-		return nil, errors.Wrapf(
+		return errors.Wrapf(
 			ErrStorageFailed,
 			"could not read blob at offset %d in file %s: %s",
-			pos.offset, err, err.Error(),
+			ent.pos.offset, err, err.Error(),
 		)
 	}
 
-	if p.vls != LazyLoad {
-		p.cache.Add(pos.offset, blob)
+	if p.vls != LazyLoad && ent.pos.offset > 0 {
+		if evicted := p.cache.Add(ent.pos.offset, blob); evicted && p.onEvict != nil {
+			p.onEvict(ent.key.String())
+		}
 	}
 
-	return blob, nil
+	ent.value = blob
+
+	return nil
 }
 
 func (p *persistence) removeValueUnderLock(pos position) {
@@ -366,6 +400,15 @@ func (p *persistence) removeValueUnderLock(pos position) {
 
 func (p *persistence) newSerializer() *respSerializer {
 	return &respSerializer{pos: p.cursor}
+}
+
+func (p *persistence) removeFromCache(cmd *deleteCmd) {
+	if cmd.pos.offset <= 0 {
+		p.lg.Noticef("attempt to remove invalid offset %d from cache", cmd.pos.offset)
+		return
+	}
+
+	p.cache.Remove(cmd.pos.offset)
 }
 
 func resolveTagFnTypeAndArguments(expression string) (prefix string, args []string, err error) {
