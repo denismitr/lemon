@@ -158,8 +158,10 @@ func (p *respParser) parseSetCommand(
 	pos := position{offset: uint64(blobOffset), size: uint64(len(value))}
 	ent := newEntryWithTags(string(key), pos, nil)
 
-	if p.vls != LazyLoad {
+	if p.vls == BufferedLoad {
 		cache.Add(pos.offset, value)
+	} else if p.vls == EagerLoad {
+		ent.value = value
 	}
 
 	// subtracting command, key and value

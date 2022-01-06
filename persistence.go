@@ -17,6 +17,7 @@ var ErrDbFileWriteFailed = errors.New("database write failed")
 var ErrSourceFileReadFailed = errors.New("source file read failed")
 var ErrCommandInvalid = errors.New("command invalid")
 var ErrStorageFailed = errors.New("storage error")
+var ErrIllegalStorageCacheCall = errors.New("illegal storage cache call")
 
 type ValueLoadStrategy string
 type PersistenceStrategy string
@@ -198,22 +199,29 @@ func (p *persistence) save(commands []serializable) error {
 	// in case we have inserts or updates we need to collect
 	// these items to update cache
 	// in case of deletes cache must be cleaned
-	changedEntries := make([]*entry, 0, len(commands))
-	deletes := make([]*deleteCmd, 0, len(commands))
+	var changes []*entry
+	var deletes []*deleteCmd
+
 	for _, cmd := range commands {
 		if err := cmd.serialize(&rs); err != nil {
 			return err
 		}
 
-		if ent, ok := cmd.(*entry); ok {
-			changedEntries = append(changedEntries, ent)
+		// values need to be put in cache for BufferedLoad strategy
+		// but also ent.value has to be set to null for lazy load
+		// for EagerLoad value is simply stored in ent.value and
+		// after persist to file we are done
+		if ent, ok := cmd.(*entry); ok && p.vls != EagerLoad {
+			changes = append(changes, ent)
 		}
 
-		if del, ok := cmd.(*deleteCmd); ok {
+		// values are actually stored in cache only for BufferedLoad strategy
+		if del, ok := cmd.(*deleteCmd); ok && p.vls == BufferedLoad {
 			deletes = append(deletes, del)
 		}
 	}
 
+	// write to disk
 	if err := p.writeUnderLock(&rs.buf); err != nil {
 		return err
 	}
@@ -225,8 +233,10 @@ func (p *persistence) save(commands []serializable) error {
 
 	// if write was a success we need to update cache
 	// otherwise reads can get old values and lru can be inadequate
-	for i := range changedEntries {
-		p.cacheEntryValue(changedEntries[i])
+	// for LazyLoad we need to set ent.value = nil
+	for i := range changes {
+		p.cacheEntryValue(changes[i])
+		changes[i].value = nil
 	}
 
 	return nil
@@ -341,17 +351,25 @@ func (p *persistence) writeAndSwap(rs *respSerializer) error {
 }
 
 func (p *persistence) cacheEntryValue(ent *entry) {
-	if p.vls == LazyLoad || ent.value == nil || ent.pos.offset <= 0 {
+	if p.vls != BufferedLoad || ent.value == nil || ent.pos.offset <= 0 {
 		return
 	}
 
 	if evicted := p.cache.Add(ent.pos.offset, ent.value); evicted && p.onEvict != nil {
 		p.onEvict(ent.key.String())
 	}
+
+	// value is now in cache no need to keep it
+	// in the entry
+	ent.value = nil
 }
 
 func (p *persistence) loadValueToEntry(ent *entry) error {
-	if p.vls != LazyLoad {
+	if p.vls == EagerLoad {
+		return errors.Wrapf(ErrIllegalStorageCacheCall, "for key %s", ent.key.String())
+	}
+
+	if p.vls == BufferedLoad {
 		if v, ok := p.cache.Get(ent.pos.offset); ok {
 			ent.value = v
 			return nil

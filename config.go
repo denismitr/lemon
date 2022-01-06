@@ -13,17 +13,17 @@ var defaultAutovacuumIntervals = 10 * time.Minute
 var defaultPersistenceIntervals = 1 * time.Second
 
 type Config struct {
-	PersistenceStrategy       PersistenceStrategy
-	ValueLoadStrategy         ValueLoadStrategy
-	TruncateFileWhenOpen      bool
-	AsyncPersistenceIntervals time.Duration
-	DisableAutoVacuum         bool
-	AutoVacuumOnlyOnClose     bool
-	AutoVacuumMinSize         uint64
-	Log                       bool
-	AutoVacuumIntervals       time.Duration
-	MaxCacheSize              uint64
-	OnCacheEvict              OnCacheEvict
+	PersistenceStrategy          PersistenceStrategy
+	ValueLoadStrategy            ValueLoadStrategy
+	TruncateFileWhenOpen         bool
+	AsyncPersistenceIntervals    time.Duration
+	DisableAutoVacuum            bool
+	AutoVacuumOnlyOnCloseOrFlush bool
+	AutoVacuumMinSize            uint64
+	Log                          bool
+	AutoVacuumIntervals          time.Duration
+	MaxCacheSize                 uint64
+	OnCacheEvict                 OnCacheEvict
 }
 
 type EngineOptions interface {

@@ -145,7 +145,8 @@ func (ee *defaultEngine) runVacuumUnderLock(ctx context.Context) error {
 		}
 
 		ent := i.(*entry)
-		if ent.value == nil && ent.pos.offset != 0 {
+		// ent.value must always contain value only on EagerLoad
+		if ee.cfg.ValueLoadStrategy != EagerLoad && ent.value == nil && ent.pos.offset != 0 {
 			if err := ee.persistence.loadValueToEntry(ent); err != nil {
 				ee.lg.Error(err)
 				pErr = err
@@ -242,7 +243,7 @@ func (ee *defaultEngine) init() error {
 			go ee.asyncFlush(ee.cfg.AsyncPersistenceIntervals)
 		}
 
-		if !ee.cfg.DisableAutoVacuum && !ee.cfg.AutoVacuumOnlyOnClose {
+		if !ee.cfg.DisableAutoVacuum && !ee.cfg.AutoVacuumOnlyOnCloseOrFlush {
 			go ee.scheduleVacuum(ee.cfg.AutoVacuumIntervals)
 		}
 	} else {
@@ -257,7 +258,8 @@ func (ee *defaultEngine) Persist(commands []serializable) error {
 		return ErrDatabaseAlreadyClosed
 	}
 
-	if ee.persistence == nil {
+	// in case we are using InMemory
+	if ee.cfg.PersistenceStrategy == InMemory {
 		return nil
 	}
 
@@ -271,6 +273,10 @@ func (ee *defaultEngine) Persist(commands []serializable) error {
 func (ee *defaultEngine) LoadEntryValue(ent *entry) error {
 	if ee.closed {
 		return ErrDatabaseAlreadyClosed
+	}
+
+	if ee.cfg.PersistenceStrategy == InMemory || ee.cfg.ValueLoadStrategy == EagerLoad {
+		return nil
 	}
 
 	if ent.pos.offset != 0 {
@@ -290,7 +296,7 @@ func (ee *defaultEngine) RemoveEntryUnderLock(ent *entry) {
 	ee.tags.removeEntry(ent)
 	ee.pks.Delete(ent)
 
-	if ee.dbFile != InMemory{
+	if ee.dbFile != InMemory {
 		ee.persistence.removeValueUnderLock(ent.pos)
 	}
 }
@@ -765,6 +771,12 @@ func (ee *defaultEngine) FlushAll(ff func(ent *entry)) error {
 
 	ee.pks = btree.NewNonConcurrent(byPrimaryKeys)
 	ee.tags = newTagIndex()
+
+	if ee.cfg.AutoVacuumOnlyOnCloseOrFlush {
+		if err := ee.runVacuumUnderLock(context.TODO()); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }

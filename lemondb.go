@@ -27,16 +27,16 @@ func NullCloser() error { return nil }
 
 func Open(path string, engineOptions ...EngineOptions) (*DB, Closer, error) {
 	defaultCfg := &Config{
-		DisableAutoVacuum:     false,
-		TruncateFileWhenOpen:  false,
-		PersistenceStrategy:   Async,
-		AsyncPersistenceIntervals: defaultPersistenceIntervals,
-		ValueLoadStrategy:     EagerLoad,
-		MaxCacheSize:          0,
-		AutoVacuumIntervals:   defaultAutovacuumIntervals,
-		AutoVacuumMinSize:     defaultAutoVacuumMinSize,
-		AutoVacuumOnlyOnClose: true,
-		Log:                   false,
+		DisableAutoVacuum:            false,
+		TruncateFileWhenOpen:         false,
+		PersistenceStrategy:          Async,
+		AsyncPersistenceIntervals:    defaultPersistenceIntervals,
+		ValueLoadStrategy:            EagerLoad,
+		MaxCacheSize:                 0,
+		AutoVacuumIntervals:          defaultAutovacuumIntervals,
+		AutoVacuumMinSize:            defaultAutoVacuumMinSize,
+		AutoVacuumOnlyOnCloseOrFlush: true,
+		Log:                          false,
 	}
 
 	if path == InMemory {

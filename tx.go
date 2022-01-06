@@ -121,7 +121,7 @@ func (x *Tx) Get(key string) (*Document, error) {
 		return nil, err
 	}
 
-	if ent.value == nil {
+	if ent.value == nil { // todo: check value strategy
 		if err := x.ee.LoadEntryValue(ent); err != nil {
 			return nil, err
 		}

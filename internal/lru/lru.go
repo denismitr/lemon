@@ -50,24 +50,26 @@ func (ls *lruShard) add(key uint64, value []byte) ([]byte, bool) {
 		ls.totalBytes -= uint64(len(elem.Value.(*entry).value))
 		elem.Value.(*entry).value = value
 		ls.totalBytes += uint64(len(value))
-	} else {
-		// add new item
-		elem = ls.evictList.PushFront(&entry{
-			key:   key,
-			value: value,
-		})
-
-		ls.totalBytes += uint64(len(value))
-		ls.elemsCount++
-		ls.elems[key] = elem
-		mustEvict := ls.totalBytes > ls.maxBytes
-
-		if mustEvict {
-			return ls.removeOldestUnderLock()
-		}
+		
+		return nil, false
 	}
 
-	return nil, false
+	// add new item
+	elem := ls.evictList.PushFront(&entry{
+		key:   key,
+		value: value,
+	})
+
+	ls.totalBytes += uint64(len(value))
+	ls.elemsCount++
+	ls.elems[key] = elem
+	mustEvict := ls.totalBytes > ls.maxBytes
+
+	if mustEvict {
+		return ls.removeOldestUnderLock()
+	} else {
+		return nil, false
+	}
 }
 
 func (ls *lruShard) purge() {

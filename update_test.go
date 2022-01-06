@@ -590,11 +590,11 @@ func Test_MassiveBufferedWrites(t *testing.T) {
 	}
 
 	db, closer, err := lemon.Open(fixture, &lemon.Config{
-		AutoVacuumOnlyOnClose: true,
-		ValueLoadStrategy: lemon.BufferedLoad,
-		MaxCacheSize:      lemon.MegaByte * 20,
-		PersistenceStrategy: lemon.Async,
-		OnCacheEvict: onEvict,
+		AutoVacuumOnlyOnCloseOrFlush: true,
+		ValueLoadStrategy:            lemon.BufferedLoad,
+		MaxCacheSize:                 lemon.MegaByte * 20,
+		PersistenceStrategy:          lemon.Async,
+		OnCacheEvict:                 onEvict,
 	})
 
 	require.NoError(t, err)
@@ -660,6 +660,130 @@ func Test_MassiveBufferedWrites(t *testing.T) {
 	}
 
 	assert.Equal(t, 431_341, evictedKeys)
+}
+
+func Test_MassiveLazyReadWrites(t *testing.T) {
+	fixture := "./__fixtures__/lazy_read_writes_1.ldb"
+	valueSuffix := "this is just a value suffix to artificially increase payload size to store in LemonDB"
+	const insertKeys = 30_000
+	const additionalCheck = 45
+	const checksAfterFlush = 100
+
+	db, closer, err := lemon.Open(fixture, &lemon.Config{
+		AutoVacuumOnlyOnCloseOrFlush: true,
+		ValueLoadStrategy:            lemon.LazyLoad,
+		PersistenceStrategy:          lemon.Async,
+	})
+
+	require.NoError(t, err)
+	defer func() {
+		if err := closer(); err != nil {
+			assert.NoError(t, err)
+		}
+
+		if err := os.Remove(fixture); err != nil {
+			assert.NoError(t, err)
+		}
+	}()
+
+	for i := 0; i < insertKeys; i++ {
+		key := fmt.Sprintf("item:%d", i)
+		value := fmt.Sprintf("Value for key: %s with suffix: %s", key, valueSuffix)
+		if err := db.Insert(key, value); err != nil {
+			require.NoError(t, err)
+		}
+	}
+
+	assert.Equal(t, insertKeys, db.Count())
+
+	for i := 0; i < insertKeys; i++ {
+		key := fmt.Sprintf("item:%d", i)
+		value := fmt.Sprintf("Value for key: %s with suffix: %s", key, valueSuffix)
+		if doc, err := db.Get(key); err != nil {
+			require.NoError(t, err)
+		} else {
+			assert.Equal(t, key, doc.Key())
+			assert.Equal(t, value, doc.StringValue())
+		}
+	}
+
+	for i := 0; i < insertKeys; i++ {
+		key := fmt.Sprintf("item:%d", i)
+		value := fmt.Sprintf("Value for key: %s modified, with suffix: %s", key, valueSuffix)
+		if err := db.InsertOrReplace(key, value); err != nil {
+			require.NoError(t, err)
+		}
+
+		if doc, err := db.Get(key); err != nil {
+			require.NoError(t, err)
+		} else {
+			assert.Equal(t, key, doc.Key())
+			assert.Equal(t, value, doc.StringValue())
+		}
+	}
+
+	assert.Equal(t, insertKeys, db.Count())
+
+	for i := 0; i < insertKeys; i++ {
+		key := fmt.Sprintf("item:%d", i)
+		value := fmt.Sprintf("Value for key: %s modified, with suffix: %s", key, valueSuffix)
+		if doc, err := db.Get(key); err != nil {
+			require.NoError(t, err)
+		} else {
+			assert.Equal(t, key, doc.Key())
+			assert.Equal(t, value, doc.StringValue())
+		}
+	}
+
+	// additional checks with adding extra keys
+	for i := insertKeys; i < insertKeys+additionalCheck; i++ {
+		key := fmt.Sprintf("item:%d", i)
+		value := fmt.Sprintf("Value for key: %s modified, with suffix: %s", key, valueSuffix)
+		if err := db.InsertOrReplace(key, value); err != nil {
+			require.NoError(t, err)
+		}
+
+		if doc, err := db.Get(key); err != nil {
+			require.NoError(t, err)
+		} else {
+			assert.Equal(t, key, doc.Key())
+			assert.Equal(t, value, doc.StringValue())
+		}
+	}
+
+	for i := insertKeys; i < insertKeys+additionalCheck; i++ {
+		key := fmt.Sprintf("item:%d", i)
+		value := fmt.Sprintf("Value for key: %s modified, with suffix: %s", key, valueSuffix)
+		if doc, err := db.Get(key); err != nil {
+			require.NoError(t, err)
+		} else {
+			assert.Equal(t, key, doc.Key())
+			assert.Equal(t, value, doc.StringValue())
+		}
+	}
+
+	require.NoError(t, db.FlushAll())
+
+	for i := 0; i < checksAfterFlush; i++ {
+		key := fmt.Sprintf("item:%d", i)
+		value := fmt.Sprintf("Value for key: %s with suffix: %s", key, valueSuffix)
+		if err := db.Insert(key, value); err != nil {
+			require.NoError(t, err)
+		}
+	}
+
+	assert.Equal(t, checksAfterFlush, db.Count())
+
+	for i := 0; i < checksAfterFlush; i++ {
+		key := fmt.Sprintf("item:%d", i)
+		value := fmt.Sprintf("Value for key: %s with suffix: %s", key, valueSuffix)
+		if doc, err := db.Get(key); err != nil {
+			require.NoError(t, err)
+		} else {
+			assert.Equal(t, key, doc.Key())
+			assert.Equal(t, value, doc.StringValue())
+		}
+	}
 }
 
 type seedTags struct {
@@ -846,4 +970,3 @@ func assertFileContentsEquals(t *testing.T, path string, expectedContents []byte
 		t.Log("contents match")
 	}
 }
-
