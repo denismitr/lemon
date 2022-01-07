@@ -27,10 +27,14 @@ type Config struct {
 }
 
 type EngineOptions interface {
-	applyTo(e executionEngine) error
+	applyTo(inMemoryOnly bool, e executionEngine) error
 }
 
-func (cfg *Config) applyTo(ee executionEngine) error {
+func (cfg *Config) applyTo(inMemoryOnly bool, ee executionEngine) error {
+	if inMemoryOnly {
+		return cfg.ensureInMemoryConfiguration(ee)
+	}
+
 	if cfg.PersistenceStrategy == "" {
 		cfg.PersistenceStrategy = Async
 	}
@@ -58,6 +62,38 @@ func (cfg *Config) applyTo(ee executionEngine) error {
 	if cfg.AutoVacuumMinSize == 0 {
 		cfg.AutoVacuumMinSize = defaultAutoVacuumMinSize
 	}
+
+	ee.SetCfg(cfg)
+
+	return nil
+}
+
+func (cfg *Config) ensureInMemoryConfiguration(ee executionEngine) error {
+	if cfg.PersistenceStrategy != "" && cfg.PersistenceStrategy != InMemory {
+		return errors.Wrapf(
+			ErrInvalidConfiguration,
+			"in memory engine can not have persistence strategy %s",
+			cfg.PersistenceStrategy,
+		)
+	}
+
+	if cfg.ValueLoadStrategy != "" && cfg.ValueLoadStrategy != EagerLoad {
+		return errors.Wrap(
+			ErrInvalidConfiguration,
+			"in memory engine should not have value load strategy",
+		)
+	}
+
+	if cfg.AutoVacuumOnlyOnCloseOrFlush || cfg.AutoVacuumIntervals != 0 || cfg.AutoVacuumMinSize != 0 {
+		return errors.Wrap(
+			ErrInvalidConfiguration,
+			"in memory engine does not use auto vacuum, remove all related parameters from config",
+		)
+	}
+
+	cfg.PersistenceStrategy = InMemory
+	cfg.ValueLoadStrategy = EagerLoad
+	cfg.DisableAutoVacuum = true
 
 	ee.SetCfg(cfg)
 

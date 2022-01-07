@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"github.com/cespare/xxhash/v2"
 	"github.com/pkg/errors"
+	"sync"
 	"sync/atomic"
 )
 
@@ -21,7 +22,7 @@ type Cache struct {
 }
 
 
-func NewCache(shards int, maxTotalBytes uint64) (*Cache, error) {
+func NewCache(shards int, maxTotalBytes uint64, onEvict OnEvict) (*Cache, error) {
 	if maxTotalBytes <= 2 {
 		return nil, ErrIllegalCapacity
 	}
@@ -38,7 +39,7 @@ func NewCache(shards int, maxTotalBytes uint64) (*Cache, error) {
 
 	shardMaxBytes := maxTotalBytes / c.capacity
 	for i := range c.shards {
-		c.shards[i] = newLruShard(shardMaxBytes)
+		c.shards[i] = newLruShard(shardMaxBytes, onEvict)
 	}
 
 	return &c, nil
@@ -51,10 +52,8 @@ func (c *Cache) OnEvict(fn OnEvict) {
 // Add value to cache under key and returns true if eviction happened
 func (c *Cache) Add(key uint64, value []byte) bool {
 	shard := c.getShard(key)
-	v, evicted := shard.add(key, value)
-	if evicted && c.onEvict != nil {
-		c.onEvict(key, v)
-	}
+	evicted := shard.add(key, value)
+
 	if !evicted {
 		atomic.AddInt64(&c.count, 1)
 	}
@@ -70,6 +69,20 @@ func (c *Cache) Get(key uint64) ([]byte, bool) {
 func (c *Cache) Remove(key uint64) {
 	shard := c.getShard(key)
 	shard.remove(key)
+}
+
+func (c *Cache) Purge() {
+	var wg sync.WaitGroup
+
+	wg.Add(len(c.shards))
+	for i := range c.shards {
+		go func(i int) {
+			defer wg.Done()
+			c.shards[i].purge()
+		}(i)
+	}
+
+	wg.Wait()
 }
 
 func (c *Cache) Count() int {

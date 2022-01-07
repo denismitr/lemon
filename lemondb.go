@@ -40,6 +40,7 @@ func Open(path string, engineOptions ...EngineOptions) (*DB, Closer, error) {
 	}
 
 	if path == InMemory {
+
 		defaultCfg.PersistenceStrategy = InMemory
 	}
 
@@ -56,7 +57,7 @@ func Open(path string, engineOptions ...EngineOptions) (*DB, Closer, error) {
 	}
 
 	for _, opt := range engineOptions {
-		if err := opt.applyTo(e); err != nil {
+		if err := opt.applyTo(path == InMemory, e); err != nil {
 			return nil, NullCloser, err
 		}
 	}

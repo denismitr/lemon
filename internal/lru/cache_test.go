@@ -14,10 +14,8 @@ func TestCache_Add(t *testing.T) {
 			evicted++
 		}
 
-		c, err := NewCache(2, 1024)
+		c, err := NewCache(2, 1024, onEvict)
 		require.NoError(t, err)
-
-		c.OnEvict(onEvict)
 
 		for i := 0; i < 100; i += 5 {
 			c.Add(uint64(i), []byte(fmt.Sprintf("Value %d", i)))
@@ -39,7 +37,7 @@ func TestCache_Add(t *testing.T) {
 			evicted++
 		}
 
-		c, err := NewCache(2, 100)
+		c, err := NewCache(2, 100, onEvict)
 		require.NoError(t, err)
 
 		c.OnEvict(onEvict)

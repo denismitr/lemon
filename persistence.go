@@ -62,9 +62,10 @@ type cache interface {
 	Add(key uint64, value []byte) bool
 	Get(key uint64) ([]byte, bool)
 	Remove(key uint64)
+	Purge()
 }
 
-type OnCacheEvict func(k string)
+type OnCacheEvict func(bytes int)
 
 type persistence struct {
 	mu       sync.RWMutex
@@ -75,7 +76,6 @@ type persistence struct {
 	flushes  int
 	cursor   int
 	cache    cache
-	onEvict  OnCacheEvict
 	lg       glog.Logger
 }
 
@@ -103,17 +103,16 @@ func newPersistence(
 		vls:      vls,
 		strategy: strategy,
 		lg:       lg,
-		onEvict:  onCacheEvict,
 	}
 
-	if err := p.initializeCache(valueShards, maxCacheSize); err != nil {
+	if err := p.initializeCache(valueShards, maxCacheSize, onCacheEvict); err != nil {
 		return nil, err
 	}
 
 	return p, nil
 }
 
-func (p *persistence) initializeCache(shards, maxCacheSize uint64) error {
+func (p *persistence) initializeCache(shards, maxCacheSize uint64, onCacheEvict OnCacheEvict) error {
 	if p.vls == LazyLoad {
 		p.cache = lru.NullCache{}
 		return nil
@@ -123,7 +122,13 @@ func (p *persistence) initializeCache(shards, maxCacheSize uint64) error {
 		maxCacheSize = memory.FreeMemory()
 	}
 
-	c, err := lru.NewCache(valueShards, maxCacheSize)
+	onEvict := func(k uint64, v []byte) {
+		if onCacheEvict != nil {
+			onCacheEvict(len(v))
+		}
+	}
+
+	c, err := lru.NewCache(valueShards, maxCacheSize, onEvict)
 	if err != nil {
 		return err
 	}
@@ -355,9 +360,7 @@ func (p *persistence) cacheEntryValue(ent *entry) {
 		return
 	}
 
-	if evicted := p.cache.Add(ent.pos.offset, ent.value); evicted && p.onEvict != nil {
-		p.onEvict(ent.key.String())
-	}
+	p.cache.Add(ent.pos.offset, ent.value)
 
 	// value is now in cache no need to keep it
 	// in the entry
@@ -398,9 +401,7 @@ func (p *persistence) loadValueToEntry(ent *entry) error {
 	}
 
 	if p.vls != LazyLoad && ent.pos.offset > 0 {
-		if evicted := p.cache.Add(ent.pos.offset, blob); evicted && p.onEvict != nil {
-			p.onEvict(ent.key.String())
-		}
+		p.cache.Add(ent.pos.offset, blob)
 	}
 
 	ent.value = blob
@@ -427,6 +428,10 @@ func (p *persistence) removeFromCache(cmd *deleteCmd) {
 	}
 
 	p.cache.Remove(cmd.pos.offset)
+}
+
+func (p *persistence) flushBuffer() {
+	p.cache.Purge()
 }
 
 func resolveTagFnTypeAndArguments(expression string) (prefix string, args []string, err error) {

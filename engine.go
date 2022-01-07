@@ -772,7 +772,11 @@ func (ee *defaultEngine) FlushAll(ff func(ent *entry)) error {
 	ee.pks = btree.NewNonConcurrent(byPrimaryKeys)
 	ee.tags = newTagIndex()
 
-	if ee.cfg.AutoVacuumOnlyOnCloseOrFlush {
+	if ee.cfg.ValueLoadStrategy == BufferedLoad {
+		ee.persistence.flushBuffer()
+	}
+
+	if ee.cfg.PersistenceStrategy != InMemory && ee.cfg.AutoVacuumOnlyOnCloseOrFlush {
 		if err := ee.runVacuumUnderLock(context.TODO()); err != nil {
 			return err
 		}
