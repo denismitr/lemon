@@ -7,6 +7,7 @@ import (
 
 type lruShard struct {
 	mu sync.RWMutex
+	lmu sync.Mutex
 	totalBytes uint64
 	elemsCount int64
 	maxBytes   uint64
@@ -30,11 +31,13 @@ type entry struct {
 }
 
 func (ls *lruShard) get(key uint64) ([]byte, bool) {
-	ls.mu.Lock()
-	defer ls.mu.Unlock()
+	ls.mu.RLock()
+	defer ls.mu.RUnlock()
 
 	if elem, ok := ls.elems[key]; ok {
+		ls.lmu.Lock()
 		ls.evictList.MoveToFront(elem)
+		ls.lmu.Unlock()
 		return elem.Value.(*entry).value, true
 	} else {
 		return nil, false
@@ -62,7 +65,9 @@ func (ls *lruShard) add(key uint64, value []byte) bool {
 
 	// Check for existing item
 	if elem, ok := ls.elems[key]; ok {
+		ls.lmu.Lock()
 		ls.evictList.MoveToFront(elem)
+		ls.lmu.Unlock()
 		ls.totalBytes -= uint64(len(elem.Value.(*entry).value))
 		elem.Value.(*entry).value = value
 		ls.totalBytes += uint64(len(value))
@@ -70,10 +75,12 @@ func (ls *lruShard) add(key uint64, value []byte) bool {
 	}
 
 	// add new item
+	ls.lmu.Lock()
 	elem := ls.evictList.PushFront(&entry{
 		key:   key,
 		value: value,
 	})
+	ls.lmu.Unlock()
 
 	ls.totalBytes += uint64(len(value))
 	ls.elemsCount++
@@ -92,7 +99,9 @@ func (ls *lruShard) purge() {
 	ls.totalBytes = 0
 	ls.elemsCount = 0
 
+	ls.lmu.Lock()
 	ls.evictList.Init()
+	ls.lmu.Unlock()
 }
 
 func (ls *lruShard) remove(key uint64) ([]byte, bool) {
@@ -108,7 +117,10 @@ func (ls *lruShard) remove(key uint64) ([]byte, bool) {
 }
 
 func (ls *lruShard) removeOldestUnderLock() (uint64, []byte, bool) {
+	ls.lmu.Lock()
 	elem := ls.evictList.Back()
+	ls.lmu.Unlock()
+
 	if elem != nil {
 		k, v := ls.removeElementUnderLock(elem)
 		return k, v, true
@@ -118,7 +130,10 @@ func (ls *lruShard) removeOldestUnderLock() (uint64, []byte, bool) {
 }
 
 func (ls *lruShard) removeElementUnderLock(elem *list.Element) (uint64, []byte) {
+	ls.lmu.Lock()
 	ls.evictList.Remove(elem)
+	ls.lmu.Unlock()
+
 	kv := elem.Value.(*entry)
 	ls.elems[kv.key] = nil
 	delete(ls.elems, kv.key)

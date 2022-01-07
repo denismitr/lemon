@@ -128,7 +128,7 @@ func (p *persistence) initializeCache(shards, maxCacheSize uint64, onCacheEvict 
 		}
 	}
 
-	c, err := lru.NewCache(valueShards, maxCacheSize, onEvict)
+	c, err := lru.NewShardedCache(valueShards, maxCacheSize, onEvict)
 	if err != nil {
 		return err
 	}

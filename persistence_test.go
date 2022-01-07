@@ -106,7 +106,7 @@ func Test_parser(t *testing.T) {
 			"*3\r\n+set\r\n$14\r\nproducts/items\r\n$15\r\n" + `[1,4,6,7,8,985]` + "\r\n",
 		}, "")
 
-		c, _ := lru.NewCache(20, GigaByte, nil)
+		c, _ := lru.NewShardedCache(20, MegaByte*30, nil)
 		r := bufio.NewReader(strings.NewReader(cmds))
 		n, err := prs.parse(r, c, mock.acceptWithSuccess)
 
@@ -157,7 +157,7 @@ func Test_parser(t *testing.T) {
 			"*3\r\n+set\r\n$14\r\nproducts/items\r\n$15\r\n" + `[1,4,6,7,8,985]` + "\r\n",
 		}, "")
 
-		c, _ := lru.NewCache(valueShards, GigaByte, nil)
+		c, _ := lru.NewShardedCache(valueShards, MegaByte*30, nil)
 		r := bufio.NewReader(strings.NewReader(cmds))
 		n, err := prs.parse(r, c, mock.acceptWithSuccess)
 

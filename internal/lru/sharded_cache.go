@@ -13,7 +13,7 @@ var ErrInvalidSharding = errors.New("invalid sharding")
 
 type OnEvict func(k uint64, v []byte)
 
-type Cache struct {
+type ShardedCache struct {
 	maxBytes uint64
 	capacity uint64
 	count    int64
@@ -21,17 +21,16 @@ type Cache struct {
 	onEvict  OnEvict
 }
 
-
-func NewCache(shards int, maxTotalBytes uint64, onEvict OnEvict) (*Cache, error) {
+func NewShardedCache(shards int, maxTotalBytes uint64, onEvict OnEvict) (*ShardedCache, error) {
 	if maxTotalBytes <= 2 {
 		return nil, ErrIllegalCapacity
 	}
 
-	if shards < 2 {
+	if shards < 1 {
 		return nil, ErrInvalidSharding
 	}
 
-	c := Cache{
+	c := ShardedCache{
 		maxBytes: maxTotalBytes,
 		capacity: uint64(shards),
 		shards:   make([]*lruShard, shards),
@@ -45,12 +44,12 @@ func NewCache(shards int, maxTotalBytes uint64, onEvict OnEvict) (*Cache, error)
 	return &c, nil
 }
 
-func (c *Cache) OnEvict(fn OnEvict) {
+func (c *ShardedCache) OnEvict(fn OnEvict) {
 	c.onEvict = fn
 }
 
 // Add value to cache under key and returns true if eviction happened
-func (c *Cache) Add(key uint64, value []byte) bool {
+func (c *ShardedCache) Add(key uint64, value []byte) bool {
 	shard := c.getShard(key)
 	evicted := shard.add(key, value)
 
@@ -61,17 +60,17 @@ func (c *Cache) Add(key uint64, value []byte) bool {
 	return evicted
 }
 
-func (c *Cache) Get(key uint64) ([]byte, bool) {
+func (c *ShardedCache) Get(key uint64) ([]byte, bool) {
 	shard := c.getShard(key)
 	return shard.get(key)
 }
 
-func (c *Cache) Remove(key uint64) {
+func (c *ShardedCache) Remove(key uint64) {
 	shard := c.getShard(key)
 	shard.remove(key)
 }
 
-func (c *Cache) Purge() {
+func (c *ShardedCache) Purge() {
 	var wg sync.WaitGroup
 
 	wg.Add(len(c.shards))
@@ -85,11 +84,11 @@ func (c *Cache) Purge() {
 	wg.Wait()
 }
 
-func (c *Cache) Count() int {
+func (c *ShardedCache) Count() int {
 	return int(atomic.LoadInt64(&c.count))
 }
 
-func (c *Cache) Keys() []uint64 {
+func (c *ShardedCache) Keys() []uint64 {
 	count := atomic.LoadInt64(&c.count)
 	keys := make([]uint64, 0, count)
 
@@ -100,7 +99,7 @@ func (c *Cache) Keys() []uint64 {
 	return keys
 }
 
-func (c *Cache) getShard(key uint64) *lruShard {
+func (c *ShardedCache) getShard(key uint64) *lruShard {
 	bs := make([]byte, 8)
 	binary.LittleEndian.PutUint64(bs, key)
 	hash := xxhash.Sum64(bs)

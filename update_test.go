@@ -736,6 +736,154 @@ func Test_MassiveBufferedWrites(t *testing.T) {
 	assert.Equal(t, 0, evictedKeys)
 }
 
+func Test_MassiveBufferedWrites_NoEvictions(t *testing.T) {
+	fixture := "./__fixtures__/buffered_writes_1.ldb"
+	valueSuffix := "this is just a value suffix to artificially increase payload size to store in LemonDB"
+	const insertKeys = 300_000
+
+	evictedKeys := 0
+	onEvict := func(bytes int) {
+		evictedKeys++
+	}
+
+	db, closer, err := lemon.Open(fixture, &lemon.Config{
+		AutoVacuumOnlyOnCloseOrFlush: true,
+		ValueLoadStrategy:            lemon.BufferedLoad,
+		MaxCacheSize:                 lemon.MegaByte * 100,
+		PersistenceStrategy:          lemon.Async,
+		OnCacheEvict:                 onEvict,
+	})
+
+	require.NoError(t, err)
+	defer func() {
+		if err := closer(); err != nil {
+			assert.NoError(t, err)
+		}
+
+		if err := os.Remove(fixture); err != nil {
+			assert.NoError(t, err)
+		}
+	}()
+
+	for i := 0; i < insertKeys; i++ {
+		key := fmt.Sprintf("item:%d", i)
+		value := fmt.Sprintf("Value for key: %s with suffix: %s", key, valueSuffix)
+		if err := db.Insert(key, value); err != nil {
+			require.NoError(t, err)
+		}
+	}
+
+	assert.Equal(t, insertKeys, db.Count())
+	assert.Equal(t, 0, evictedKeys)
+
+	for i := insertKeys - 1; i >= 0; i-- {
+		key := fmt.Sprintf("item:%d", i)
+		value := fmt.Sprintf("Value for key: %s with suffix: %s", key, valueSuffix)
+		if doc, err := db.Get(key); err != nil {
+			require.NoError(t, err)
+		} else {
+			assert.Equal(t, key, doc.Key())
+			assert.Equal(t, value, doc.StringValue())
+		}
+	}
+
+	assert.Equal(t, insertKeys, db.Count())
+	assert.Equal(t, 0, evictedKeys)
+
+	for i := 0; i < insertKeys; i++ {
+		key := fmt.Sprintf("item:%d", i)
+		value := fmt.Sprintf("Value for key: %s with suffix: %s", key, valueSuffix)
+		if err := db.InsertOrReplace(key, value); err != nil {
+			require.NoError(t, err)
+		}
+
+		if doc, err := db.Get(key); err != nil {
+			require.NoError(t, err)
+		} else {
+			assert.Equal(t, key, doc.Key())
+			assert.Equal(t, value, doc.StringValue())
+		}
+	}
+
+	assert.Equal(t, insertKeys, db.Count())
+	assert.Equal(t, 0, evictedKeys)
+
+	for i := insertKeys - 1; i >= 0; i-- {
+		key := fmt.Sprintf("item:%d", i)
+		value := fmt.Sprintf("Value for key: %s with suffix: %s", key, valueSuffix)
+		if doc, err := db.Get(key); err != nil {
+			require.NoError(t, err)
+		} else {
+			assert.Equal(t, key, doc.Key())
+			assert.Equal(t, value, doc.StringValue())
+		}
+	}
+
+	assert.Equal(t, 0, evictedKeys)
+
+	const additionalChecks = 100
+	// additional checks with adding extra keys
+	for i := insertKeys; i < insertKeys+additionalChecks; i++ {
+		key := fmt.Sprintf("item:%d", i)
+		value := fmt.Sprintf("Value for key: %s modified, with suffix: %s", key, valueSuffix)
+		if err := db.InsertOrReplace(key, value); err != nil {
+			require.NoError(t, err)
+		}
+
+		if doc, err := db.Get(key); err != nil {
+			require.NoError(t, err)
+		} else {
+			assert.Equal(t, key, doc.Key())
+			assert.Equal(t, value, doc.StringValue())
+		}
+	}
+
+	assert.Equal(t, 0, evictedKeys)
+
+	for i := insertKeys; i < insertKeys+additionalChecks; i++ {
+		key := fmt.Sprintf("item:%d", i)
+		value := fmt.Sprintf("Value for key: %s modified, with suffix: %s", key, valueSuffix)
+		if doc, err := db.Get(key); err != nil {
+			require.NoError(t, err)
+		} else {
+			assert.Equal(t, key, doc.Key())
+			assert.Equal(t, value, doc.StringValue())
+		}
+	}
+
+	assert.Equal(t, 0, evictedKeys)
+
+	require.NoError(t, db.FlushAll())
+
+	const checksAfterFlush = 250
+	for i := 0; i < checksAfterFlush; i++ {
+		key := fmt.Sprintf("item:%d", i)
+		value := fmt.Sprintf("Value for key: %s with suffix: %s", key, valueSuffix)
+		if err := db.Insert(key, value); err != nil {
+			require.NoError(t, err)
+		}
+	}
+
+	assert.Equal(t, checksAfterFlush, db.Count())
+
+	// since database was flushed cache should be clean and
+	// all documents should be able to fit in the cache
+	assert.Equal(t, 0, evictedKeys)
+
+	for i := 0; i < checksAfterFlush; i++ {
+		key := fmt.Sprintf("item:%d", i)
+		value := fmt.Sprintf("Value for key: %s with suffix: %s", key, valueSuffix)
+		if doc, err := db.Get(key); err != nil {
+			require.NoError(t, err)
+		} else {
+			assert.Equal(t, key, doc.Key())
+			assert.Equal(t, value, doc.StringValue())
+		}
+	}
+
+	assert.Equal(t, 0, evictedKeys)
+}
+
 func Test_MassiveLazyReadWrites(t *testing.T) {
 	fixture := "./__fixtures__/lazy_read_writes_1.ldb"
 	valueSuffix := "this is just a value suffix to artificially increase payload size to store in LemonDB"
