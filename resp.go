@@ -32,7 +32,7 @@ func (rs *respSerializer) serializeSetCommand(ent *entry) error {
 
 	ent.pos = position{
 		size:   uint64(len(ent.value)),
-		offset: uint64(rs.pos + prefix),
+		offset: uint64(rs.pos + prefix + 1),
 	}
 
 	rs.pos += total
@@ -64,6 +64,7 @@ func (rs *respSerializer) serializeDelCommand(cmd *deleteCmd) error {
 	rs.pos += writeRespArray(2, &rs.buf)
 	rs.pos += writeRespSimpleString([]byte(delCommand), &rs.buf)
 	rs.pos += writeRespKeyString(cmd.key.Bytes(), &rs.buf)
+	rs.pos += 1
 	return nil
 }
 

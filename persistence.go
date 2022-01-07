@@ -3,9 +3,9 @@ package lemon
 import (
 	"bufio"
 	"bytes"
-	"encoding/binary"
-	"github.com/cespare/xxhash/v2"
 	"github.com/denismitr/glog"
+	"github.com/denismitr/lemon/internal/lru"
+	"github.com/pbnjay/memory"
 	"github.com/pkg/errors"
 	"io"
 	"os"
@@ -17,6 +17,7 @@ var ErrDbFileWriteFailed = errors.New("database write failed")
 var ErrSourceFileReadFailed = errors.New("source file read failed")
 var ErrCommandInvalid = errors.New("command invalid")
 var ErrStorageFailed = errors.New("storage error")
+var ErrIllegalStorageCacheCall = errors.New("illegal storage cache call")
 
 type ValueLoadStrategy string
 type PersistenceStrategy string
@@ -45,55 +46,26 @@ const (
 )
 
 const (
-	LazyLoad  ValueLoadStrategy = "lazy"
-	EagerLoad ValueLoadStrategy = "eager"
+	LazyLoad     ValueLoadStrategy = "lazy"
+	EagerLoad    ValueLoadStrategy = "eager"
+	BufferedLoad ValueLoadStrategy = "buffered"
 )
 
-const valueShards = 20
+const (
+	valueShards        = 20
+	KiloByte    uint64 = 1 << (10 * 1)
+	MegaByte    uint64 = 1 << (10 * 2)
+	GigaByte    uint64 = 1 << (10 * 3)
+)
 
-type valueMap struct {
-	sync.RWMutex
-	m map[position][]byte
+type cache interface {
+	Add(key uint64, value []byte) bool
+	Get(key uint64) ([]byte, bool)
+	Remove(key uint64)
+	Purge()
 }
 
-type shardedValueMap []*valueMap
-
-func newShardedValueMap(shardsNum int) shardedValueMap {
-	shards := make(shardedValueMap, shardsNum)
-	for i := range shards {
-		shards[i] = &valueMap{m: make(map[position][]byte)}
-	}
-	return shards
-}
-
-func (svm shardedValueMap) getShard(pos position) *valueMap {
-	bs := make([]byte, 8)
-	binary.LittleEndian.PutUint64(bs, pos.offset)
-	hash := xxhash.Sum64(bs)
-	return svm[hash%uint64(len(svm))]
-}
-
-func (svm shardedValueMap) get(pos position) ([]byte, bool) {
-	shard := svm.getShard(pos)
-	shard.RLock()
-	defer shard.RUnlock()
-	v, ok := shard.m[pos]
-	return v, ok
-}
-
-func (svm shardedValueMap) set(pos position, v []byte) {
-	shard := svm.getShard(pos)
-	shard.Lock()
-	defer shard.Unlock()
-	shard.m[pos] = v
-}
-
-func (svm shardedValueMap) remove(pos position) {
-	shard := svm.getShard(pos)
-	shard.Lock()
-	defer shard.Unlock()
-	delete(shard.m, pos)
-}
+type OnCacheEvict func(bytes int)
 
 type persistence struct {
 	mu       sync.RWMutex
@@ -103,7 +75,7 @@ type persistence struct {
 	f        *os.File
 	flushes  int
 	cursor   int
-	cache    shardedValueMap
+	cache    cache
 	lg       glog.Logger
 }
 
@@ -112,6 +84,8 @@ func newPersistence(
 	strategy PersistenceStrategy,
 	truncateFileOnOpen bool,
 	vls ValueLoadStrategy,
+	maxCacheSize uint64,
+	onCacheEvict OnCacheEvict,
 	lg glog.Logger,
 ) (*persistence, error) {
 	flags := os.O_CREATE | os.O_RDWR
@@ -129,16 +103,45 @@ func newPersistence(
 		vls:      vls,
 		strategy: strategy,
 		lg:       lg,
-		cache:    newShardedValueMap(valueShards),
+	}
+
+	if err := p.initializeCache(valueShards, maxCacheSize, onCacheEvict); err != nil {
+		return nil, err
 	}
 
 	return p, nil
 }
 
+func (p *persistence) initializeCache(shards, maxCacheSize uint64, onCacheEvict OnCacheEvict) error {
+	if p.vls == LazyLoad {
+		p.cache = lru.NullCache{}
+		return nil
+	}
+
+	if p.vls == EagerLoad {
+		maxCacheSize = memory.FreeMemory()
+	}
+
+	onEvict := func(k uint64, v []byte) {
+		if onCacheEvict != nil {
+			onCacheEvict(len(v))
+		}
+	}
+
+	c, err := lru.NewShardedCache(valueShards, maxCacheSize, onEvict)
+	if err != nil {
+		return err
+	}
+
+	p.cache = c
+
+	return nil
+}
+
 func (p *persistence) close() error {
 	p.mu.Lock()
 	defer func() {
-		if err :=  p.f.Close(); err != nil {
+		if err := p.f.Close(); err != nil {
 			p.lg.Error(err)
 		}
 
@@ -198,13 +201,50 @@ func (p *persistence) save(commands []serializable) error {
 
 	rs := respSerializer{pos: p.cursor}
 
+	// in case we have inserts or updates we need to collect
+	// these items to update cache
+	// in case of deletes cache must be cleaned
+	var changes []*entry
+	var deletes []*deleteCmd
+
 	for _, cmd := range commands {
 		if err := cmd.serialize(&rs); err != nil {
 			return err
 		}
+
+		// values need to be put in cache for BufferedLoad strategy
+		// but also ent.value has to be set to null for lazy load
+		// for EagerLoad value is simply stored in ent.value and
+		// after persist to file we are done
+		if ent, ok := cmd.(*entry); ok && p.vls != EagerLoad {
+			changes = append(changes, ent)
+		}
+
+		// values are actually stored in cache only for BufferedLoad strategy
+		if del, ok := cmd.(*deleteCmd); ok && p.vls == BufferedLoad {
+			deletes = append(deletes, del)
+		}
 	}
 
-	return p.writeUnderLock(&rs.buf)
+	// write to disk
+	if err := p.writeUnderLock(&rs.buf); err != nil {
+		return err
+	}
+
+	// remove deleted entries data from cache
+	for i := range deletes {
+		p.removeFromCache(deletes[i])
+	}
+
+	// if write was a success we need to update cache
+	// otherwise reads can get old values and lru can be inadequate
+	// for LazyLoad we need to set ent.value = nil
+	for i := range changes {
+		p.cacheEntryValue(changes[i])
+		changes[i].value = nil
+	}
+
+	return nil
 }
 
 func (p *persistence) writeUnderLock(buf *bytes.Buffer) error {
@@ -315,55 +355,83 @@ func (p *persistence) writeAndSwap(rs *respSerializer) error {
 	return nil
 }
 
-func (p *persistence) setValueByPosition(pos position, v []byte) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.cache.set(pos, v)
-	return nil
+func (p *persistence) cacheEntryValue(ent *entry) {
+	if p.vls != BufferedLoad || ent.value == nil || ent.pos.offset <= 0 {
+		return
+	}
+
+	p.cache.Add(ent.pos.offset, ent.value)
+
+	// value is now in cache no need to keep it
+	// in the entry
+	ent.value = nil
 }
 
-func (p *persistence) loadValueByPosition(pos position) ([]byte, error) {
-	p.mu.RLock()
-	if v, ok := p.cache.get(pos); ok {
-		p.mu.RUnlock()
-		return v, nil
+func (p *persistence) loadValueToEntry(ent *entry) error {
+	if p.vls == EagerLoad {
+		return errors.Wrapf(ErrIllegalStorageCacheCall, "for key %s", ent.key.String())
 	}
-	p.mu.RUnlock()
+
+	if p.vls == BufferedLoad {
+		if v, ok := p.cache.Get(ent.pos.offset); ok {
+			ent.value = v
+			return nil
+		}
+	}
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if _, err := p.f.Seek(int64(pos.offset), 0); err != nil {
-		return nil, errors.Wrapf(
+	if _, err := p.f.Seek(int64(ent.pos.offset), 0); err != nil {
+		return errors.Wrapf(
 			ErrStorageFailed,
 			"could not seek to offset %d in file %s: %s",
-			pos.offset, err, err.Error(),
+			ent.pos.offset, err, err.Error(),
 		)
 	}
 
 	r := bufio.NewReader(p.f)
-	blob := make([]byte, pos.size)
+	blob := make([]byte, ent.pos.size)
 	if _, err := io.ReadFull(r, blob); err != nil {
-		return nil, errors.Wrapf(
+		return errors.Wrapf(
 			ErrStorageFailed,
 			"could not read blob at offset %d in file %s: %s",
-			pos.offset, err, err.Error(),
+			ent.pos.offset, err, err.Error(),
 		)
 	}
 
-	if p.vls != LazyLoad {
-		p.cache.set(pos, blob)
+	if p.vls != LazyLoad && ent.pos.offset > 0 {
+		p.cache.Add(ent.pos.offset, blob)
 	}
 
-	return blob, nil
+	ent.value = blob
+
+	return nil
 }
 
 func (p *persistence) removeValueUnderLock(pos position) {
-	p.cache.remove(pos)
+	if p.vls == LazyLoad {
+		return
+	}
+
+	p.cache.Remove(pos.offset)
 }
 
 func (p *persistence) newSerializer() *respSerializer {
 	return &respSerializer{pos: p.cursor}
+}
+
+func (p *persistence) removeFromCache(cmd *deleteCmd) {
+	if cmd.pos.offset <= 0 {
+		p.lg.Noticef("attempt to remove invalid offset %d from cache", cmd.pos.offset)
+		return
+	}
+
+	p.cache.Remove(cmd.pos.offset)
+}
+
+func (p *persistence) flushBuffer() {
+	p.cache.Purge()
 }
 
 func resolveTagFnTypeAndArguments(expression string) (prefix string, args []string, err error) {

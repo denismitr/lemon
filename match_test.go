@@ -28,7 +28,7 @@ type untagTestSuite struct {
 func (uts *untagTestSuite) SetupSuite() {
 	uts.fixture = "./__fixtures__/untag_db1.ldb"
 	db, closer, err := lemon.Open(uts.fixture, &lemon.Config{
-		AutoVacuumOnlyOnClose: true,
+		AutoVacuumOnlyOnCloseOrFlush: true,
 	})
 
 	uts.Require().NoError(err)
@@ -166,7 +166,7 @@ func (uts *untagTestSuite) Test_Untag_TagAndUntagInOneTx() {
 	u2aBeforeUntag, err := db.Get("user:2:animals")
 	uts.Require().NoError(err)
 	uts.Require().NotNil(u2aBeforeUntag)
-	uts.Require().Equal(lemon.M{"content": "json", "count": 2, "dailyExpenses":45.6}, u2aBeforeUntag.Tags())
+	uts.Require().Equal(lemon.M{"content": "json", "count": 2, "dailyExpenses": 45.6}, u2aBeforeUntag.Tags())
 
 	var u2aTagsBeforeCommit lemon.M
 	if err := db.Update(context.Background(), func(tx *lemon.Tx) error {
@@ -175,9 +175,9 @@ func (uts *untagTestSuite) Test_Untag_TagAndUntagInOneTx() {
 		}
 
 		if err := tx.Tag("user:2:animals", lemon.M{
-			"foo": "bar",
+			"foo":        "bar",
 			"continents": 3,
-			"extinct": false,
+			"extinct":    false,
 		}); err != nil {
 			return err
 		}
@@ -192,20 +192,20 @@ func (uts *untagTestSuite) Test_Untag_TagAndUntagInOneTx() {
 
 	// expect tags before commit and after commit be equal
 	uts.Assert().Equal(lemon.M{
-		"foo": "bar",
-		"continents": 3,
-		"dailyExpenses":45.6,
-		"extinct": false,
+		"foo":           "bar",
+		"continents":    3,
+		"dailyExpenses": 45.6,
+		"extinct":       false,
 	}, u2aTagsBeforeCommit)
 
 	u2aAfterCommit, err := db.Get("user:2:animals")
 	uts.Require().NoError(err)
 	uts.Require().NotNil(u2aAfterCommit)
 	uts.Assert().Equal(lemon.M{
-		"foo": "bar",
-		"continents": 3,
-		"dailyExpenses":45.6,
-		"extinct": false,
+		"foo":           "bar",
+		"continents":    3,
+		"dailyExpenses": 45.6,
+		"extinct":       false,
 	}, u2aAfterCommit.Tags())
 }
 
@@ -217,7 +217,7 @@ type matchTestSuite struct {
 func (mts *matchTestSuite) SetupSuite() {
 	mts.fixture = "./__fixtures__/match_db1.ldb"
 	db, closer, err := lemon.Open(mts.fixture, &lemon.Config{
-		AutoVacuumOnlyOnClose: true,
+		AutoVacuumOnlyOnCloseOrFlush: true,
 	})
 
 	mts.Require().NoError(err)
@@ -616,8 +616,8 @@ func seedAnimals(t *testing.T, db *lemon.DB, wg *sync.WaitGroup) {
 
 		if err := tx.Insert("animal:3", `{"species": "penguin"}`,
 			lemon.WithTags().
-			Str("content", "json").
-			Int("age", 22),
+				Str("content", "json").
+				Int("age", 22),
 		); err != nil {
 			return err
 		}

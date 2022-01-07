@@ -89,14 +89,16 @@ func (ee *defaultEngine) asyncFlush(d time.Duration) {
 	for {
 		select {
 		case <-ee.stopCh:
-			t.Stop()
-			return
-		case <-t.C:
-			ee.Lock()
 			if err := ee.persistence.sync(); err != nil {
 				ee.lg.Error(err)
 			}
-			ee.Unlock()
+
+			t.Stop()
+			return
+		case <-t.C:
+			if err := ee.persistence.sync(); err != nil {
+				ee.lg.Error(err)
+			}
 		}
 	}
 }
@@ -136,26 +138,34 @@ func (ee *defaultEngine) runVacuumUnderLock(ctx context.Context) error {
 	rs := ee.persistence.newSerializer()
 	rs.reset()
 
+	var pErr error
 	ee.pks.Ascend(nil, func(i interface{}) bool {
 		if err := ctx.Err(); err != nil {
 			return false
 		}
 
 		ent := i.(*entry)
-		if ent.value == nil && ent.pos.offset != 0 {
-			v, err := ee.persistence.loadValueByPosition(ent.pos)
-			if err != nil {
+		// ent.value must always contain value only on EagerLoad
+		if ee.cfg.ValueLoadStrategy != EagerLoad && ent.value == nil && ent.pos.offset != 0 {
+			if err := ee.persistence.loadValueToEntry(ent); err != nil {
 				ee.lg.Error(err)
+				pErr = err
+				return false
 			}
-			ent.value = v
 		}
 
 		if err := ent.serialize(rs); err != nil {
 			ee.lg.Error(err)
+			pErr = err
+			return false
 		}
 
 		return true
 	})
+
+	if pErr != nil {
+		return errors.Wrap(pErr, "could not finish vacuum")
+	}
 
 	if err := ctx.Err(); err != nil {
 		return errors.Wrap(err, "could not finish vacuum")
@@ -191,6 +201,10 @@ func (ee *defaultEngine) Close(ctx context.Context) error {
 
 	close(ee.stopCh)
 
+	if ee.cfg.PersistenceStrategy == Async {
+		time.Sleep(ee.cfg.AsyncPersistenceIntervals)
+	}
+
 	if ee.persistence != nil {
 		return ee.persistence.close()
 	}
@@ -208,6 +222,8 @@ func (ee *defaultEngine) init() error {
 			ee.cfg.PersistenceStrategy,
 			ee.cfg.TruncateFileWhenOpen,
 			ee.cfg.ValueLoadStrategy,
+			ee.cfg.MaxCacheSize,
+			ee.cfg.OnCacheEvict,
 			ee.lg,
 		)
 
@@ -227,7 +243,7 @@ func (ee *defaultEngine) init() error {
 			go ee.asyncFlush(ee.cfg.AsyncPersistenceIntervals)
 		}
 
-		if !ee.cfg.DisableAutoVacuum && !ee.cfg.AutoVacuumOnlyOnClose {
+		if !ee.cfg.DisableAutoVacuum && !ee.cfg.AutoVacuumOnlyOnCloseOrFlush {
 			go ee.scheduleVacuum(ee.cfg.AutoVacuumIntervals)
 		}
 	} else {
@@ -242,7 +258,8 @@ func (ee *defaultEngine) Persist(commands []serializable) error {
 		return ErrDatabaseAlreadyClosed
 	}
 
-	if ee.persistence == nil {
+	// in case we are using InMemory
+	if ee.cfg.PersistenceStrategy == InMemory {
 		return nil
 	}
 
@@ -258,12 +275,14 @@ func (ee *defaultEngine) LoadEntryValue(ent *entry) error {
 		return ErrDatabaseAlreadyClosed
 	}
 
+	if ee.cfg.PersistenceStrategy == InMemory || ee.cfg.ValueLoadStrategy == EagerLoad {
+		return nil
+	}
+
 	if ent.pos.offset != 0 {
-		v, err := ee.persistence.loadValueByPosition(ent.pos)
-		if err != nil {
+		if err := ee.persistence.loadValueToEntry(ent); err != nil {
 			return err
 		}
-		ent.value = v
 	}
 
 	return nil
@@ -752,6 +771,16 @@ func (ee *defaultEngine) FlushAll(ff func(ent *entry)) error {
 
 	ee.pks = btree.NewNonConcurrent(byPrimaryKeys)
 	ee.tags = newTagIndex()
+
+	if ee.cfg.ValueLoadStrategy == BufferedLoad {
+		ee.persistence.flushBuffer()
+	}
+
+	if ee.cfg.PersistenceStrategy != InMemory && ee.cfg.AutoVacuumOnlyOnCloseOrFlush {
+		if err := ee.runVacuumUnderLock(context.TODO()); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }

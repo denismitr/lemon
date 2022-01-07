@@ -5,7 +5,6 @@ import (
 	"time"
 )
 
-
 var seededString *rand.Rand
 
 func init() {

@@ -62,16 +62,16 @@ func (rts *rollbackTestSuite) TestInsertRollbackWithoutTags() {
 
 	err = db.Update(context.Background(), func(tx *lemon.Tx) error {
 		if err := tx.Insert("book:21", lemon.M{
-			"author": "Jeff Smith",
-			"year": 2009,
+			"author":  "Jeff Smith",
+			"year":    2009,
 			"edition": 1.3,
 		}); err != nil {
 			rts.T().Fatal(err)
 		}
 
 		if err := tx.Insert("book:22", lemon.M{
-			"author": "Paul Figler",
-			"year": 2011,
+			"author":  "Paul Figler",
+			"year":    2011,
 			"edition": 3,
 		}); err != nil {
 			rts.T().Fatal(err)
@@ -115,10 +115,10 @@ func (rts *rollbackTestSuite) TestInsertRollbackWithTags() {
 
 	err = db.Update(context.Background(), func(tx *lemon.Tx) error {
 		if err := tx.Insert("book:21", lemon.M{
-				"author": "Jeff Smith",
-				"year": 2009,
-				"edition": 1.3,
-			},
+			"author":  "Jeff Smith",
+			"year":    2009,
+			"edition": 1.3,
+		},
 			lemon.WithTags().Int("foo", 10).Bool("bar", true),
 		); err != nil {
 			rts.T().Fatal(err)
@@ -211,10 +211,10 @@ func (vts *autoVacuumTestSuite) TearDownSuite() {
 
 func (vts *autoVacuumTestSuite) Test_AutoVacuumWithIntervals() {
 	db, closer, err := lemon.Open(vts.fixture, &lemon.Config{
-		DisableAutoVacuum: false,
-		AutoVacuumMinSize: 2,
-		AutoVacuumOnlyOnClose: false,
-		AutoVacuumIntervals: 1 * time.Second,
+		DisableAutoVacuum:            false,
+		AutoVacuumMinSize:            2,
+		AutoVacuumOnlyOnCloseOrFlush: false,
+		AutoVacuumIntervals:          1 * time.Second,
 	})
 
 	vts.Require().NoError(err)

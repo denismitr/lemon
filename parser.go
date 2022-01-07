@@ -20,7 +20,7 @@ type respParser struct {
 
 func (p *respParser) parse(
 	r *bufio.Reader,
-	cache shardedValueMap,
+	cache cache,
 	cb func(d deserializable) error,
 ) (int, error) {
 	for {
@@ -141,7 +141,7 @@ func (p *respParser) resolveTagger(r *bufio.Reader) (Tagger, error) {
 // parseSetCommand - parses `set` command from serialization protocol
 func (p *respParser) parseSetCommand(
 	r *bufio.Reader,
-	cache shardedValueMap,
+	cache cache,
 	segments int,
 	cb func(d deserializable) error,
 ) error {
@@ -157,8 +157,11 @@ func (p *respParser) parseSetCommand(
 
 	pos := position{offset: uint64(blobOffset), size: uint64(len(value))}
 	ent := newEntryWithTags(string(key), pos, nil)
-	if p.vls != LazyLoad {
-		cache.set(pos, value)
+
+	if p.vls == BufferedLoad {
+		cache.Add(pos.offset, value)
+	} else if p.vls == EagerLoad {
+		ent.value = value
 	}
 
 	// subtracting command, key and value
@@ -175,6 +178,7 @@ func (p *respParser) parseSetCommand(
 		tagger(ent.tags)
 	}
 
+	// todo: send ent to output channel
 	return cb(ent)
 }
 
